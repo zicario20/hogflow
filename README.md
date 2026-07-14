@@ -10,7 +10,7 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 1 implemented — generic line-crossing pipeline created; pig-specific implementation not started
+Current roadmap status: Phase 1 implemented — generic finite-segment line-crossing pipeline created; pig-specific implementation not started.
 
 The repository contains Phase 0 documentation and a Phase 1 generic people/vehicle line-crossing proof of concept. Pig-specific detection, tracking evaluation, and counting validation have not started.
 
@@ -27,7 +27,7 @@ HogFlow should not currently be described as production-ready, operationally pro
 
 ## Phase 1
 
-Phase 1 implements a generic people/vehicle proof of concept that reads a local video, obtains generic detections and tracker IDs, evaluates bottom-center points against an arbitrary directional line, counts each eligible tracker ID at most once, logs crossing events, and writes an annotated video.
+Phase 1 implements a generic people/vehicle proof of concept that reads a local video, obtains generic detections and tracker IDs, evaluates bottom-center movement against an arbitrary finite directional line segment, counts each eligible tracker ID at most once, logs valid segment-crossing events, and writes an annotated video.
 
 Phase 1 does not validate pig counting.
 
@@ -60,7 +60,7 @@ Phase 0 status:
 
 Phase 1 status:
 
-* implemented as a generic people/vehicle proof of concept
+* implemented as a generic people/vehicle finite-segment line-crossing proof of concept
 
 Not yet implemented:
 
@@ -89,6 +89,6 @@ Not yet implemented:
 
 ## Current repository scope
 
-The repository preserves persistent project context and implements only the Phase 1 generic line-crossing proof of concept beyond Phase 0 documentation.
+The repository preserves persistent project context and implements only the Phase 1 generic finite-segment line-crossing proof of concept beyond Phase 0 documentation.
 
 It does not implement pig-specific detection, the Phase 2 architecture, sessions, storage, UI, evaluation, or pilot workflow code.

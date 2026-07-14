@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 1 implemented — generic line-crossing pipeline created; pig-specific implementation not started.
+Current repository status: Phase 1 implemented — generic finite-segment line-crossing pipeline created; pig-specific implementation not started.
 
 ## Project identity
 
@@ -305,7 +305,7 @@ IMPLEMENTED at repository level:
 
 * documentation foundation
 * Phase 0 problem definition and process mapping
-* Phase 1 generic directional line-crossing core
+* Phase 1 generic finite-segment directional line-crossing core
 * Phase 1 generic detector/tracker/video proof-of-concept integration
 
 Not yet implemented:
@@ -318,4 +318,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 1 implemented — generic line-crossing pipeline created; pig-specific implementation not started.
+Current roadmap status: Phase 1 implemented — generic finite-segment line-crossing pipeline created; pig-specific implementation not started.

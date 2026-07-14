@@ -211,3 +211,186 @@ def test_forgetting_inactive_tracker_state_keeps_unique_count_guard() -> None:
     assert repeated_positive is not None
     assert repeated_positive.counted is False
     assert counter.count == 1
+
+
+def test_horizontal_segment_crossing_inside_bounds_counts() -> None:
+    counter = horizontal_counter()
+
+    assert counter.update(80, Point(5.0, -3.0)) is None
+    event = counter.update(80, Point(5.0, 3.0))
+
+    assert event is not None
+    assert event.direction is CrossingDirection.NEGATIVE_TO_POSITIVE
+    assert event.counted is True
+    assert counter.count == 1
+
+
+def test_crossing_infinite_extension_left_of_segment_is_ignored() -> None:
+    counter = horizontal_counter()
+
+    assert counter.update(81, Point(-5.0, -3.0)) is None
+    assert counter.update(81, Point(-5.0, 3.0)) is None
+
+    assert counter.events == ()
+    assert counter.count == 0
+
+
+def test_crossing_infinite_extension_right_of_segment_is_ignored() -> None:
+    counter = horizontal_counter()
+
+    assert counter.update(82, Point(15.0, -3.0)) is None
+    assert counter.update(82, Point(15.0, 3.0)) is None
+
+    assert counter.events == ()
+    assert counter.count == 0
+
+
+def test_reverse_crossing_inside_segment_emits_uncounted_event() -> None:
+    counter = horizontal_counter()
+
+    assert counter.update(83, Point(5.0, 3.0)) is None
+    event = counter.update(83, Point(5.0, -3.0))
+
+    assert event is not None
+    assert event.direction is CrossingDirection.POSITIVE_TO_NEGATIVE
+    assert event.counted is False
+    assert counter.count == 0
+
+
+def test_reverse_crossing_outside_segment_is_ignored() -> None:
+    counter = horizontal_counter()
+
+    assert counter.update(84, Point(-5.0, 3.0)) is None
+    assert counter.update(84, Point(-5.0, -3.0)) is None
+
+    assert counter.events == ()
+    assert counter.count == 0
+
+
+def test_diagonal_counting_segment_accepts_interior_intersection() -> None:
+    line = Line(start=Point(0.0, 0.0), end=Point(10.0, 10.0))
+    counter = DirectionalLineCounter(
+        line=line,
+        positive_direction=CrossingDirection.NEGATIVE_TO_POSITIVE,
+        epsilon=0.1,
+    )
+
+    assert counter.update(85, Point(8.0, 2.0)) is None
+    event = counter.update(85, Point(2.0, 8.0))
+
+    assert event is not None
+    assert event.direction is CrossingDirection.NEGATIVE_TO_POSITIVE
+    assert event.counted is True
+    assert counter.count == 1
+
+
+def test_diagonal_line_extension_crossing_outside_segment_is_ignored() -> None:
+    line = Line(start=Point(0.0, 0.0), end=Point(10.0, 10.0))
+    counter = DirectionalLineCounter(
+        line=line,
+        positive_direction=CrossingDirection.NEGATIVE_TO_POSITIVE,
+        epsilon=0.1,
+    )
+
+    assert counter.update(86, Point(18.0, 12.0)) is None
+    assert counter.update(86, Point(12.0, 18.0)) is None
+
+    assert counter.events == ()
+    assert counter.count == 0
+
+
+def test_crossing_exactly_at_counting_segment_endpoint_counts() -> None:
+    counter = horizontal_counter()
+
+    assert counter.update(87, Point(0.0, -3.0)) is None
+    event = counter.update(87, Point(0.0, 3.0))
+
+    assert event is not None
+    assert event.direction is CrossingDirection.NEGATIVE_TO_POSITIVE
+    assert event.counted is True
+    assert counter.count == 1
+
+
+def test_parallel_movement_does_not_emit_event_or_raise() -> None:
+    counter = horizontal_counter()
+
+    assert counter.update(88, Point(1.0, -3.0)) is None
+    assert counter.update(88, Point(9.0, -3.0)) is None
+
+    assert counter.events == ()
+    assert counter.count == 0
+
+
+def test_near_line_transition_inside_finite_segment_counts_once() -> None:
+    counter = horizontal_counter(epsilon=0.5)
+
+    assert counter.update(89, Point(5.0, -3.0)) is None
+    assert counter.update(89, Point(5.0, -0.2)) is None
+    assert counter.update(89, Point(5.0, 0.2)) is None
+    event = counter.update(89, Point(5.0, 3.0))
+
+    assert event is not None and event.counted is True
+    assert len(counter.events) == 1
+    assert counter.count == 1
+
+
+def test_near_line_transition_outside_finite_segment_is_ignored() -> None:
+    counter = horizontal_counter(epsilon=0.5)
+
+    assert counter.update(90, Point(-5.0, -3.0)) is None
+    assert counter.update(90, Point(-5.0, -0.2)) is None
+    assert counter.update(90, Point(-5.0, 0.2)) is None
+    assert counter.update(90, Point(-5.0, 3.0)) is None
+
+    assert counter.events == ()
+    assert counter.count == 0
+
+
+def test_repeated_tracker_after_valid_segment_crossing_counts_only_once() -> None:
+    counter = horizontal_counter()
+
+    assert counter.update(91, Point(5.0, -3.0)) is None
+    first_positive = counter.update(91, Point(5.0, 3.0))
+    reverse = counter.update(91, Point(5.0, -3.0))
+    second_positive = counter.update(91, Point(5.0, 3.0))
+
+    assert first_positive is not None and first_positive.counted is True
+    assert reverse is not None
+    assert reverse.direction is CrossingDirection.POSITIVE_TO_NEGATIVE
+    assert reverse.counted is False
+    assert second_positive is not None
+    assert second_positive.direction is CrossingDirection.NEGATIVE_TO_POSITIVE
+    assert second_positive.counted is False
+    assert counter.count == 1
+
+
+def test_segment_intersection_rejects_parallel_and_collinear_movement() -> None:
+    line = Line(start=Point(0.0, 0.0), end=Point(10.0, 0.0))
+
+    assert (
+        line.intersects_movement_segment(
+            Point(0.0, 2.0),
+            Point(10.0, 2.0),
+        )
+        is False
+    )
+    assert (
+        line.intersects_movement_segment(
+            Point(2.0, 0.0),
+            Point(8.0, 0.0),
+        )
+        is False
+    )
+
+
+def test_segment_intersection_allows_endpoint_with_float_tolerance() -> None:
+    line = Line(start=Point(0.0, 0.0), end=Point(10.0, 0.0))
+    endpoint_roundoff = 10.0 + 1e-10
+
+    assert (
+        line.intersects_movement_segment(
+            Point(endpoint_roundoff, -2.0),
+            Point(endpoint_roundoff, 2.0),
+        )
+        is True
+    )

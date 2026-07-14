@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from math import hypot, isfinite
 
+_SEGMENT_INTERSECTION_TOLERANCE = 1e-9
+
 
 @dataclass(frozen=True, slots=True)
 class Point:
@@ -50,10 +52,41 @@ class Line:
         return line_x * point_y - line_y * point_x
 
     def signed_distance(self, point: Point) -> float:
-        """Return signed perpendicular distance from the infinite line."""
+        """Return signed perpendicular distance from the supporting infinite line."""
 
         length = hypot(self.end.x - self.start.x, self.end.y - self.start.y)
         return self.side_value(point) / length
+
+    def intersects_movement_segment(self, previous: Point, current: Point) -> bool:
+        """Return whether a movement segment intersects this finite segment.
+
+        Intersections at either endpoint are included within a small numerical
+        tolerance. Parallel and collinear segments return ``False``; the
+        counter's meaningful-side transition rule excludes sliding movement.
+        """
+
+        movement_x = current.x - previous.x
+        movement_y = current.y - previous.y
+        counting_x = self.end.x - self.start.x
+        counting_y = self.end.y - self.start.y
+
+        denominator = movement_x * counting_y - movement_y * counting_x
+        denominator_scale = max(
+            hypot(movement_x, movement_y) * hypot(counting_x, counting_y),
+            1.0,
+        )
+        if abs(denominator) <= _SEGMENT_INTERSECTION_TOLERANCE * denominator_scale:
+            return False
+
+        offset_x = self.start.x - previous.x
+        offset_y = self.start.y - previous.y
+        movement_parameter = (offset_x * counting_y - offset_y * counting_x) / denominator
+        counting_parameter = (offset_x * movement_y - offset_y * movement_x) / denominator
+        tolerance = _SEGMENT_INTERSECTION_TOLERANCE
+        return (
+            -tolerance <= movement_parameter <= 1.0 + tolerance
+            and -tolerance <= counting_parameter <= 1.0 + tolerance
+        )
 
 
 class CrossingDirection(str, Enum):
@@ -87,13 +120,15 @@ class _TrackerState:
 
 
 class DirectionalLineCounter:
-    """Count unique tracker IDs crossing a line in one configured direction.
+    """Count unique tracker IDs crossing a finite segment in one direction.
 
     ``epsilon`` is a perpendicular-distance tolerance in the same coordinate
-    units as the points. Observations within that distance of the infinite line
-    are treated as near-line observations and do not replace the last meaningful
-    side. This allows ``negative -> near line -> positive`` to create one event
-    while ``negative -> near line -> negative`` creates none.
+    units as the points. Observations within that distance of the segment's
+    supporting infinite line are treated as near-line observations and do not
+    replace the last meaningful side. This allows
+    ``negative -> near line -> positive`` to create one event when the implied
+    movement intersects the finite segment, while
+    ``negative -> near line -> negative`` creates none.
     """
 
     def __init__(
@@ -137,8 +172,10 @@ class DirectionalLineCounter:
         """Process one tracker observation and return a crossing event if present.
 
         The first meaningful observation establishes tracker state. A subsequent
-        observation on the opposite meaningful side creates exactly one event.
-        Near-line observations preserve the last meaningful side and point.
+        observation on the opposite meaningful side creates an event only when
+        the movement between meaningful points intersects the finite counting
+        segment. Near-line observations preserve the last meaningful side and
+        point.
         """
 
         if not isinstance(tracker_id, int) or isinstance(tracker_id, bool):
@@ -152,6 +189,12 @@ class DirectionalLineCounter:
         self._tracker_states[tracker_id] = _TrackerState(current_side, point)
 
         if previous_state is None or previous_state.last_meaningful_side is current_side:
+            return None
+
+        if not self.line.intersects_movement_segment(
+            previous_state.last_meaningful_point,
+            point,
+        ):
             return None
 
         direction = self._transition_direction(

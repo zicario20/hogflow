@@ -57,6 +57,16 @@ The counter maintains a set of tracker IDs that already contributed a positive c
 
 `reset()` clears counted IDs, transient tracker-side state, and internally stored crossing events. The video integration may discard transient side state after prolonged tracker inactivity, but it does not remove the ID from the counted-ID set during the same run.
 
+## Finite counting segment
+
+The displayed counting boundary is the finite segment between the configured line start and end points. The directed infinite line through those endpoints is used only to classify meaningful sides; a side transition alone is insufficient to create an event.
+
+For each opposite-side transition, the counter also verifies that the movement segment from the last meaningful tracker point to the current meaningful point intersects the configured finite counting segment. Crossings of the invisible line extensions beyond either endpoint are ignored for positive, reverse, and repeated-positive events.
+
+An intersection exactly at a counting-segment endpoint may count when the tracker changes meaningful sides. There is no hidden endpoint exclusion rule. Parallel movement, collinear movement, sliding along the line, and endpoint touches without a meaningful side change do not count.
+
+The configured start-to-end order still controls the side sign and the interpretation of `negative_to_positive` and `positive_to_negative`. Reversing the endpoints therefore reverses the side convention and positive-direction interpretation while preserving the same finite geometric boundary.
+
 ## Counting unit
 
 `One unique eligible positive tracker crossing per Phase 1 counter run.`

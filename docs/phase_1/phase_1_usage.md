@@ -97,7 +97,7 @@ Line coordinates use input-video pixel coordinates:
 
 Place the line where complete tracked objects are expected to pass through a constrained part of the scene. A line that misses object anchor points, lies inside a heavy occlusion region, or is too close to frame boundaries can create misleading results.
 
-The counter supports horizontal, vertical, and diagonal lines. The line start and end must be different.
+The counter supports horizontal, vertical, and diagonal finite line segments. The line start and end must be different. Objects whose movement crosses only the invisible extension beyond either endpoint are not counted and do not produce crossing events.
 
 ## Positive direction
 
@@ -106,7 +106,7 @@ The two options are:
 * `negative-to-positive`: count the first transition from the line's negative side to its positive side for each tracker ID
 * `positive-to-negative`: count the first transition from the line's positive side to its negative side for each tracker ID
 
-Negative and positive sides are not universally equivalent to physical left/right or up/down. Their meaning depends on the directed line. Reversing the line start and end points reverses the signed side convention.
+Negative and positive sides are not universally equivalent to physical left/right or up/down. Their meaning depends on the directed line. Reversing the line start and end points preserves the same finite segment but reverses the signed side convention and positive-direction interpretation.
 
 If initial output counts movement in the wrong physical direction, either change `--positive-direction` or reverse the line endpoints, then verify the result visually.
 
@@ -120,7 +120,7 @@ The annotated video contains:
 * `COUNT: N`, the current unique positive count
 * the selected class name
 
-The JSONL file contains one object per actual crossing event. It does not contain one record per frame. Each event includes frame index, timestamp, tracker ID, actual side-transition direction, whether the event incremented the count, previous and current points, and the current positive count. Reverse events and repeated positive crossings remain present with `counted: false`.
+The JSONL file contains one object per actual finite-segment crossing event. It does not contain one record per frame. Each event includes frame index, timestamp, tracker ID, actual side-transition direction, whether the event incremented the count, previous and current points, and the current positive count. Reverse events and repeated positive crossings remain present with `counted: false` only when the tracked movement intersects the configured segment.
 
 ## Limitations
 

@@ -2,7 +2,7 @@
 
 ## Phase objective
 
-Phase 1 implements a generic people/vehicle proof of concept for detection, multi-object tracking, tracker-ID observations, arbitrary directional line crossing, unique positive tracker counting, reverse-event recording, and duplicate positive-count prevention.
+Phase 1 implements a generic people/vehicle proof of concept for detection, multi-object tracking, tracker-ID observations, arbitrary finite directional line-segment crossing, unique positive tracker counting, reverse-event recording, and duplicate positive-count prevention.
 
 It does not validate pig counting.
 
@@ -10,6 +10,7 @@ It does not validate pig counting.
 
 * a Python `src/` package with Phase 1 runtime and development dependencies
 * detector-independent line geometry and directional crossing logic
+* finite-segment intersection validation for tracked movement
 * epsilon-aware near-line handling
 * one-positive-count-per-tracker-ID state for each Phase 1 run
 * observable reverse and repeated-positive crossing events
@@ -40,6 +41,12 @@ The unit-test suite covers:
 * complete reset and tracker-ID reuse after reset
 * independent per-tracker state
 * inactive-side-state cleanup without removing the unique-count guard
+* valid horizontal crossing inside the configured segment
+* rejection of crossings beyond the left and right segment endpoints
+* diagonal-segment intersections inside and outside the configured bounds
+* endpoint crossing with a meaningful side transition
+* parallel movement without a crossing or exception
+* near-line transitions inside and outside the finite segment
 
 These tests evaluate counting behavior without video, AI inference, OpenCV, network access, or a GPU.
 
@@ -53,7 +60,7 @@ No legal sample video was present in `data/raw/` during implementation, so this 
 
 ## Current roadmap status
 
-Current roadmap status: Phase 1 implemented — generic line-crossing pipeline created; pig-specific implementation not started.
+Current roadmap status: Phase 1 implemented — generic finite-segment line-crossing pipeline created; pig-specific implementation not started.
 
 ## Phase 1 exit criteria
 
@@ -61,7 +68,7 @@ Current roadmap status: Phase 1 implemented — generic line-crossing pipeline c
 - [x] generic object class detection supported in the implementation
 - [x] multi-object tracking integrated
 - [x] tracker IDs passed to the HogFlow counter
-- [x] arbitrary 2D line supported
+- [x] arbitrary finite 2D line segment supported
 - [x] positive direction configurable
 - [x] unique tracker positive counting implemented
 - [x] reverse events implemented
