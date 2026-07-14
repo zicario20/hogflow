@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 1 implemented — generic finite-segment line-crossing pipeline created; pig-specific implementation not started.
+Current repository status: Phase 2 in progress — Phase 2.1 architecture foundation implemented; Phase 2.2 and Phase 2.3 not started.
 
 ## Project identity
 
@@ -271,6 +271,14 @@ The roadmap currently spans Phase 0 through Phase 16.
 | Phase 15 | Document results as a portfolio case study. |
 | Phase 16 | Prepare an authorized pilot-readiness plan and define validation gates. |
 
+Phase 2 is executed through audited subphases:
+
+* Phase 2.1 — architecture foundation
+* Phase 2.2 — interfaces and contracts
+* Phase 2.3 — existing Phase 1 integration with the approved contracts
+
+Only Phase 2.1 is implemented. This subphase structure does not renumber or change the official Phase 0 through Phase 16 roadmap.
+
 ## Pilot readiness phase
 
 PLANNED in Phase 16:
@@ -307,15 +315,25 @@ IMPLEMENTED at repository level:
 * Phase 0 problem definition and process mapping
 * Phase 1 generic finite-segment directional line-crossing core
 * Phase 1 generic detector/tracker/video proof-of-concept integration
+* Phase 2.1 package foundation
+* shared error hierarchy
+* centralized logging configuration
+* foundational immutable settings
+* documented dependency rules
+* architecture-boundary tests
 
 Not yet implemented:
 
-* Phase 2 through Phase 16
+* Phase 2.2 contracts
+* Phase 2.3 pipeline integration
+* Phase 3 through Phase 16
 * pig-specific detector
 * pig-specific tracking evaluation
-* HogFlow session-management code
+* operational session management
+* receiving batches or groups
+* exception-event management
 * SQLite event storage
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 1 implemented — generic finite-segment line-crossing pipeline created; pig-specific implementation not started.
+Current roadmap status: Phase 2 in progress — Phase 2.1 architecture foundation implemented; Phase 2.2 and Phase 2.3 not started.

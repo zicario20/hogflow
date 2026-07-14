@@ -10,9 +10,9 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 1 implemented — generic finite-segment line-crossing pipeline created; pig-specific implementation not started.
+Current roadmap status: Phase 2 in progress — Phase 2.1 architecture foundation implemented; Phase 2.2 and Phase 2.3 not started.
 
-The repository contains Phase 0 documentation and a Phase 1 generic people/vehicle line-crossing proof of concept. Pig-specific detection, tracking evaluation, and counting validation have not started.
+The repository contains Phase 0 documentation, a Phase 1 generic people/vehicle line-crossing proof of concept, and the Phase 2.1 architecture foundation. Pig-specific detection, tracking evaluation, and counting validation have not started.
 
 HogFlow should not currently be described as production-ready, operationally proven, or commercially validated.
 
@@ -34,6 +34,23 @@ Phase 1 does not validate pig counting.
 * [Phase 1 design](docs/phase_1/phase_1_design.md)
 * [Phase 1 usage](docs/phase_1/phase_1_usage.md)
 * [Phase 1 summary](docs/phase_1/phase_1_summary.md)
+
+## Phase 2 progress
+
+Phase 2.1 establishes the architecture foundation:
+
+* explicit module responsibilities
+* shared error hierarchy
+* centralized logging configuration
+* immutable foundational settings
+* dependency-boundary documentation
+* automated architecture checks
+
+Phase 2.1 does not add new detection, tracking, counting, session, storage, or UI behavior.
+
+* [Phase 2.1 architecture foundation](docs/phase_2/phase_2_1_architecture_foundation.md)
+* [Phase 2.1 dependency rules](docs/phase_2/phase_2_1_dependency_rules.md)
+* [Architecture decisions](docs/phase_2/architecture_decisions.md)
 
 ## High-level conceptual pipeline
 
@@ -62,9 +79,14 @@ Phase 1 status:
 
 * implemented as a generic people/vehicle finite-segment line-crossing proof of concept
 
+Phase 2 status:
+
+* in progress; Phase 2.1 architecture foundation implemented
+
 Not yet implemented:
 
-* Phase 2: HogFlow software architecture
+* Phase 2.2: interfaces and contracts
+* Phase 2.3: existing Phase 1 integration with the future contracts
 * Phase 3: Pig video data acquisition
 * Phase 4: Pig detection baseline
 * Phase 5: Multi-object tracking
@@ -89,6 +111,6 @@ Not yet implemented:
 
 ## Current repository scope
 
-The repository preserves persistent project context and implements only the Phase 1 generic finite-segment line-crossing proof of concept beyond Phase 0 documentation.
+The repository preserves persistent project context, the Phase 1 generic finite-segment line-crossing proof of concept, and the Phase 2.1 architecture foundation.
 
-It does not implement pig-specific detection, the Phase 2 architecture, sessions, storage, UI, evaluation, or pilot workflow code.
+It does not implement Phase 2.2 contracts, Phase 2.3 pipeline integration, pig-specific detection, sessions, storage, UI, evaluation, or pilot workflow code.
