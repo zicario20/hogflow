@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+
+# Local input/output media and generated artifacts
+data/raw/*
+data/processed/*
+
+# Common model weight formats
+*.pt
+*.pth
+*.onnx
+*.engine
