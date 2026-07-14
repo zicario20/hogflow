@@ -113,3 +113,35 @@ Create only the packages and shared foundations required by Phase 2.1. Add abstr
 ### Consequences
 
 The architecture remains small and auditable. Future changes may introduce additional structures when evidence and explicit requirements justify them.
+
+## ADR-008 — Use one framework-neutral shared-model module for contracts
+
+Status: Accepted
+
+### Context
+
+Video-source, detector, and tracker contracts need one canonical language. Placing shared models inside any one component package would force the other contracts to depend sideways or upward, while framework-owned image and result types would couple the architecture to an implementation.
+
+### Decision
+
+Phase 2.2 defines frozen, slotted `Frame`, `BoundingBox`, `Detection`, and `Track` dataclasses in `hogflow.models`. Contract packages depend on this module, and the shared-model module depends only on `core` for expected input-data errors. `Frame` uses immutable packed RGB bytes rather than a NumPy, OpenCV, Torch, or model-framework object.
+
+### Consequences
+
+Future adapters must convert private framework objects at their boundaries. Contract consumers receive immutable values and do not need a computer-vision dependency. The conversion cost and canonical RGB representation are explicit tradeoffs; Phase 2.2 makes no throughput or real-time guarantee.
+
+## ADR-009 — Define component Protocols without pipeline execution
+
+Status: Accepted
+
+### Context
+
+Phase 2.2 must make future detectors, trackers, and video sources replaceable, while pipeline execution and adaptation of the approved Phase 1 integration belong to Phase 2.3.
+
+### Decision
+
+Define one small `Detector` Protocol, one small `Tracker` Protocol, and one small `VideoSource` Protocol. Do not define an orchestrator, service, manager, factory, dependency-injection container, or pipeline runner.
+
+### Consequences
+
+The component boundaries can be tested independently of implementations. No user-visible workflow changes in Phase 2.2, and Phase 2.3 must supply adapters and composition without changing the contracts casually.

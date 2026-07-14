@@ -10,9 +10,9 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 2 in progress — Phase 2.1 architecture foundation implemented; Phase 2.2 and Phase 2.3 not started.
+Current roadmap status: Phase 2 in progress — Phase 2.1 and Phase 2.2 completed; Phase 2.3 not started.
 
-The repository contains Phase 0 documentation, a Phase 1 generic people/vehicle line-crossing proof of concept, and the Phase 2.1 architecture foundation. Pig-specific detection, tracking evaluation, and counting validation have not started.
+The repository contains Phase 0 documentation, a Phase 1 generic people/vehicle line-crossing proof of concept, the Phase 2.1 architecture foundation, and the Phase 2.2 framework-independent contract layer. Pig-specific detection, tracking evaluation, and counting validation have not started.
 
 HogFlow should not currently be described as production-ready, operationally proven, or commercially validated.
 
@@ -48,8 +48,19 @@ Phase 2.1 establishes the architecture foundation:
 
 Phase 2.1 does not add new detection, tracking, counting, session, storage, or UI behavior.
 
+Phase 2.2 adds architectural contracts only:
+
+* immutable `Frame`, `BoundingBox`, `Detection`, and `Track` models
+* replaceable `Detector`, `Tracker`, and `VideoSource` Protocols
+* framework-independent contract boundaries
+* contract, public API, immutability, and architecture tests
+
+Phase 2.2 does not add a concrete detector, tracker, video adapter, or executable pipeline. The existing Phase 1 integration remains unchanged.
+
 * [Phase 2.1 architecture foundation](docs/phase_2/phase_2_1_architecture_foundation.md)
 * [Phase 2.1 dependency rules](docs/phase_2/phase_2_1_dependency_rules.md)
+* [Phase 2.2 interfaces and contracts](docs/phase_2/phase_2_2_interfaces.md)
+* [Phase 2.2 summary](docs/phase_2/phase_2_2_summary.md)
 * [Architecture decisions](docs/phase_2/architecture_decisions.md)
 
 ## High-level conceptual pipeline
@@ -81,11 +92,10 @@ Phase 1 status:
 
 Phase 2 status:
 
-* in progress; Phase 2.1 architecture foundation implemented
+* in progress; Phase 2.1 and Phase 2.2 completed
 
 Not yet implemented:
 
-* Phase 2.2: interfaces and contracts
 * Phase 2.3: existing Phase 1 integration with the future contracts
 * Phase 3: Pig video data acquisition
 * Phase 4: Pig detection baseline
@@ -111,6 +121,6 @@ Not yet implemented:
 
 ## Current repository scope
 
-The repository preserves persistent project context, the Phase 1 generic finite-segment line-crossing proof of concept, and the Phase 2.1 architecture foundation.
+The repository preserves persistent project context, the Phase 1 generic finite-segment line-crossing proof of concept, the Phase 2.1 architecture foundation, and the Phase 2.2 interfaces and immutable communication models.
 
-It does not implement Phase 2.2 contracts, Phase 2.3 pipeline integration, pig-specific detection, sessions, storage, UI, evaluation, or pilot workflow code.
+It does not implement Phase 2.3 pipeline integration, concrete detector or tracker adapters, pig-specific detection, sessions, storage, UI, evaluation, or pilot workflow code.

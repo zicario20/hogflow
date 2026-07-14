@@ -1,8 +1,6 @@
 import ast
-import importlib
-import io
+import subprocess
 import sys
-from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src" / "hogflow"
@@ -12,6 +10,7 @@ INTERNAL_PACKAGES = {
     "counting",
     "detection",
     "domain",
+    "models",
     "pipeline",
     "sessions",
     "storage",
@@ -25,6 +24,7 @@ FORBIDDEN_IMPORTS = {
         "video",
         "detection",
         "tracking",
+        "models",
         "pipeline",
         "sessions",
         "storage",
@@ -35,6 +35,7 @@ FORBIDDEN_IMPORTS = {
         "video",
         "detection",
         "tracking",
+        "models",
         "pipeline",
         "sessions",
         "storage",
@@ -44,6 +45,7 @@ FORBIDDEN_IMPORTS = {
         "video",
         "detection",
         "tracking",
+        "models",
         "pipeline",
         "sessions",
         "storage",
@@ -54,10 +56,41 @@ FORBIDDEN_IMPORTS = {
         "video",
         "detection",
         "tracking",
+        "models",
         "pipeline",
         "sessions",
         "storage",
     },
+    "models": {
+        "config",
+        "counting",
+        "video",
+        "detection",
+        "tracking",
+        "pipeline",
+        "sessions",
+        "storage",
+        "domain",
+    },
+}
+CONTRACT_LAYER_FILES = (
+    SOURCE_ROOT / "models.py",
+    SOURCE_ROOT / "detection" / "contracts.py",
+    SOURCE_ROOT / "tracking" / "contracts.py",
+    SOURCE_ROOT / "video" / "contracts.py",
+)
+PROTOCOL_CONTRACT_FILES = CONTRACT_LAYER_FILES[1:]
+FORBIDDEN_CONTRACT_IMPORTS = {
+    "botsort",
+    "bytetrack",
+    "cv2",
+    "numpy",
+    "onnxruntime",
+    "opencv",
+    "supervision",
+    "tensorrt",
+    "torch",
+    "ultralytics",
 }
 
 
@@ -174,13 +207,57 @@ def test_internal_import_parser_handles_supported_import_forms() -> None:
     assert {target for _line, target in imports} == {"tracking", "video"}
 
 
+def test_contract_layer_has_no_computer_vision_framework_imports() -> None:
+    violations: list[str] = []
+    for source_file in CONTRACT_LAYER_FILES:
+        tree = ast.parse(source_file.read_text(encoding="utf-8"), filename=str(source_file))
+        for node in ast.walk(tree):
+            imported_roots: list[str] = []
+            if isinstance(node, ast.Import):
+                imported_roots.extend(alias.name.split(".", maxsplit=1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_roots.append(node.module.split(".", maxsplit=1)[0])
+
+            for imported_root in imported_roots:
+                if imported_root in FORBIDDEN_CONTRACT_IMPORTS:
+                    relative_file = source_file.relative_to(SOURCE_ROOT.parent)
+                    violations.append(f"{relative_file}:{node.lineno}: imports {imported_root!r}")
+
+    assert not violations, "Framework imports in contract layer:\n" + "\n".join(violations)
+
+
+def test_protocol_contracts_depend_only_on_shared_models() -> None:
+    violations: list[str] = []
+    for source_file in PROTOCOL_CONTRACT_FILES:
+        source_module = _module_parts(source_file)
+        tree = ast.parse(source_file.read_text(encoding="utf-8"), filename=str(source_file))
+        imported_packages = {
+            target
+            for _line, target in _internal_imports(
+                tree,
+                source_module,
+                source_is_package=False,
+            )
+        }
+        if imported_packages != {"models"}:
+            relative_file = source_file.relative_to(SOURCE_ROOT.parent)
+            violations.append(f"{relative_file}: imports {sorted(imported_packages)!r}")
+
+    assert not violations, "Protocol dependency violations:\n" + "\n".join(violations)
+
+
 def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
     package_names = (
         "hogflow.core",
         "hogflow.config",
         "hogflow.counting",
+        "hogflow.models",
         "hogflow.detection",
+        "hogflow.detection.contracts",
         "hogflow.tracking",
+        "hogflow.tracking.contracts",
+        "hogflow.video",
+        "hogflow.video.contracts",
         "hogflow.pipeline",
         "hogflow.sessions",
         "hogflow.storage",
@@ -188,14 +265,23 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
     )
 
     for package_name in package_names:
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        with redirect_stdout(stdout), redirect_stderr(stderr):
-            existing_module = sys.modules.get(package_name)
-            if existing_module is None:
-                importlib.import_module(package_name)
-            else:
-                importlib.reload(existing_module)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import importlib, sys; "
+                    "sys.path.insert(0, sys.argv[1]); "
+                    "importlib.import_module(sys.argv[2])"
+                ),
+                str(SOURCE_ROOT.parent),
+                package_name,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
 
-        assert stdout.getvalue() == "", f"{package_name} wrote to stdout during import"
-        assert stderr.getvalue() == "", f"{package_name} wrote to stderr during import"
+        assert result.returncode == 0, f"{package_name} failed to import: {result.stderr}"
+        assert result.stdout == "", f"{package_name} wrote to stdout during import"
+        assert result.stderr == "", f"{package_name} wrote to stderr during import"

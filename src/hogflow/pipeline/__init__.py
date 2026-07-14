@@ -1,5 +1,5 @@
-"""Future orchestration for video, detection, tracking, and counting.
+"""Future orchestration boundary for video, detection, tracking, and counting.
 
-Current status: PLANNED — contracts begin in Phase 2.2 and integration begins
-in Phase 2.3.
+Phase 2.2 defines communication through shared models and component protocols.
+Pipeline execution and integration remain unimplemented until Phase 2.3.
 """

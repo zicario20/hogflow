@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 2 in progress — Phase 2.1 architecture foundation implemented; Phase 2.2 and Phase 2.3 not started.
+Current repository status: Phase 2 in progress — Phase 2.1 and Phase 2.2 completed; Phase 2.3 not started.
 
 ## Project identity
 
@@ -55,13 +55,20 @@ VIDEO
 
 ## Detection and tracking concept
 
-PLANNED:
+IMPLEMENTED contract layer in Phase 2.2:
 
-* Detection should be isolated behind a detector interface.
-* The rest of the system should conceptually interact with detection as `detections = detector.predict(frame)`.
-* Model-specific inference and conversion logic should stay inside the detection layer.
-* Tracking should remain isolated from detection implementation details.
-* Counting must not directly depend on a specific detector model.
+* `Frame`, `BoundingBox`, `Detection`, and `Track` provide immutable framework-neutral communication models.
+* `Detector.predict(frame)` accepts one `Frame` and returns a sequence of `Detection` objects.
+* `Tracker.update(frame, detections)` accepts one `Frame` and its detections, then returns a sequence of `Track` objects.
+* `VideoSource.read()` returns the next `Frame` or `None` at end of input; `close()` defines explicit resource release.
+* The contract layer does not import computer-vision frameworks.
+
+PLANNED implementation work:
+
+* Model-specific inference and conversion logic will stay inside future detection adapters.
+* Tracking implementations will remain isolated from detector implementation details.
+* The existing Phase 1 integration will be adapted to the contracts in Phase 2.3.
+* Counting will not directly depend on a specific detector or tracker implementation.
 
 Candidate detector families mentioned in project guidance include YOLO, RF-DETR, or another compatible detector. The detector implementation must remain replaceable.
 
@@ -273,11 +280,11 @@ The roadmap currently spans Phase 0 through Phase 16.
 
 Phase 2 is executed through audited subphases:
 
-* Phase 2.1 — architecture foundation
-* Phase 2.2 — interfaces and contracts
-* Phase 2.3 — existing Phase 1 integration with the approved contracts
+* Phase 2.1 — architecture foundation — completed
+* Phase 2.2 — interfaces and contracts — completed
+* Phase 2.3 — existing Phase 1 integration with the approved contracts — not started
 
-Only Phase 2.1 is implemented. This subphase structure does not renumber or change the official Phase 0 through Phase 16 roadmap.
+Phase 2.1 and Phase 2.2 are implemented. This subphase structure does not renumber or change the official Phase 0 through Phase 16 roadmap.
 
 ## Pilot readiness phase
 
@@ -321,10 +328,12 @@ IMPLEMENTED at repository level:
 * foundational immutable settings
 * documented dependency rules
 * architecture-boundary tests
+* framework-independent immutable contract models
+* Detector, Tracker, and VideoSource Protocols
+* contract API, immutability, import-side-effect, and framework-independence tests
 
 Not yet implemented:
 
-* Phase 2.2 contracts
 * Phase 2.3 pipeline integration
 * Phase 3 through Phase 16
 * pig-specific detector
@@ -336,4 +345,8 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 2 in progress — Phase 2.1 architecture foundation implemented; Phase 2.2 and Phase 2.3 not started.
+Current roadmap status:
+Phase 2 in progress —
+Phase 2.1 completed.
+Phase 2.2 completed.
+Phase 2.3 not started.

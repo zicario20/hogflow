@@ -1,4 +1,9 @@
-"""Future multi-object tracker contracts and adapters.
+"""Framework-independent tracker contracts for HogFlow.
 
-Current status: PLANNED — contracts begin in Phase 2.2.
+Current status: CONTRACT ONLY — introduced in Phase 2.2. No tracker
+implementation or adapter is included.
 """
+
+from hogflow.tracking.contracts import Tracker
+
+__all__ = ["Tracker"]
