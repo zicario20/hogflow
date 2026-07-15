@@ -1,26 +1,26 @@
-"""Phase 1 generic object tracking and directional line-crossing CLI."""
+"""Generic object tracking and directional line-crossing CLI composition root."""
 
 from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-from hogflow.counting.line_crossing import (
-    CrossingDirection,
-    CrossingEvent,
-    DirectionalLineCounter,
-    Line,
-    Point,
-)
+from hogflow.adapters import OpenCVVideoSource, UltralyticsDetector, UltralyticsTracker
+from hogflow.core import HogFlowError, configure_logging, get_logger
+from hogflow.counting import CrossingDirection, CrossingEvent, DirectionalLineCounter, Line, Point
+from hogflow.models import Frame
+from hogflow.pipeline import GenericCountingPipeline
+from hogflow.video.opencv_output import OpenCVAnnotatedVideoOutput
 
 DEFAULT_MODEL = "yolo26n.pt"
 TRACKER_CONFIG = "bytetrack.yaml"
 TRACKER_STATE_TTL_FRAMES = 300
 CLI_DIRECTION_CHOICES = ("negative-to-positive", "positive-to-negative")
+
+_LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +66,7 @@ def positive_integer(value: str) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Create the Phase 1 command-line parser."""
+    """Create the backward-compatible generic counter command-line parser."""
 
     parser = argparse.ArgumentParser(
         description=(
@@ -140,42 +140,6 @@ def _validate_config(config: GenericCounterConfig) -> None:
             raise ValueError(f"Could not create parent directory for {path}: {exc}") from exc
 
 
-def _load_runtime_dependencies() -> tuple[Any, Any, Any]:
-    try:
-        import cv2
-        import supervision as sv
-        from ultralytics import YOLO
-    except ImportError as exc:
-        raise RuntimeError(
-            'Phase 1 runtime dependencies are missing. Install with pip install -e ".[dev]".'
-        ) from exc
-    return cv2, sv, YOLO
-
-
-def _class_names_by_id(names: Mapping[Any, Any] | Sequence[Any]) -> dict[int, str]:
-    if isinstance(names, Mapping):
-        return {int(class_id): str(name) for class_id, name in names.items()}
-    return {class_id: str(name) for class_id, name in enumerate(names)}
-
-
-def _resolve_class_id(class_name: str, names: Mapping[Any, Any] | Sequence[Any]) -> int:
-    names_by_id = _class_names_by_id(names)
-    matches = [class_id for class_id, name in names_by_id.items() if name == class_name]
-    if matches:
-        return matches[0]
-
-    available = ", ".join(sorted(names_by_id.values()))
-    raise ValueError(
-        f"Requested class {class_name!r} is not available in the selected model. "
-        f"Available classes: {available}"
-    )
-
-
-def _bottom_center(xyxy: Sequence[float]) -> Point:
-    x1, _y1, x2, y2 = xyxy
-    return Point(x=(float(x1) + float(x2)) / 2.0, y=float(y2))
-
-
 def _event_payload(
     event: CrossingEvent,
     *,
@@ -201,184 +165,82 @@ def _event_payload(
     }
 
 
-def _forget_inactive_tracker_states(
-    counter: DirectionalLineCounter,
-    last_seen_frame: dict[int, int],
-    frame_index: int,
-) -> None:
-    stale_ids = [
-        tracker_id
-        for tracker_id, last_seen in last_seen_frame.items()
-        if frame_index - last_seen > TRACKER_STATE_TTL_FRAMES
-    ]
-    for tracker_id in stale_ids:
-        counter.forget_tracker(tracker_id)
-        del last_seen_frame[tracker_id]
-
-
 def run_generic_counter(config: GenericCounterConfig) -> int:
-    """Run generic detection, tracking, counting, logging, and annotation."""
+    """Compose and run generic adapters, counting, logging, and annotation."""
 
     _validate_config(config)
-    cv2, sv, yolo_class = _load_runtime_dependencies()
-
+    source = OpenCVVideoSource(config.input_path)
+    output: OpenCVAnnotatedVideoOutput | None = None
     try:
-        model = yolo_class(config.model_name)
-    except Exception as exc:
-        raise RuntimeError(f"Could not load detector model {config.model_name!r}: {exc}") from exc
+        detector = UltralyticsDetector(
+            config.model_name,
+            config.class_name,
+            config.confidence,
+            config.device,
+        )
+        tracker = UltralyticsTracker(TRACKER_CONFIG)
+        counter = DirectionalLineCounter(
+            line=config.line,
+            positive_direction=config.positive_direction,
+            epsilon=config.line_epsilon,
+        )
+        output = OpenCVAnnotatedVideoOutput(
+            config.output_path,
+            fps=source.fps,
+            width=source.width,
+            height=source.height,
+            line=config.line,
+            class_name=config.class_name,
+            show=config.show,
+        )
+        pipeline = GenericCountingPipeline(
+            source,
+            detector,
+            tracker,
+            counter,
+            tracker_state_ttl_frames=TRACKER_STATE_TTL_FRAMES,
+        )
 
-    class_id = _resolve_class_id(config.class_name, model.names)
-    capture = cv2.VideoCapture(str(config.input_path))
-    if not capture.isOpened():
-        capture.release()
-        raise RuntimeError(f"OpenCV could not open input video: {config.input_path}")
-
-    fps = float(capture.get(cv2.CAP_PROP_FPS))
-    width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    if fps <= 0 or width <= 0 or height <= 0:
-        capture.release()
-        raise RuntimeError("Input video has invalid FPS or frame dimensions.")
-
-    fourcc_name = "XVID" if config.output_path.suffix.lower() == ".avi" else "mp4v"
-    writer = cv2.VideoWriter(
-        str(config.output_path),
-        cv2.VideoWriter_fourcc(*fourcc_name),
-        fps,
-        (width, height),
-    )
-    if not writer.isOpened():
-        capture.release()
-        writer.release()
-        raise RuntimeError(f"OpenCV could not create output video: {config.output_path}")
-
-    counter = DirectionalLineCounter(
-        line=config.line,
-        positive_direction=config.positive_direction,
-        epsilon=config.line_epsilon,
-    )
-    box_annotator = sv.BoxAnnotator()
-    label_annotator = sv.LabelAnnotator()
-    last_seen_frame: dict[int, int] = {}
-    frame_index = 0
-
-    try:
         with config.events_path.open("w", encoding="utf-8", newline="\n") as event_file:
-            while capture.isOpened():
-                if config.max_frames is not None and frame_index >= config.max_frames:
-                    break
 
-                success, frame = capture.read()
-                if not success:
-                    break
-
-                track_arguments: dict[str, object] = {
-                    "source": frame,
-                    "persist": True,
-                    "tracker": TRACKER_CONFIG,
-                    "classes": [class_id],
-                    "conf": config.confidence,
-                    "verbose": False,
-                }
-                if config.device is not None:
-                    track_arguments["device"] = config.device
-
-                # Ultralytics applies class/confidence filtering before ByteTrack.
-                results = model.track(**track_arguments)
-                if not results:
-                    raise RuntimeError(
-                        f"Detector returned no result container at frame {frame_index}."
-                    )
-
-                detections = sv.Detections.from_ultralytics(results[0])
-                tracker_ids = detections.tracker_id
-                if tracker_ids is not None:
-                    for bounding_box, raw_tracker_id in zip(
-                        detections.xyxy,
-                        tracker_ids,
-                        strict=True,
-                    ):
-                        tracker_id = int(raw_tracker_id)
-                        if tracker_id < 0:
-                            continue
-                        last_seen_frame[tracker_id] = frame_index
-                        event = counter.update(tracker_id, _bottom_center(bounding_box))
-                        if event is None:
-                            continue
-                        payload = _event_payload(
-                            event,
-                            frame_index=frame_index,
-                            timestamp_seconds=frame_index / fps,
-                            current_positive_count=counter.count,
-                        )
-                        event_file.write(json.dumps(payload, sort_keys=True) + "\n")
-
-                _forget_inactive_tracker_states(counter, last_seen_frame, frame_index)
-
-                annotated_frame = box_annotator.annotate(
-                    scene=frame.copy(),
-                    detections=detections,
+            def write_event(event: CrossingEvent, frame: Frame, current_count: int) -> None:
+                timestamp = frame.timestamp_seconds
+                if timestamp is None:
+                    timestamp = frame.frame_index / source.fps
+                payload = _event_payload(
+                    event,
+                    frame_index=frame.frame_index,
+                    timestamp_seconds=timestamp,
+                    current_positive_count=current_count,
                 )
-                if tracker_ids is None:
-                    labels = [f"{config.class_name} (untracked)" for _ in range(len(detections))]
-                else:
-                    labels = [
-                        f"{config.class_name} #{int(tracker_id)}" for tracker_id in tracker_ids
-                    ]
-                annotated_frame = label_annotator.annotate(
-                    scene=annotated_frame,
-                    detections=detections,
-                    labels=labels,
-                )
+                event_file.write(json.dumps(payload, sort_keys=True) + "\n")
 
-                line_start = (round(config.line.start.x), round(config.line.start.y))
-                line_end = (round(config.line.end.x), round(config.line.end.y))
-                cv2.line(annotated_frame, line_start, line_end, (0, 255, 255), 3)
-                cv2.putText(
-                    annotated_frame,
-                    f"COUNT: {counter.count}",
-                    (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1.0,
-                    (0, 255, 0),
-                    2,
-                    cv2.LINE_AA,
-                )
-                cv2.putText(
-                    annotated_frame,
-                    f"CLASS: {config.class_name}",
-                    (20, 75),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (255, 255, 255),
-                    2,
-                    cv2.LINE_AA,
-                )
-                writer.write(annotated_frame)
-
-                if config.show:
-                    cv2.imshow("HogFlow Phase 1 Generic Counter", annotated_frame)
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
-                        frame_index += 1
-                        break
-
-                frame_index += 1
+            summary = pipeline.run(
+                max_frames=config.max_frames,
+                on_frame=output,
+                on_event=write_event,
+            )
     finally:
-        capture.release()
-        writer.release()
-        if config.show:
-            cv2.destroyAllWindows()
+        source.close()
+        if output is not None:
+            output.close()
 
-    print(f"Processed frames: {frame_index}")
-    print(f"Unique positive count: {counter.count}")
+    _LOGGER.info(
+        "Generic counting run completed with %s processed frames and count %s",
+        summary.processed_frames,
+        summary.positive_count,
+    )
+    print(f"Processed frames: {summary.processed_frames}")
+    print(f"Unique positive count: {summary.positive_count}")
     print(f"Annotated video: {config.output_path}")
     print(f"Crossing events: {config.events_path}")
-    return counter.count
+    return summary.positive_count
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the Phase 1 generic counter command-line interface."""
+    """Run the generic counter command-line interface."""
 
+    configure_logging()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
@@ -398,7 +260,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             max_frames=args.max_frames,
         )
         run_generic_counter(config)
-    except (OSError, RuntimeError, ValueError) as exc:
+    except (HogFlowError, OSError, RuntimeError, ValueError) as exc:
         parser.error(str(exc))
     return 0
 

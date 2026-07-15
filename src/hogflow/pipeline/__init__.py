@@ -1,5 +1,6 @@
-"""Future orchestration boundary for video, detection, tracking, and counting.
+"""Framework-independent orchestration for the generic HogFlow pipeline."""
 
-Phase 2.2 defines communication through shared models and component protocols.
-Pipeline execution and integration remain unimplemented until Phase 2.3.
-"""
+from hogflow.pipeline.generic_counting_pipeline import GenericCountingPipeline
+from hogflow.pipeline.models import PipelineFrameResult, PipelineRunSummary
+
+__all__ = ["GenericCountingPipeline", "PipelineFrameResult", "PipelineRunSummary"]

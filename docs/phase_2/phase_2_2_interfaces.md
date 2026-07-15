@@ -17,7 +17,10 @@ flowchart TD
     tracks --> counter["Existing Phase 1 counting engine"]
 ```
 
-This diagram describes compatible data boundaries only. Phase 2.2 does not define execution order, scheduling, threading, buffering, multiprocessing, conversion to counting points, or orchestration. Those integration responsibilities remain unimplemented until Phase 2.3.
+This diagram describes the compatible data boundaries defined in Phase 2.2.
+That subphase did not define execution order, scheduling, threading, buffering,
+multiprocessing, conversion to counting points, or orchestration. Phase 2.3
+later implemented the approved synchronous integration.
 
 ## Dependency direction
 
@@ -129,7 +132,9 @@ Phase 2.2 does not modify:
 * the existing CLI
 * the existing JSONL event format
 
-The existing Phase 1 video integration does not yet implement these contracts. Its adaptation belongs to Phase 2.3.
+At Phase 2.2 completion, the Phase 1 video integration did not yet implement
+these contracts. Its later adaptation is documented in the Phase 2.3 design
+and summary.
 
 ## Phase boundary
 

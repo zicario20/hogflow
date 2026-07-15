@@ -2,52 +2,67 @@
 
 ## Purpose
 
-These rules make HogFlow's internal dependency direction explicit while Phase 2 is built through audited subphases. They preserve the approved Phase 1 implementation and incorporate the shared models and contracts added in Phase 2.2 without claiming Phase 2.3 integration is implemented.
+These rules define the dependency direction after Phase 2.3 integrates the
+approved contracts with concrete generic adapters and a synchronous pipeline.
+An arrow means that the module on the left may depend on the module on the
+right.
 
-An arrow means that the module on the left may depend on the module on the right.
+Implemented direction:
 
-The foundational direction can be summarized as:
-
-`counting → config → core`
-
-Counting may also remain directly independent from config and core when it does not need them, as the current Phase 1 counting module does.
-
-Additional intended directions are:
-
-* `video → counting`
-* `video → core`
-* `video → config`
+* `adapters → contracts/models/core/config`
+* `pipeline → contracts/models/counting/core/config`
+* `video CLI/output → adapters/pipeline/counting/config/core`
 * `contracts → models → core`
-* `detection contract → models`
-* `tracking contract → models`
-* `video-source contract → models`
-* `future pipeline → detection/tracking/counting/video/core/config/domain`
-* `future sessions → core/domain`
-* `future storage → core/domain/sessions`
-* `future UI → pipeline/sessions/storage`
+* `counting → core/config` only when a concrete need exists
+
+The current counting module remains independent from CV frameworks and does
+not need config or core.
 
 ## Package rules
 
 | Package | Responsibility | Allowed internal dependencies | Forbidden examples |
 | --- | --- | --- | --- |
-| `core` | Shared expected-error types and logging configuration. | None. `core` may use only the Python standard library. | `config`, `counting`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
-| `config` | Explicit, validated, immutable foundational settings. | `core` | `counting`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
-| `models` | Canonical immutable `Frame`, `BoundingBox`, `Detection`, and `Track` contract data. | `core` | `config`, `counting`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
-| `counting` | Detector-independent counting rules and geometry. | `core`; `config` only when a concrete need exists. Current Phase 1 counting remains independent from both. | `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, UI code |
-| `video` | Phase 1 video integration plus the Phase 2.2 framework-neutral `VideoSource` contract. | `models` for the contract; `core`, `config`, and `counting` for approved or future integration needs | `pipeline`, `sessions`, `storage`, UI code; duplicated counting business rules |
-| `detection` | Phase 2.2 detector contract; concrete implementations are future work. | `models`; `core` or `config` only when a future implementation has a concrete need | `video`, `tracking`, `pipeline`, `sessions`, `storage`, UI code |
-| `tracking` | Phase 2.2 tracker contract; concrete adapters are future work. | `models`; `core` or `config` only when a future implementation has a concrete need | `video`, `detection`, `pipeline`, `sessions`, `storage`, UI code |
-| `pipeline` | Future orchestration between video input, detection, tracking, counting, and domain-neutral results. | `core`, `config`, `video`, `detection`, `tracking`, `counting`, `domain` | Direct persistence or UI business logic; Phase 2.1 contains no orchestration implementation |
-| `sessions` | Future operational session lifecycle. | `core`, `domain` | `video`, `detection`, `tracking`, `pipeline`, direct UI code |
-| `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | `video`, `detection`, `tracking`, `pipeline`, direct UI code |
-| `domain` | Future operational metadata and domain concepts independent from vision frameworks. | `core` only when necessary | OpenCV, Ultralytics, Supervision, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage` |
+| `core` | Shared expected-error types and logging configuration. | Python standard library only. | `adapters`, `config`, `counting`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
+| `config` | Explicit immutable foundational settings. | `core` | `adapters`, `counting`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
+| `models` | Canonical immutable communication data. | `core` | `adapters`, `config`, `counting`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
+| `counting` | Detector-independent counting rules and geometry. | `core` or `config` only with concrete need; currently neither. | `adapters`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, UI code, CV frameworks |
+| `detection` | Framework-independent `Detector` contract. | `models` | Adapters, frameworks, video, tracking, pipeline, storage, UI code |
+| `tracking` | Framework-independent `Tracker` contract. | `models` | Adapters, frameworks, video, detection, pipeline, storage, UI code |
+| `adapters` | Concrete OpenCV and Ultralytics integration boundaries. | `models`, `core`; contracts/config when needed | Pipeline orchestration, counting rules, sessions, storage, UI business logic |
+| `pipeline` | Synchronous generic orchestration and immutable results. | `video`, `detection`, `tracking`, `models`, `counting`; `core/config` when needed | Concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated counting geometry |
+| `video` | Framework-neutral source contract plus CLI/output infrastructure. | `models` for contract; `adapters`, `pipeline`, `counting`, `core`, `config` for entrypoint/output integration | Sessions, storage, UI business logic, duplicated counting rules |
+| `sessions` | Future operational session lifecycle. | `core`, `domain` | Video, detection, tracking, pipeline, direct UI code |
+| `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | Video, detection, tracking, pipeline, direct UI code |
+| `domain` | Future operational concepts independent from vision frameworks. | `core` only when necessary | Adapters, CV frameworks, video, detection, tracking, pipeline, sessions, storage |
 
 ## External-library boundary
 
-The approved Phase 1 `video` implementation may continue using external computer-vision libraries directly. Decoupling the existing detector and tracker integration through the Phase 2.2 contracts belongs to Phase 2.3.
+External CV libraries are allowed only in concrete infrastructure-facing code:
 
-The `core`, `config`, `models`, `counting`, and `domain` layers must not import OpenCV, Ultralytics, or Supervision. Phase 2.2 contract modules must not import any computer-vision or model framework, including NumPy and Torch.
+* OpenCV in the video-source adapter and annotated-output collaborator
+* Ultralytics and NumPy in detector/tracker adapters
+* Supervision in annotated-output infrastructure
+
+The `core`, `config`, `models`, `counting`, `domain`, contract modules, and
+pipeline modules must not import OpenCV, NumPy, Torch, Ultralytics, Supervision,
+ByteTrack, BoT-SORT, or another CV framework.
+
+No framework object may appear in a contract signature or escape an adapter.
+The video CLI chooses concrete implementations; the pipeline depends only on
+contracts and HogFlow models.
+
+## Future dependency direction
+
+Future roadmap work remains governed by lower-level dependencies:
+
+* `sessions → core/domain`
+* `storage → core/domain/sessions`
+* `future UI → pipeline/sessions/storage`
+
+These arrows do not mark those packages as implemented.
 
 ## Change policy
 
-These rules are architectural decisions for the current roadmap, not permanent laws. A dependency-direction change requires an explicit technical reason, corresponding documentation, and updated automated boundary checks. Convenience alone is not sufficient justification for a circular or upward dependency.
+A dependency-direction change requires an explicit technical reason,
+corresponding documentation, and updated automated boundary checks.
+Convenience alone does not justify a circular or upward dependency.

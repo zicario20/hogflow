@@ -5,6 +5,7 @@ from pathlib import Path
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src" / "hogflow"
 INTERNAL_PACKAGES = {
+    "adapters",
     "config",
     "core",
     "counting",
@@ -18,7 +19,9 @@ INTERNAL_PACKAGES = {
     "video",
 }
 FORBIDDEN_IMPORTS = {
+    "adapters": {"counting", "domain", "pipeline", "sessions", "storage"},
     "core": {
+        "adapters",
         "config",
         "counting",
         "video",
@@ -31,6 +34,7 @@ FORBIDDEN_IMPORTS = {
         "domain",
     },
     "config": {
+        "adapters",
         "counting",
         "video",
         "detection",
@@ -42,6 +46,7 @@ FORBIDDEN_IMPORTS = {
         "domain",
     },
     "counting": {
+        "adapters",
         "video",
         "detection",
         "tracking",
@@ -51,6 +56,7 @@ FORBIDDEN_IMPORTS = {
         "storage",
     },
     "domain": {
+        "adapters",
         "config",
         "counting",
         "video",
@@ -62,6 +68,7 @@ FORBIDDEN_IMPORTS = {
         "storage",
     },
     "models": {
+        "adapters",
         "config",
         "counting",
         "video",
@@ -72,6 +79,7 @@ FORBIDDEN_IMPORTS = {
         "storage",
         "domain",
     },
+    "pipeline": {"adapters"},
 }
 CONTRACT_LAYER_FILES = (
     SOURCE_ROOT / "models.py",
@@ -92,6 +100,15 @@ FORBIDDEN_CONTRACT_IMPORTS = {
     "torch",
     "ultralytics",
 }
+FRAMEWORK_INDEPENDENT_FILES = (
+    SOURCE_ROOT / "models.py",
+    SOURCE_ROOT / "counting" / "line_crossing.py",
+    SOURCE_ROOT / "detection" / "contracts.py",
+    SOURCE_ROOT / "tracking" / "contracts.py",
+    SOURCE_ROOT / "video" / "contracts.py",
+    SOURCE_ROOT / "pipeline" / "models.py",
+    SOURCE_ROOT / "pipeline" / "generic_counting_pipeline.py",
+)
 
 
 def _module_parts(path: Path) -> tuple[str, ...]:
@@ -226,6 +243,24 @@ def test_contract_layer_has_no_computer_vision_framework_imports() -> None:
     assert not violations, "Framework imports in contract layer:\n" + "\n".join(violations)
 
 
+def test_core_counting_contracts_and_pipeline_have_no_framework_imports() -> None:
+    violations: list[str] = []
+    for source_file in FRAMEWORK_INDEPENDENT_FILES:
+        tree = ast.parse(source_file.read_text(encoding="utf-8"), filename=str(source_file))
+        for node in ast.walk(tree):
+            imported_roots: list[str] = []
+            if isinstance(node, ast.Import):
+                imported_roots.extend(alias.name.split(".", maxsplit=1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_roots.append(node.module.split(".", maxsplit=1)[0])
+            for imported_root in imported_roots:
+                if imported_root in FORBIDDEN_CONTRACT_IMPORTS:
+                    relative_file = source_file.relative_to(SOURCE_ROOT.parent)
+                    violations.append(f"{relative_file}:{node.lineno}: imports {imported_root!r}")
+
+    assert not violations, "Framework imports in independent layers:\n" + "\n".join(violations)
+
+
 def test_protocol_contracts_depend_only_on_shared_models() -> None:
     violations: list[str] = []
     for source_file in PROTOCOL_CONTRACT_FILES:
@@ -258,7 +293,10 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.tracking.contracts",
         "hogflow.video",
         "hogflow.video.contracts",
+        "hogflow.adapters",
         "hogflow.pipeline",
+        "hogflow.pipeline.models",
+        "hogflow.pipeline.generic_counting_pipeline",
         "hogflow.sessions",
         "hogflow.storage",
         "hogflow.domain",

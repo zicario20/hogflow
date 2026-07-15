@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 2 in progress — Phase 2.1 and Phase 2.2 completed; Phase 2.3 not started.
+Current repository status: Phase 2 completed — generic architecture, contracts, adapters, and pipeline integration implemented; pig-specific data acquisition not started.
 
 ## Project identity
 
@@ -53,7 +53,7 @@ VIDEO
 → OPERATOR UI
 → EVALUATION / ANALYTICS
 
-## Detection and tracking concept
+## Detection, tracking, and generic integration
 
 IMPLEMENTED contract layer in Phase 2.2:
 
@@ -63,12 +63,19 @@ IMPLEMENTED contract layer in Phase 2.2:
 * `VideoSource.read()` returns the next `Frame` or `None` at end of input; `close()` defines explicit resource release.
 * The contract layer does not import computer-vision frameworks.
 
-PLANNED implementation work:
+IMPLEMENTED generic integration in Phase 2.3:
 
-* Model-specific inference and conversion logic will stay inside future detection adapters.
-* Tracking implementations will remain isolated from detector implementation details.
-* The existing Phase 1 integration will be adapted to the contracts in Phase 2.3.
-* Counting will not directly depend on a specific detector or tracker implementation.
+* `OpenCVVideoSource` converts local OpenCV BGR frames into immutable packed-RGB `Frame` values.
+* `UltralyticsDetector` performs one generic class-filtered inference and returns immutable `Detection` tuples.
+* `UltralyticsTracker` supplies those external detections directly to ByteTrack and returns immutable `Track` tuples without duplicate inference.
+* `GenericCountingPipeline` synchronously coordinates the approved contracts and delegates all count decisions to the Phase 1 `DirectionalLineCounter`.
+* The existing generic CLI composes adapters, pipeline, annotated output, and unchanged JSONL crossing events.
+* Counting does not directly depend on a specific detector or tracker implementation.
+
+PLANNED pig-specific implementation work:
+
+* Legal or public pig-video acquisition begins in Phase 3.
+* Pig-specific detector and tracker validation remain future work.
 
 Candidate detector families mentioned in project guidance include YOLO, RF-DETR, or another compatible detector. The detector implementation must remain replaceable.
 
@@ -282,9 +289,9 @@ Phase 2 is executed through audited subphases:
 
 * Phase 2.1 — architecture foundation — completed
 * Phase 2.2 — interfaces and contracts — completed
-* Phase 2.3 — existing Phase 1 integration with the approved contracts — not started
+* Phase 2.3 — existing Phase 1 integration with the approved contracts — completed
 
-Phase 2.1 and Phase 2.2 are implemented. This subphase structure does not renumber or change the official Phase 0 through Phase 16 roadmap.
+Phase 2.1, Phase 2.2, and Phase 2.3 are implemented. This subphase structure does not renumber or change the official Phase 0 through Phase 16 roadmap.
 
 ## Pilot readiness phase
 
@@ -331,11 +338,15 @@ IMPLEMENTED at repository level:
 * framework-independent immutable contract models
 * Detector, Tracker, and VideoSource Protocols
 * contract API, immutability, import-side-effect, and framework-independence tests
+* Phase 2.3 framework adapters for local video, generic Ultralytics detection, and ByteTrack
+* synchronous generic pipeline orchestration
+* CLI composition through the approved contracts and adapters
+* synthetic pipeline and video-output integration tests
 
 Not yet implemented:
 
-* Phase 2.3 pipeline integration
 * Phase 3 through Phase 16
+* pig-specific video acquisition
 * pig-specific detector
 * pig-specific tracking evaluation
 * operational session management
@@ -345,8 +356,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status:
-Phase 2 in progress —
-Phase 2.1 completed.
-Phase 2.2 completed.
-Phase 2.3 not started.
+Current roadmap status: Phase 2 completed — architecture foundation, contracts, adapters, and generic pipeline integration implemented; Phase 3 not started.

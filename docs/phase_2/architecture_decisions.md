@@ -145,3 +145,67 @@ Define one small `Detector` Protocol, one small `Tracker` Protocol, and one smal
 ### Consequences
 
 The component boundaries can be tested independently of implementations. No user-visible workflow changes in Phase 2.2, and Phase 2.3 must supply adapters and composition without changing the contracts casually.
+
+## ADR-010 — Use adapters for framework integration
+
+Status: Accepted
+
+### Context
+
+Phase 2.2 contracts exchange only immutable HogFlow models, while OpenCV and Ultralytics require framework-specific arrays and result objects.
+
+### Decision
+
+Place concrete video, detector, and tracker integrations in `hogflow.adapters`. Convert framework objects to or from `Frame`, `Detection`, and `Track` only at adapter boundaries. Use the installed Ultralytics ByteTrack API with externally supplied detections so detection runs once per frame.
+
+### Consequences
+
+Framework objects do not leak into contracts, models, counting, or pipeline orchestration. Adapter tests can isolate dependencies with fakes. Concrete framework upgrades remain localized.
+
+## ADR-011 — Keep the CLI as the composition root
+
+Status: Accepted
+
+### Context
+
+The existing Phase 1 CLI already owns user configuration and output-path choices. A separate container, factory, or service locator would add infrastructure without another current consumer.
+
+### Decision
+
+Keep `hogflow.video.generic_counter` as a thin composition root that parses unchanged arguments, constructs concrete adapters, counter, pipeline, and output collaborators, and translates expected errors for CLI users.
+
+### Consequences
+
+Library modules remain independently testable and the command remains compatible. Another entrypoint can compose the same contracts later without changing the pipeline.
+
+## ADR-012 — Preserve the Frame bytes contract despite conversion overhead
+
+Status: Accepted
+
+### Context
+
+OpenCV decodes mutable BGR arrays and Ultralytics accepts arrays, while the approved `Frame` contract stores packed immutable RGB bytes.
+
+### Decision
+
+Preserve packed RGB bytes. Convert BGR to RGB in the source adapter and reconstruct detector input at the detector boundary. Do not weaken `Frame` to expose NumPy.
+
+### Consequences
+
+The framework-neutral contract remains stable and immutable. Phase 2.3 accepts measurable memory-copy and color-conversion overhead and makes no real-time performance claim.
+
+## ADR-013 — Use synchronous orchestration for Phase 2.3
+
+Status: Accepted
+
+### Context
+
+The generic pipeline needs deterministic sequential frame processing and has no demonstrated need for concurrency, buffering, or distributed execution.
+
+### Decision
+
+Use one small synchronous `GenericCountingPipeline`. Process one frame at a time, invoke each component once, forward immutable results through callbacks, and guarantee source cleanup.
+
+### Consequences
+
+Control flow and failure behavior remain explicit and directly testable. Async execution, queues, multiprocessing, streaming infrastructure, and general workflow abstractions remain outside scope.

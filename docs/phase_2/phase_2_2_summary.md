@@ -27,7 +27,10 @@ The contract layer uses only Python standard-library types and HogFlow shared mo
 
 ## Backward compatibility
 
-The approved Phase 1 counting and video modules and the existing Phase 1 tests remain unchanged. The current generic counter still uses its approved direct Ultralytics, Supervision, and OpenCV integration. Contract-based adaptation is reserved for Phase 2.3.
+At Phase 2.2 completion, the approved Phase 1 counting and video modules and
+tests remained unchanged, and the generic counter still used its direct
+Ultralytics, Supervision, and OpenCV integration. Phase 2.3 later adapted that
+integration while preserving Phase 1 behavior.
 
 ## Validation evidence
 
@@ -43,15 +46,13 @@ Phase 2.2 validation covers:
 * absence of CV-framework imports in the contract layer
 * absence of import-time output and runtime side effects
 
-## Current roadmap status
+## Status at Phase 2.2 completion
 
-Current roadmap status:
-Phase 2 in progress —
-Phase 2.1 completed.
-Phase 2.2 completed.
-Phase 2.3 not started.
+At the conclusion of Phase 2.2, Phase 2.3 had not started. Phase 2.3 later
+completed the adapter and pipeline integration documented in
+[phase_2_3_summary.md](phase_2_3_summary.md).
 
-## Known limitations
+## Known limitations at Phase 2.2 completion
 
 * pipeline orchestration is not implemented
 * no concrete detector is implemented
