@@ -1,5 +1,7 @@
 # HogFlow
 
+[![CI](https://github.com/zicario20/hogflow/actions/workflows/ci.yml/badge.svg)](https://github.com/zicario20/hogflow/actions/workflows/ci.yml)
+
 HogFlow is a computer vision research prototype / MVP for evaluating automated
 livestock counting in constrained passage environments.
 
@@ -14,7 +16,7 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 3 infrastructure implemented; real authorized dataset acquisition and review in progress; Phase 4 not started.
+Current roadmap status: Phase 4 in progress — Phase 4.1 infrastructure implemented; real pig annotation not completed; no pig detector trained or validated; Phase 4.2 not started.
 
 The repository contains Phase 0 documentation, an approved Phase 1 generic
 people/vehicle finite-segment proof of concept, and the completed Phase 2
@@ -28,6 +30,11 @@ Real authorized pig-video acquisition and review may still be ongoing. No real
 pig media is committed, and pig-specific detection, tracking validation, and
 counting evaluation have not started. HogFlow is not production-ready,
 operationally proven, or commercially validated.
+
+Phase 4.1 adds source-only CI, framework-neutral detection-evaluation models,
+deterministic basic detection metrics, metadata-only dataset selection, and a
+protected local annotation workspace. It introduces no detector implementation
+or accuracy result.
 
 ## Phase 0 documentation
 
@@ -112,6 +119,28 @@ direction, and a usable virtual-line location. It does not validate counting.
 * [Phase 3 summary](docs/phase_3/phase_3_summary.md)
 * [Local data workspace](data/README.md)
 
+## Phase 4
+
+Phase 4 remains in progress. Phase 4.1 implements evaluation and preparation
+foundations only:
+
+* GitHub Actions CI using synthetic/source-only tests
+* immutable ground-truth, prediction, frame, match, result, and dataset models
+* explicit pixel and normalized bounding-box coordinates
+* area, intersection, union, IoU, deterministic one-to-one matching, precision,
+  recall, and F1
+* metadata-only Phase 3 inventory selection with opaque clip IDs
+* local annotation, model, inference-run, and evaluation workspaces protected by Git
+
+CI validates code quality and deterministic synthetic behavior. It does not
+validate real pig-video quality, annotation quality, detector accuracy, or
+counting performance. No mAP implementation is claimed.
+
+* [Phase 4.1 CI and detection foundation](docs/phase_4/phase_4_1_ci_and_detection_foundation.md)
+* [Detection evaluation foundation](docs/phase_4/phase_4_detection_evaluation.md)
+* [Annotation policy draft](docs/phase_4/phase_4_annotation_policy_draft.md)
+* [Phase 4.1 summary](docs/phase_4/phase_4_1_summary.md)
+
 ## High-level pipeline
 
 Implemented generic Phase 2.3 flow:
@@ -134,7 +163,8 @@ storage, operator UI, and evaluation only in their approved phases.
 * Phase 1: generic people/vehicle finite-segment proof of concept implemented
 * Phase 2: completed through Phase 2.1, Phase 2.2, and Phase 2.3
 * Phase 3: inventory infrastructure implemented; real authorized collection and review in progress
-* Phase 4 through Phase 16: not started
+* Phase 4: in progress — Phase 4.1 infrastructure implemented; Phase 4.2 not started
+* Phase 5 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
 The repository contains no real pig video and makes no claim that a suitable
@@ -149,9 +179,10 @@ real dataset has been acquired.
 
 ## Current limitations
 
-The generic pipeline has not been validated on pigs. Phase 3 motion estimates
+The generic pipeline has not been validated on pigs. No real pig annotation is
+complete and no pig detector has been trained or validated. Phase 3 motion estimates
 use bounded samples and can be wrong when moving animals dominate image
 features. HogFlow has no pig-specific detector, pig-specific tracker evaluation,
 sessions, SQLite persistence, operator UI, ground-truth comparison, analytics,
 or pilot workflow. Tracker ID switches and fragmentation remain count risks.
-Synthetic infrastructure tests do not prove real pig-video or model quality.
+Synthetic CI and evaluation tests do not prove real pig-video or model quality.

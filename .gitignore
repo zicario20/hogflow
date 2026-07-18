@@ -13,6 +13,35 @@ data/processed/**
 !data/interim/.gitkeep
 !data/processed/.gitkeep
 
+# Local annotation, model, inference, and evaluation workspaces
+data/annotations/**
+!data/annotations/raw/
+!data/annotations/raw/.gitkeep
+!data/annotations/interim/
+!data/annotations/interim/.gitkeep
+!data/annotations/processed/
+!data/annotations/processed/.gitkeep
+data/models/**
+!data/models/.gitkeep
+data/runs/**
+!data/runs/.gitkeep
+data/evaluation/**
+!data/evaluation/.gitkeep
+data/yolo/**
+data/coco/**
+data/*.local.json
+data/**/*manifest*.json
+!data/clip_manifest.example.json
+
+# Dataset review records and tool-generated CV outputs are always local
+*.review.json
+/runs/**
+/weights/**
+.ultralytics/
+*.cache
+*.npy
+*.npz
+
 *.[mM][pP]4
 *.[mM][oO][vV]
 *.[aA][vV][iI]
@@ -25,3 +54,7 @@ data/processed/**
 *.pth
 *.onnx
 *.engine
+*.ckpt
+*.safetensors
+*.tflite
+*.pb

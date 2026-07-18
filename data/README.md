@@ -8,6 +8,10 @@ only public, synthetic, or explicitly authorized data.
 - `raw/` contains original video files. HogFlow inventory tools read but never modify them.
 - `interim/` is reserved for local intermediate artifacts, such as manually cut clips.
 - `processed/` contains generated inventories and other local outputs.
+- `annotations/` contains local raw, interim, and processed annotation work.
+- `models/` contains local checkpoints and model weights.
+- `runs/` contains local inference outputs.
+- `evaluation/` contains local detector-evaluation reports and derived records.
 - Video files, frames, thumbnails, generated media, and model weights are ignored by Git.
 
 Before placing a clip here, confirm that its license or authorization permits project use.
@@ -40,3 +44,17 @@ python -m hogflow.data.inventory --input data/raw --output data/processed/invent
 
 The command writes JSON, CSV, and Markdown metadata reports. It does not create frames or
 thumbnails.
+
+Prepare a metadata-only Phase 4.1 detection-selection plan with:
+
+```bash
+python -m hogflow.evaluation.dataset_selection \
+  --inventory data/processed/inventory/inventory.json \
+  --output data/processed/phase_4/detection_selection.json
+```
+
+The plan contains opaque clip IDs rather than private filenames or paths. Phase 4.1 does not
+extract frames, create annotations, download weights, run detector inference, or train a model.
+All real annotation files, manifests, dataset exports, weights, runs, and evaluation reports
+remain local and ignored. Only the documented examples and `.gitkeep` placeholders may be
+tracked.

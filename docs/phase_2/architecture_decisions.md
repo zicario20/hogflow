@@ -209,3 +209,94 @@ Use one small synchronous `GenericCountingPipeline`. Process one frame at a time
 ### Consequences
 
 Control flow and failure behavior remain explicit and directly testable. Async execution, queues, multiprocessing, streaming infrastructure, and general workflow abstractions remain outside scope.
+
+## ADR-014 — Run source-only continuous integration
+
+Status: Accepted
+
+### Context
+
+The repository needs repeatable validation on pushes and pull requests, while
+all real videos, annotations, inventory outputs, model weights, and evaluation
+artifacts are local-only data that must never enter GitHub Actions.
+
+### Decision
+
+Run CI on Ubuntu with Python 3.12, read-only repository permissions, the
+repository's development installation, and source/synthetic quality gates only.
+Do not upload media-bearing artifacts or access local dataset paths.
+
+### Consequences
+
+CI provides evidence that source code, synthetic tests, formatting,
+compilation, and declared dependencies are healthy. It provides no evidence
+about real pig-video quality, annotation quality, detector accuracy, tracking,
+or counting.
+
+## ADR-015 — Reuse the canonical bounding box through an explicit evaluation wrapper
+
+Status: Accepted
+
+### Context
+
+HogFlow already has a validated framework-neutral `BoundingBox`, but detection
+evaluation must distinguish pixel coordinates from normalized coordinates.
+Duplicating box geometry would create two competing canonical representations.
+
+### Decision
+
+Use the existing `hogflow.models.BoundingBox` inside an immutable
+`EvaluationBoundingBox` that adds an explicit coordinate-space value and the
+additional validation required by evaluation.
+
+### Consequences
+
+Core coordinates stay canonical and framework independent. Evaluation APIs
+cannot silently mix normalized and pixel boxes, and future adapters remain
+responsible for coordinate conversion.
+
+## ADR-016 — Use deterministic confidence-first one-to-one matching
+
+Status: Accepted
+
+### Context
+
+Basic precision, recall, and F1 require reproducible assignment between
+predictions and ground truth without introducing a partial or misleading mAP
+implementation.
+
+### Decision
+
+Within each frame, evaluate predictions by descending confidence and then
+stable prediction ID. Match each prediction to the unmatched same-class ground
+truth with the highest qualifying IoU, breaking equal-IoU ties by stable ground
+truth ID. Each endpoint may be matched at most once.
+
+### Consequences
+
+Duplicate predictions become false positives and repeated runs are
+deterministic. The method supplies threshold-specific basic metrics only; it is
+not mAP and does not prove detector quality.
+
+## ADR-017 — Keep dataset selection metadata-only and path-private
+
+Status: Accepted
+
+### Context
+
+Phase 4.1 must prepare a future detection dataset from Phase 3 inventory data
+without decoding media or publishing private filenames and source references.
+
+### Decision
+
+Select only readable, explicitly authorized detection candidates without fatal
+validation errors. Emit deterministic opaque clip IDs, decisions, criteria,
+and rejection reasons; omit local paths, filenames, review notes, and source
+references. Write plans only to ignored local workspaces.
+
+### Consequences
+
+Selection is reproducible without accessing video bytes and cannot turn a
+counting-candidate label into a detector-performance claim. Authorized local
+inventory data remains outside source control, and later annotation work must
+resolve opaque IDs locally.

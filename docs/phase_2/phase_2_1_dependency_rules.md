@@ -4,7 +4,8 @@
 
 These rules define the dependency direction after Phase 2.3 integrates the
 approved contracts with concrete generic adapters and a synchronous pipeline,
-and after Phase 3 adds local dataset-inventory infrastructure.
+after Phase 3 adds local dataset-inventory infrastructure, and after Phase 4.1
+adds framework-neutral detection-evaluation infrastructure.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -18,6 +19,8 @@ Implemented direction:
 * `data models/validation → core`
 * `video metadata infrastructure → data models/validation/core`
 * `data inventory CLI → data models/validation/video metadata/core`
+* `evaluation models/metrics → models/core`
+* `evaluation dataset selection CLI → core`
 
 The current counting module remains independent from CV frameworks and does
 not need config or core.
@@ -31,6 +34,7 @@ not need config or core.
 | `models` | Canonical immutable communication data. | `core` | `adapters`, `config`, `counting`, `data`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
 | `counting` | Detector-independent counting rules and geometry. | `core` or `config` only with concrete need; currently neither. | `adapters`, `data`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, UI code, CV frameworks |
 | `data` | Immutable inventory models, deterministic discovery, local sidecar/manifest parsing, suitability rules, inventory CLI, and metadata report output. | Models/validation: `core`; inventory CLI: `core`, `video` metadata infrastructure | Adapters, counting, detector/tracker contracts, pipeline, sessions, storage, domain business logic; CV frameworks in models or validation |
+| `evaluation` | Immutable detection-evaluation models, deterministic geometry/matching/metrics, and metadata-only local dataset selection. | `models`, `core` | Adapters, video decoding, detector/tracker implementations, pipeline, counting, sessions, storage, UI code, CV frameworks |
 | `detection` | Framework-independent `Detector` contract. | `models` | Adapters, frameworks, video, tracking, pipeline, storage, UI code |
 | `tracking` | Framework-independent `Tracker` contract. | `models` | Adapters, frameworks, video, detection, pipeline, storage, UI code |
 | `adapters` | Concrete OpenCV and Ultralytics integration boundaries. | `models`, `core`; contracts/config when needed | Data inventory, pipeline orchestration, counting rules, sessions, storage, UI business logic |
@@ -50,9 +54,13 @@ External CV libraries are allowed only in concrete infrastructure-facing code:
 * OpenCV and NumPy in the Phase 3 video-metadata infrastructure
 
 The `core`, `config`, `models`, `counting`, `domain`, contract modules,
-framework-neutral `data` models/validation, and pipeline modules must not import
+framework-neutral `data` models/validation, `evaluation`, and pipeline modules must not import
 OpenCV, NumPy, Torch, Ultralytics, Supervision, ByteTrack, BoT-SORT, or another
 CV framework.
+
+Phase 4.1 dataset selection consumes inventory metadata only. It must not decode
+videos, expose local paths in its output, or infer detector quality from an
+inventory suitability label.
 
 No framework object may appear in a contract signature or escape an adapter.
 The video CLI chooses concrete implementations; the pipeline depends only on

@@ -12,6 +12,7 @@ INTERNAL_PACKAGES = {
     "data",
     "detection",
     "domain",
+    "evaluation",
     "models",
     "pipeline",
     "sessions",
@@ -20,7 +21,15 @@ INTERNAL_PACKAGES = {
     "video",
 }
 FORBIDDEN_IMPORTS = {
-    "adapters": {"counting", "data", "domain", "pipeline", "sessions", "storage"},
+    "adapters": {
+        "counting",
+        "data",
+        "domain",
+        "evaluation",
+        "pipeline",
+        "sessions",
+        "storage",
+    },
     "core": {
         "adapters",
         "config",
@@ -34,6 +43,7 @@ FORBIDDEN_IMPORTS = {
         "sessions",
         "storage",
         "domain",
+        "evaluation",
     },
     "config": {
         "adapters",
@@ -47,6 +57,7 @@ FORBIDDEN_IMPORTS = {
         "sessions",
         "storage",
         "domain",
+        "evaluation",
     },
     "counting": {
         "adapters",
@@ -58,6 +69,7 @@ FORBIDDEN_IMPORTS = {
         "pipeline",
         "sessions",
         "storage",
+        "evaluation",
     },
     "domain": {
         "adapters",
@@ -71,6 +83,7 @@ FORBIDDEN_IMPORTS = {
         "pipeline",
         "sessions",
         "storage",
+        "evaluation",
     },
     "models": {
         "adapters",
@@ -84,8 +97,9 @@ FORBIDDEN_IMPORTS = {
         "sessions",
         "storage",
         "domain",
+        "evaluation",
     },
-    "pipeline": {"adapters", "data"},
+    "pipeline": {"adapters", "data", "evaluation"},
     "data": {
         "adapters",
         "counting",
@@ -96,6 +110,20 @@ FORBIDDEN_IMPORTS = {
         "sessions",
         "storage",
         "tracking",
+        "evaluation",
+    },
+    "evaluation": {
+        "adapters",
+        "config",
+        "counting",
+        "data",
+        "detection",
+        "domain",
+        "pipeline",
+        "sessions",
+        "storage",
+        "tracking",
+        "video",
     },
 }
 CONTRACT_LAYER_FILES = (
@@ -127,6 +155,9 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "pipeline" / "generic_counting_pipeline.py",
     SOURCE_ROOT / "data" / "models.py",
     SOURCE_ROOT / "data" / "validation.py",
+    SOURCE_ROOT / "evaluation" / "detection_models.py",
+    SOURCE_ROOT / "evaluation" / "detection_metrics.py",
+    SOURCE_ROOT / "evaluation" / "dataset_selection.py",
 )
 
 
@@ -309,6 +340,10 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.data",
         "hogflow.data.models",
         "hogflow.data.validation",
+        "hogflow.evaluation",
+        "hogflow.evaluation.detection_models",
+        "hogflow.evaluation.detection_metrics",
+        "hogflow.evaluation.dataset_selection",
         "hogflow.detection",
         "hogflow.detection.contracts",
         "hogflow.tracking",

@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 3 infrastructure implemented; real authorized dataset acquisition and review in progress; Phase 4 not started.
+Current repository status: Phase 4 in progress — Phase 4.1 infrastructure implemented; real pig annotation not completed; no pig detector trained or validated; Phase 4.2 not started.
 
 ## Project identity
 
@@ -86,6 +86,25 @@ IN PROGRESS Phase 3 evidence work:
 
 * Real authorized pig-video acquisition and manual review may continue outside Git.
 * No real pig dataset is bundled or claimed complete.
+
+IMPLEMENTED Phase 4.1 foundations:
+
+* GitHub Actions runs source-only lint, formatting, test, compilation, and dependency checks on pushes and pull requests involving `main`.
+* Immutable framework-neutral detection-evaluation models represent explicit pixel or normalized boxes, ground truth, predictions, frames, one-to-one matches, aggregate results, and dataset summaries.
+* Deterministic utilities calculate area, intersection, union, IoU, true positives, false positives, false negatives, precision, recall, and F1 with explicit zero-denominator behavior.
+* Confidence-first matching uses stable ID tie-breaks and never matches one prediction or ground-truth box more than once.
+* Metadata-only dataset selection consumes local Phase 3 inventory JSON without decoding videos and writes an ignored local plan containing opaque clip IDs rather than filenames or paths.
+* Local annotation, model, inference-run, and evaluation workspaces are protected from Git; only approved `.gitkeep` placeholders are tracked.
+
+NOT IMPLEMENTED in Phase 4.1:
+
+* real pig annotation
+* frame extraction
+* a finalized annotation format
+* pig detector inference, training, fine-tuning, or validation
+* mAP
+* tracking evaluation
+* counting evaluation
 
 PLANNED pig-specific implementation work:
 
@@ -309,6 +328,8 @@ Phase 2.1, Phase 2.2, and Phase 2.3 are implemented. This subphase structure doe
 
 Phase 3 inventory infrastructure is implemented. Real authorized dataset acquisition and review may still be ongoing, so this status does not claim that a representative pig dataset has been completed or validated.
 
+Phase 4 is in progress through Phase 4.1 foundations only. Phase 4.2 has not started, and no detector-performance result exists.
+
 ## Pilot readiness phase
 
 PLANNED in Phase 16:
@@ -366,11 +387,19 @@ IMPLEMENTED at repository level:
 * authorization/manual-review sidecar and optional clip-manifest validation
 * JSON, CSV, and Markdown dataset inventory output
 * synthetic Phase 3 video-infrastructure tests
+* source-only GitHub Actions continuous integration
+* Phase 4.1 immutable detection-evaluation models
+* deterministic bounding-box geometry and one-to-one basic detection metrics
+* privacy-preserving metadata-only detection dataset selection
+* protected local annotation/model/run/evaluation workspaces
+* synthetic Phase 4.1 evaluation, selection, CI, architecture, and Git-hygiene tests
 
 Not yet implemented:
 
-* Phase 4 through Phase 16
+* Phase 4.2 and remaining Phase 4 detector-baseline work
+* Phase 5 through Phase 16
 * a completed or validated real authorized pig-video dataset
+* completed real pig annotations
 * pig-specific detector
 * pig-specific tracking evaluation
 * operational session management
@@ -380,4 +409,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 3 infrastructure implemented; real authorized dataset acquisition and review in progress; Phase 4 not started.
+Current roadmap status: Phase 4 in progress — Phase 4.1 infrastructure implemented; real pig annotation not completed; no pig detector trained or validated; Phase 4.2 not started.
