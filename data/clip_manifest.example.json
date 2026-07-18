@@ -1,0 +1,13 @@
+{
+  "clips": [
+    {
+      "original_source_reference": "Authorized source reference",
+      "clip_filename": "authorized-source_static-section_clip-001.mp4",
+      "start_time_seconds": 12.5,
+      "end_time_seconds": 42.5,
+      "reason_selected": "Camera appears stationary during this interval.",
+      "camera_appears_static": true,
+      "notes": "Boundary record only; Phase 3 does not cut the source video."
+    }
+  ]
+}

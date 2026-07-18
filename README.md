@@ -14,17 +14,20 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 2 completed — architecture foundation, contracts, adapters, and generic pipeline integration implemented; Phase 3 not started.
+Current roadmap status: Phase 3 infrastructure implemented; real authorized dataset acquisition and review in progress; Phase 4 not started.
 
 The repository contains Phase 0 documentation, an approved Phase 1 generic
 people/vehicle finite-segment proof of concept, and the completed Phase 2
 software architecture. Phase 2.3 preserves the Phase 1 CLI while routing generic
 video input, detection, tracking, counting, annotation, and event output through
-the approved contracts and adapters.
+the approved contracts and adapters. Phase 3 adds a local-only authorized-video
+inventory, bounded metadata validation, conservative camera-motion estimates,
+manual review sidecars, and JSON/CSV/Markdown reports.
 
-Pig-specific video acquisition, detection, tracking validation, and counting
-evaluation have not started. HogFlow is not production-ready, operationally
-proven, or commercially validated.
+Real authorized pig-video acquisition and review may still be ongoing. No real
+pig media is committed, and pig-specific detection, tracking validation, and
+counting evaluation have not started. HogFlow is not production-ready,
+operationally proven, or commercially validated.
 
 ## Phase 0 documentation
 
@@ -85,6 +88,30 @@ Phase 2.3 provides generic integration:
 * [Phase 2.3 summary](docs/phase_2/phase_2_3_summary.md)
 * [Architecture decisions](docs/phase_2/architecture_decisions.md)
 
+## Phase 3
+
+Phase 3 implements local dataset-acquisition infrastructure without bundling
+media or beginning model work:
+
+* immutable framework-neutral inventory and review models
+* deterministic local video discovery
+* bounded OpenCV metadata and decode validation
+* feature-based camera-motion estimates with conservative labels
+* explicit authorization and manual scene-review sidecars
+* optional clip-boundary manifests
+* JSON, CSV, and Markdown inventory reports
+* Git safeguards for videos, frames, outputs, and model weights
+
+Automatic labels are inventory aids only. Counting candidacy requires manual
+confirmation of authorization, camera stability, a clear passage, predominant
+direction, and a usable virtual-line location. It does not validate counting.
+
+* [Phase 3 data acquisition](docs/phase_3/phase_3_data_acquisition.md)
+* [Phase 3 video inventory](docs/phase_3/phase_3_video_inventory.md)
+* [Phase 3 usage](docs/phase_3/phase_3_usage.md)
+* [Phase 3 summary](docs/phase_3/phase_3_summary.md)
+* [Local data workspace](data/README.md)
+
 ## High-level pipeline
 
 Implemented generic Phase 2.3 flow:
@@ -106,10 +133,12 @@ storage, operator UI, and evaluation only in their approved phases.
 * Phase 0: documented
 * Phase 1: generic people/vehicle finite-segment proof of concept implemented
 * Phase 2: completed through Phase 2.1, Phase 2.2, and Phase 2.3
-* Phase 3 through Phase 16: not started
+* Phase 3: inventory infrastructure implemented; real authorized collection and review in progress
+* Phase 4 through Phase 16: not started
 
-Phase 3 is legal or public pig-video data acquisition. It has not been
-implemented by this repository.
+Phase 3 infrastructure works with an empty directory and synthetic test videos.
+The repository contains no real pig video and makes no claim that a suitable
+real dataset has been acquired.
 
 ## Documentation index
 
@@ -120,8 +149,9 @@ implemented by this repository.
 
 ## Current limitations
 
-The generic pipeline has not been validated on pigs. It has no pig-specific
-detector, pig-specific tracker evaluation, sessions, SQLite persistence,
-operator UI, ground-truth comparison, analytics, or pilot workflow. Tracker ID
-switches and fragmentation remain count risks. Packed-RGB contract conversion
-adds overhead. Synthetic infrastructure tests do not prove real-model accuracy.
+The generic pipeline has not been validated on pigs. Phase 3 motion estimates
+use bounded samples and can be wrong when moving animals dominate image
+features. HogFlow has no pig-specific detector, pig-specific tracker evaluation,
+sessions, SQLite persistence, operator UI, ground-truth comparison, analytics,
+or pilot workflow. Tracker ID switches and fragmentation remain count risks.
+Synthetic infrastructure tests do not prove real pig-video or model quality.

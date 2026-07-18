@@ -9,6 +9,7 @@ INTERNAL_PACKAGES = {
     "config",
     "core",
     "counting",
+    "data",
     "detection",
     "domain",
     "models",
@@ -19,11 +20,12 @@ INTERNAL_PACKAGES = {
     "video",
 }
 FORBIDDEN_IMPORTS = {
-    "adapters": {"counting", "domain", "pipeline", "sessions", "storage"},
+    "adapters": {"counting", "data", "domain", "pipeline", "sessions", "storage"},
     "core": {
         "adapters",
         "config",
         "counting",
+        "data",
         "video",
         "detection",
         "tracking",
@@ -36,6 +38,7 @@ FORBIDDEN_IMPORTS = {
     "config": {
         "adapters",
         "counting",
+        "data",
         "video",
         "detection",
         "tracking",
@@ -47,6 +50,7 @@ FORBIDDEN_IMPORTS = {
     },
     "counting": {
         "adapters",
+        "data",
         "video",
         "detection",
         "tracking",
@@ -59,6 +63,7 @@ FORBIDDEN_IMPORTS = {
         "adapters",
         "config",
         "counting",
+        "data",
         "video",
         "detection",
         "tracking",
@@ -71,6 +76,7 @@ FORBIDDEN_IMPORTS = {
         "adapters",
         "config",
         "counting",
+        "data",
         "video",
         "detection",
         "tracking",
@@ -79,7 +85,18 @@ FORBIDDEN_IMPORTS = {
         "storage",
         "domain",
     },
-    "pipeline": {"adapters"},
+    "pipeline": {"adapters", "data"},
+    "data": {
+        "adapters",
+        "counting",
+        "detection",
+        "domain",
+        "models",
+        "pipeline",
+        "sessions",
+        "storage",
+        "tracking",
+    },
 }
 CONTRACT_LAYER_FILES = (
     SOURCE_ROOT / "models.py",
@@ -108,6 +125,8 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "video" / "contracts.py",
     SOURCE_ROOT / "pipeline" / "models.py",
     SOURCE_ROOT / "pipeline" / "generic_counting_pipeline.py",
+    SOURCE_ROOT / "data" / "models.py",
+    SOURCE_ROOT / "data" / "validation.py",
 )
 
 
@@ -287,12 +306,16 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.config",
         "hogflow.counting",
         "hogflow.models",
+        "hogflow.data",
+        "hogflow.data.models",
+        "hogflow.data.validation",
         "hogflow.detection",
         "hogflow.detection.contracts",
         "hogflow.tracking",
         "hogflow.tracking.contracts",
         "hogflow.video",
         "hogflow.video.contracts",
+        "hogflow.video.metadata",
         "hogflow.adapters",
         "hogflow.pipeline",
         "hogflow.pipeline.models",

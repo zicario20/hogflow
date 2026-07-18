@@ -1,0 +1,15 @@
+{
+  "authorized_for_project": true,
+  "source_type": "synthetic",
+  "source_reference": "Local synthetic test clip",
+  "license_or_permission_notes": "Created locally for HogFlow infrastructure testing.",
+  "camera_static_confirmed": true,
+  "clear_passage_confirmed": null,
+  "predominant_direction_confirmed": null,
+  "counting_line_possible": null,
+  "intended_use": [
+    "detection",
+    "tracking"
+  ],
+  "reviewer_notes": "Do not record credentials or personally identifying information."
+}

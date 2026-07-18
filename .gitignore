@@ -6,8 +6,19 @@ __pycache__/
 *.pyc
 
 # Local input/output media and generated artifacts
-data/raw/*
-data/processed/*
+data/raw/**
+data/interim/**
+data/processed/**
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+*.[mM][pP]4
+*.[mM][oO][vV]
+*.[aA][vV][iI]
+*.[mM][kK][vV]
+*.[mM]4[vV]
+*.[wW][eE][bB][mM]
 
 # Common model weight formats
 *.pt

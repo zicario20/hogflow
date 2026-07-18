@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 2 completed — generic architecture, contracts, adapters, and pipeline integration implemented; pig-specific data acquisition not started.
+Current repository status: Phase 3 infrastructure implemented; real authorized dataset acquisition and review in progress; Phase 4 not started.
 
 ## Project identity
 
@@ -72,10 +72,24 @@ IMPLEMENTED generic integration in Phase 2.3:
 * The existing generic CLI composes adapters, pipeline, annotated output, and unchanged JSONL crossing events.
 * Counting does not directly depend on a specific detector or tracker implementation.
 
+IMPLEMENTED Phase 3 data-acquisition infrastructure:
+
+* Local `data/raw`, `data/interim`, and `data/processed` workspaces are protected from media commits.
+* Immutable inventory models and deterministic video discovery remain independent from CV frameworks.
+* OpenCV metadata inspection uses bounded samples and records readability, dimensions, FPS, frame count, duration, codec, decode problems, and changing dimensions.
+* Feature-based global-motion estimates provide conservative camera-stability review labels.
+* Explicit authorization and manual scene-review sidecars control candidate labeling.
+* Counting candidacy requires human confirmation of a static camera, clear passage, predominant direction, and usable virtual-line location; metadata alone cannot grant it.
+* Local inventory output is available in JSON, CSV, and Markdown without extracting frames or thumbnails.
+
+IN PROGRESS Phase 3 evidence work:
+
+* Real authorized pig-video acquisition and manual review may continue outside Git.
+* No real pig dataset is bundled or claimed complete.
+
 PLANNED pig-specific implementation work:
 
-* Legal or public pig-video acquisition begins in Phase 3.
-* Pig-specific detector and tracker validation remain future work.
+* Pig-specific detector and tracker validation remain future work beginning in Phase 4.
 
 Candidate detector families mentioned in project guidance include YOLO, RF-DETR, or another compatible detector. The detector implementation must remain replaceable.
 
@@ -293,6 +307,8 @@ Phase 2 is executed through audited subphases:
 
 Phase 2.1, Phase 2.2, and Phase 2.3 are implemented. This subphase structure does not renumber or change the official Phase 0 through Phase 16 roadmap.
 
+Phase 3 inventory infrastructure is implemented. Real authorized dataset acquisition and review may still be ongoing, so this status does not claim that a representative pig dataset has been completed or validated.
+
 ## Pilot readiness phase
 
 PLANNED in Phase 16:
@@ -342,11 +358,19 @@ IMPLEMENTED at repository level:
 * synchronous generic pipeline orchestration
 * CLI composition through the approved contracts and adapters
 * synthetic pipeline and video-output integration tests
+* Phase 3 local data-workspace and Git media safeguards
+* immutable video inventory, review, manifest, and summary models
+* deterministic supported-video discovery
+* bounded OpenCV metadata and decode validation
+* conservative feature-based camera-motion labeling
+* authorization/manual-review sidecar and optional clip-manifest validation
+* JSON, CSV, and Markdown dataset inventory output
+* synthetic Phase 3 video-infrastructure tests
 
 Not yet implemented:
 
-* Phase 3 through Phase 16
-* pig-specific video acquisition
+* Phase 4 through Phase 16
+* a completed or validated real authorized pig-video dataset
 * pig-specific detector
 * pig-specific tracking evaluation
 * operational session management
@@ -356,4 +380,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 2 completed — architecture foundation, contracts, adapters, and generic pipeline integration implemented; Phase 3 not started.
+Current roadmap status: Phase 3 infrastructure implemented; real authorized dataset acquisition and review in progress; Phase 4 not started.
