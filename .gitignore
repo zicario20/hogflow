@@ -29,6 +29,10 @@ data/evaluation/**
 !data/evaluation/.gitkeep
 data/tensorboard/**
 data/metrics/**
+data/live/**
+data/captures/**
+data/snapshots/**
+data/camera/**
 data/yolo/**
 data/coco/**
 data/*.local.json
@@ -67,6 +71,14 @@ data/**/*.sqlite3
 events.out.tfevents*
 wandb/
 mlruns/
+/recordings/**
+/camera_dumps/**
+/stream_debug/**
+/logs/camera/**
+/runs/live/**
+*.camera.local.*
+camera*.local.*
+*.log
 
 *.[mM][pP]4
 *.[mM][oO][vV]
@@ -74,6 +86,9 @@ mlruns/
 *.[mM][kK][vV]
 *.[mM]4[vV]
 *.[wW][eE][bB][mM]
+*.[jJ][pP][gG]
+*.[jJ][pP][eE][gG]
+*.[pP][nN][gG]
 
 # Common model weight formats
 *.pt

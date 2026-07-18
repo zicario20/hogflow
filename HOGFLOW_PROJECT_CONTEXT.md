@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 4 implementation completed through Phase 4.3 — replaceable local baseline-training pipeline operational; real pig annotation and empirical detector validation may still be incomplete; no production or accuracy claim; Phase 5 not started.
+Current repository status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented; production architecture is stream-first; no real camera validation, pig detector execution, pig tracking, or pig counting; Phase 5.2 not started.
 
 ## Project identity
 
@@ -166,6 +166,34 @@ PLANNED pig-specific evidence work:
   replaceable Phase 4.3 training implementation does not supply that evidence.
 
 Candidate detector families mentioned in project guidance include YOLO, RF-DETR, or another compatible detector. The detector implementation must remain replaceable.
+
+IMPLEMENTED Phase 5.1 live acquisition foundation:
+
+* A framework-neutral `CameraSource` contract with explicit frame,
+  temporary-unavailable, EOF, interruption, and stopped read outcomes.
+* Immutable stream identities, timestamps, RGB payloads, `FramePacket` values,
+  health snapshots, and statistics.
+* Lifecycle-scoped monotonically increasing sequence numbers ordered by a
+  monotonic clock rather than wall time.
+* Thread-safe fixed-capacity buffering with deterministic `drop_oldest` and
+  `drop_newest` policies and observable sequence gaps.
+* A synchronous acquisition runner with optional producer thread, graceful
+  stop, deterministic reconnect backoff, and bounded diagnostics.
+* Runtime-only protected RTSP/file locators whose representations, errors,
+  logs, health, and statistics expose only opaque source identity.
+* Isolated OpenCV adapters for USB/RTSP acquisition and one-pass local
+  development files, plus a deterministic synthetic source for CI.
+* A headless diagnostic CLI that saves, uploads, previews, detects, tracks, and
+  counts nothing.
+
+NOT EMPIRICALLY COMPLETED in Phase 5.1:
+
+* physical USB-camera validation
+* real RTSP compatibility or interruption testing
+* a live pig-camera stream
+* pig-detector execution
+* pig-specific tracking or counting
+* Phase 5.2
 
 ## Unique tracker counting concept
 
@@ -386,7 +414,9 @@ Phase 3 inventory infrastructure is implemented. Real authorized dataset acquisi
 Phase 4 implementation is complete through Phase 4.3. The local replaceable
 training pipeline is operational, but real annotation may still be incomplete
 and no real detector-performance result was produced during implementation.
-Phase 5 has not started.
+Phase 5 is in progress through Phase 5.1. The live acquisition foundation is
+implemented using synthetic and fake-backend evidence only. Phase 5.2 and
+pig-specific tracking have not started.
 
 ## Pilot readiness phase
 
@@ -463,10 +493,19 @@ IMPLEMENTED at repository level:
 * reuse of Phase 4.1 metrics with separate framework metric reporting
 * local reproducibility metadata and detection failure-analysis output
 * synthetic Phase 4.3 training adapter and orchestration tests
+* Phase 5.1 framework-neutral continuous camera models and `CameraSource` contract
+* protected runtime source locators and sanitized camera identity
+* isolated OpenCV USB/RTSP and development-file stream adapters
+* deterministic scripted synthetic camera source
+* bounded thread-safe frame buffering and observable real-time drop policies
+* synchronous live-stream lifecycle runner, reconnect policy, health, and statistics
+* headless no-persistence camera diagnostic CLI
+* synthetic Phase 5.1 lifecycle, latency, privacy, adapter, and architecture tests
 
 Not yet implemented:
 
-* Phase 5 through Phase 16
+* Phase 5.2 and remaining pig-specific tracking work
+* Phase 6 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
@@ -478,4 +517,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 4 implementation completed through Phase 4.3 — replaceable local baseline-training pipeline operational; real pig annotation and empirical detector validation may still be incomplete; no production or accuracy claim; Phase 5 not started.
+Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented; production architecture is stream-first; no real camera validation, pig detector execution, pig tracking, or pig counting; Phase 5.2 not started.

@@ -32,6 +32,15 @@ def test_local_data_artifacts_and_common_video_formats_are_ignored() -> None:
         "data/evaluation/report.json",
         "data/tensorboard/events.out.tfevents.synthetic",
         "data/metrics/baseline/training_metadata.json",
+        "data/live/current-frame.jpg",
+        "data/captures/frame.jpeg",
+        "data/snapshots/frame.png",
+        "data/camera/private.camera.local.json",
+        "recordings/camera.avi",
+        "camera_dumps/frame.jpg",
+        "stream_debug/packet.png",
+        "runs/live/diagnostic.json",
+        "logs/camera/stream.log",
         "data/yolo/dataset.yaml",
         "data/coco/instances.json",
         "data/raw/clip.mp4.review.json",
@@ -120,6 +129,10 @@ def test_repository_tracks_no_video_or_generated_data_artifacts() -> None:
                 "data/runs/",
                 "data/tensorboard/",
                 "data/metrics/",
+                "data/live/",
+                "data/captures/",
+                "data/snapshots/",
+                "data/camera/",
             )
         )
         and not path.endswith(".gitkeep")

@@ -456,3 +456,120 @@ local output directories.
 Local runs are auditable without publishing source filenames or absolute
 paths. Reproducing a result still requires the independently retained local
 dataset and checkpoint; Git contains neither.
+
+## ADR-025 — Separate live acquisition from the Phase 2 video contract
+
+Status: Accepted
+
+### Context
+
+The Phase 2 `VideoSource` contract represents finite, sequential video input
+for the generic counting pipeline. A production-oriented camera source needs
+explicit temporary-failure, interruption, reconnect, shutdown, and health
+semantics that cannot be represented safely by an ambiguous `None` result.
+
+### Decision
+
+Define a small framework-neutral `CameraSource` contract in
+`hogflow.streaming`. Each read returns an explicit status and an optional
+immutable source frame. Keep the existing `VideoSource` contract unchanged for
+backward compatibility.
+
+### Consequences
+
+Live acquisition can distinguish file EOF from temporary or fatal camera
+conditions without changing Phase 1 or Phase 2 behavior. Future consumers can
+adapt `FramePacket` values deliberately, while camera infrastructure remains
+independent of detection, tracking, and counting.
+
+## ADR-026 — Use immutable RGB packets and monotonic stream ordering
+
+Status: Accepted
+
+### Context
+
+OpenCV produces mutable BGR arrays, but the streaming boundary must not expose
+OpenCV or NumPy objects. Wall-clock adjustments also make civil time unsafe for
+ordering a continuous stream.
+
+### Decision
+
+Copy acquired images into immutable packed RGB bytes before they leave an
+adapter. Assign lifecycle-scoped sequence numbers and monotonic timestamps in
+the runner. Retain a timezone-aware acquisition timestamp only as descriptive
+metadata.
+
+### Consequences
+
+Stream packets are framework-neutral and safely retainable, and ordering does
+not depend on wall-clock changes. The adapter incurs a color conversion and
+copy; real-camera throughput remains unvalidated.
+
+## ADR-027 — Bound latency with an explicit frame-drop policy
+
+Status: Accepted
+
+### Context
+
+A live camera can produce frames faster than a downstream consumer. An
+unbounded queue would convert consumer lag into increasing memory use and
+minutes of stale video.
+
+### Decision
+
+Use a fixed-capacity, thread-safe in-memory buffer. Support `drop_oldest` and
+`drop_newest`, defaulting to `drop_oldest` so a future real-time consumer sees
+recent frames. Expose submitted, delivered, dropped, depth, maximum-depth, and
+sequence-gap statistics.
+
+### Consequences
+
+Memory and latency remain bounded at the cost of intentionally discarded
+frames. Drops are observable and must not be mistaken for complete frame
+delivery.
+
+## ADR-028 — Use synchronous acquisition with deterministic reconnection
+
+Status: Accepted
+
+### Context
+
+Phase 5.1 needs continuous acquisition and optional producer/consumer
+separation, but no distributed stream framework, asynchronous application, or
+inference scheduler is required.
+
+### Decision
+
+Implement a synchronous `LiveStreamRunner` with an optional single producer
+thread. Use configurable bounded exponential backoff for live-source
+reconnection, injectable monotonic clock and sleep functions for deterministic
+tests, and never reconnect a development file after normal EOF.
+
+### Consequences
+
+Lifecycle, shutdown, and reconnect behavior remain small and testable without
+physical cameras. Backend blocking-read interruption remains best effort and
+must be validated with each real camera/backend combination later.
+
+## ADR-029 — Keep camera locators runtime-only and expose opaque identities
+
+Status: Accepted
+
+### Context
+
+RTSP locators may contain usernames, passwords, hosts, ports, and private
+deployment paths. Dataclass representations, logs, exceptions, and diagnostic
+reports can accidentally disclose those values.
+
+### Decision
+
+Store locators in a protected runtime wrapper whose string and representation
+contain only source type and opaque stream ID. Public models, health reports,
+statistics, and CLI output use `StreamIdentity`; adapter exceptions use static
+sanitized messages.
+
+### Consequences
+
+The normal public surface does not serialize camera secrets or private paths.
+Callers remain responsible for supplying and protecting runtime credentials;
+Phase 5.1 does not add a credential manager.

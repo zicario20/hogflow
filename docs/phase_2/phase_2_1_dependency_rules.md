@@ -7,7 +7,9 @@ approved contracts with concrete generic adapters and a synchronous pipeline,
 after Phase 3 adds local dataset-inventory infrastructure, after Phase 4.1
 adds framework-neutral detection-evaluation infrastructure, and after Phase 4.2
 adds local annotation-dataset preparation, and after Phase 4.3 adds the
-replaceable baseline detector-training boundary.
+replaceable baseline detector-training boundary. Phase 5.1 adds a
+framework-neutral live-streaming domain and isolates camera frameworks inside
+adapters.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -31,6 +33,9 @@ Implemented direction:
 * `training dataset/orchestration/reporting → annotation/evaluation/training models/core`
 * `YOLO training adapter → training contracts/models/core/Ultralytics`
 * `YOLO training CLI → YOLO adapter/training/core`
+* `streaming models/contracts/buffering/health/lifecycle → core and standard library`
+* `camera adapters → streaming/core/OpenCV`
+* `camera diagnostics CLI → camera adapters/streaming/core`
 
 The current counting module remains independent from CV frameworks and does
 not need config or core.
@@ -50,6 +55,7 @@ not need config or core.
 | `tracking` | Framework-independent `Tracker` contract. | `models` | Adapters, frameworks, video, detection, pipeline, storage, UI code |
 | `adapters` | Concrete OpenCV and Ultralytics integration boundaries, including the Phase 4.3 YOLO trainer. | `models`, `core`, contracts/config/training when needed | Data inventory, pipeline orchestration, counting rules, sessions, storage, UI business logic |
 | `training` | Framework-neutral detector-training configuration, contracts, prepared-dataset gate, orchestration, metrics reporting, and failure summaries. | `annotation`, `evaluation`, `models`, `core` | Concrete adapters, Ultralytics, Torch, OpenCV, NumPy, Supervision, tracking, counting, pipeline, sessions, storage, UI logic |
+| `streaming` | Framework-neutral live-frame contracts, immutable packets, source configuration, bounded buffering, health, lifecycle, reconnect policy, and synthetic source. | `core` and Python standard library | `adapters`, OpenCV, NumPy, Torch, Ultralytics, Supervision, detection, tracking, counting, pipeline, sessions, storage, UI logic |
 | `pipeline` | Synchronous generic orchestration and immutable results. | `video`, `detection`, `tracking`, `models`, `counting`; `core/config` when needed | Data inventory, concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated counting geometry |
 | `video` | Framework-neutral source contract plus CLI/output and OpenCV metadata infrastructure. | `models` for contract; `adapters`, `pipeline`, `counting`, `core`, `config` for generic entrypoint/output; `data` models/validation for metadata inspection | Sessions, storage, UI business logic, duplicated counting rules |
 | `sessions` | Future operational session lifecycle. | `core`, `domain` | Video, detection, tracking, pipeline, direct UI code |
@@ -66,12 +72,19 @@ External CV libraries are allowed only in concrete infrastructure-facing code:
 * OpenCV and NumPy in the Phase 3 video-metadata infrastructure
 * OpenCV in Phase 4.2 local frame extraction and annotation image validation
 * Ultralytics and Torch inside the Phase 4.3 YOLO training adapter only
+* OpenCV inside the Phase 5.1 USB, RTSP, and development-file camera adapters
 
 The `core`, `config`, `models`, `counting`, `domain`, contract modules,
 framework-neutral `data` models/splitting/planning, annotation models/policy/YOLO/manifest,
 `evaluation`, framework-neutral `training`, and pipeline modules must not import
 OpenCV, NumPy, Torch, Ultralytics, Supervision, ByteTrack, BoT-SORT, or another
 CV framework.
+
+The framework-neutral `streaming` package follows the same restriction. It
+defines explicit camera-source outcomes, immutable RGB packets, buffering,
+health, and lifecycle behavior without importing detector, tracker, counting,
+pipeline, or adapter packages. Camera adapters may depend inward on streaming;
+streaming must never depend outward on adapters.
 
 Phase 4.1 dataset selection consumes inventory metadata only. It must not decode
 videos, expose local paths in its output, or infer detector quality from an

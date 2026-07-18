@@ -15,6 +15,8 @@ only public, synthetic, or explicitly authorized data.
 - `tensorboard/` is reserved for local training logs if explicitly enabled.
 - `metrics/` contains local training metadata, detector metrics, dataset
   configuration, and failure-analysis reports.
+- `live/`, `captures/`, `snapshots/`, and related debug locations are reserved
+  for explicitly authorized local camera diagnostics and remain Git-ignored.
 - Video files, frames, thumbnails, generated media, and model weights are ignored by Git.
 
 Before placing a clip here, confirm that its license or authorization permits project use.
@@ -106,3 +108,17 @@ mAP values remain separate from HogFlow precision, recall, F1, and IoU.
 Resume requires an explicit local checkpoint through `--resume`. Use a new run
 name for a fresh experiment. None of these outputs may be committed or
 uploaded. See [Phase 4.3 training](../docs/phase_4/phase_4_3_training.md).
+
+## Phase 5.1 live-camera privacy
+
+The production input architecture is stream-first, but Phase 5.1 diagnostics
+do not record or upload frames. Camera streams, snapshots, captures,
+recordings, debug frame dumps, and camera logs remain local-only and
+Git-ignored. Do not place camera credentials, credential-bearing RTSP URLs,
+private deployment addresses, or secret configuration files anywhere in this
+workspace or in source control.
+
+Supply USB device choices and RTSP locators only at runtime. Diagnostic output
+uses opaque stream identities and aggregate health statistics. Prerecorded
+videos remain development and validation tools rather than the production
+input model. See [Phase 5.1 live streaming](../docs/phase_5/phase_5_1_live_streaming.md).

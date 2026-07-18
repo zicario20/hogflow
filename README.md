@@ -16,7 +16,7 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 4 implementation completed through Phase 4.3 — replaceable local baseline-training pipeline operational; real pig annotation and empirical detector validation may still be incomplete; no production or accuracy claim; Phase 5 not started.
+Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented; production architecture is stream-first; no real camera validation, pig detector execution, pig tracking, or pig counting; Phase 5.2 not started.
 
 The repository contains Phase 0 documentation, an approved Phase 1 generic
 people/vehicle finite-segment proof of concept, and the completed Phase 2
@@ -47,6 +47,12 @@ validation, one isolated Ultralytics YOLO trainer, deterministic configuration,
 local checkpoint/provenance output, reuse of Phase 4.1 evaluation metrics, and
 local failure reporting. The training pipeline is operational, but no real pig
 checkpoint or accuracy result was produced during implementation.
+
+Phase 5.1 adds framework-neutral continuous acquisition models and contracts,
+runtime-only protected camera locators, isolated OpenCV USB/RTSP and local-file
+adapters, a deterministic synthetic source, fixed-capacity buffering,
+reconnection and health state, and a headless diagnostic CLI. It performs no
+detection, tracking, counting, recording, upload, or remote telemetry.
 
 ## Phase 0 documentation
 
@@ -180,9 +186,36 @@ counting performance. No mAP implementation is claimed.
 * [Phase 4.3 local training](docs/phase_4/phase_4_3_training.md)
 * [Phase 4.3 summary](docs/phase_4/phase_4_3_summary.md)
 
+## Phase 5
+
+Phase 5 is in progress through the Phase 5.1 acquisition foundation:
+
+* stream-first USB and RTSP production-input architecture
+* explicit live, development-file, and synthetic source types
+* immutable ordered `FramePacket` values with packed RGB bytes
+* thread-safe bounded buffering with observable frame drops
+* deterministic live-source reconnect policy and bounded health reporting
+* credential-safe source identities and local-only camera data policy
+* headless diagnostics without automatic frame persistence
+
+Prerecorded videos remain development, training, and validation tools only.
+No pig detector was executed, no pig tracking or counting was implemented, and
+Phase 5.2 has not started.
+
+* [Phase 5.1 live streaming](docs/phase_5/phase_5_1_live_streaming.md)
+* [Phase 5.1 summary](docs/phase_5/phase_5_1_summary.md)
+
 ## High-level pipeline
 
-Implemented generic Phase 2.3 flow:
+Production input foundation implemented in Phase 5.1:
+
+LIVE CAMERA
+→ CAMERA SOURCE ADAPTER
+→ ORDERED FRAME PACKET
+→ BOUNDED FRAME BUFFER
+→ FUTURE DETECTOR CONSUMER
+
+Implemented generic Phase 2.3 development/video flow:
 
 VIDEO SOURCE
 → FRAME
@@ -203,11 +236,12 @@ storage, operator UI, and evaluation only in their approved phases.
 * Phase 2: completed through Phase 2.1, Phase 2.2, and Phase 2.3
 * Phase 3: inventory infrastructure implemented; real authorized collection and review in progress
 * Phase 4: implementation completed through Phase 4.3; real annotation and empirical detector validation may still be incomplete
-* Phase 5 through Phase 16: not started
+* Phase 5: in progress — Phase 5.1 live-camera acquisition foundation implemented; Phase 5.2 not started
+* Phase 6 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
-The repository contains no real pig video and makes no claim that a suitable
-real dataset has been acquired.
+The source-controlled repository contains no real pig video and makes no claim
+that a suitable real dataset has been acquired.
 
 ## Documentation index
 
@@ -218,11 +252,13 @@ real dataset has been acquired.
 
 ## Current limitations
 
-The generic pipeline has not been validated on pigs. Real pig annotation may be
+The generic pipeline has not been validated on pigs. The live-camera foundation
+has not been validated with a physical USB or RTSP camera. Real pig annotation may be
 incomplete, and no real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific
 tracking evaluation, sessions, SQLite persistence, operator UI, counting
 ground-truth comparison, analytics, or pilot workflow. Tracker ID switches and
-fragmentation remain count risks. Synthetic CI and training tests do not prove
-real pig-video or model quality.
+fragmentation remain count risks. OpenCV backend support, timeouts, and camera
+setting compliance vary by platform. Synthetic CI, training, and streaming
+tests do not prove real pig-video, model, camera, tracking, or counting quality.
