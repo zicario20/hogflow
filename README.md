@@ -16,7 +16,7 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 4 in progress — Phase 4.1 complete; Phase 4.2 tooling implemented; real pig annotation may still be incomplete; no detector trained or validated; no accuracy claims; Phase 4.3 not started.
+Current roadmap status: Phase 4 implementation completed through Phase 4.3 — replaceable local baseline-training pipeline operational; real pig annotation and empirical detector validation may still be incomplete; no production or accuracy claim; Phase 5 not started.
 
 The repository contains Phase 0 documentation, an approved Phase 1 generic
 people/vehicle finite-segment proof of concept, and the completed Phase 2
@@ -26,10 +26,11 @@ the approved contracts and adapters. Phase 3 adds a local-only authorized-video
 inventory, bounded metadata validation, conservative camera-motion estimates,
 manual review sidecars, and JSON/CSV/Markdown reports.
 
-Real authorized pig-video acquisition and review may still be ongoing. No real
-pig media is committed, and pig-specific detection, tracking validation, and
-counting evaluation have not started. HogFlow is not production-ready,
-operationally proven, or commercially validated.
+Real authorized pig-video acquisition, annotation, and review may still be
+ongoing. No real pig media is committed. Phase 4.3 supplies a replaceable local
+training pipeline, but no real pig baseline was trained during implementation.
+Pig-specific tracking and counting evaluation have not started. HogFlow is not
+production-ready, operationally proven, or commercially validated.
 
 Phase 4.1 adds source-only CI, framework-neutral detection-evaluation models,
 deterministic basic detection metrics, metadata-only dataset selection, and a
@@ -40,6 +41,12 @@ Phase 4.2 adds deterministic source-video splitting, timestamp planning, local
 frame extraction, a finalized pig bounding-box policy, framework-neutral YOLO
 label support, sanitized manifests, and local dataset validation. It does not
 train or run a detector.
+
+Phase 4.3 adds framework-neutral trainer contracts, mandatory prepared-dataset
+validation, one isolated Ultralytics YOLO trainer, deterministic configuration,
+local checkpoint/provenance output, reuse of Phase 4.1 evaluation metrics, and
+local failure reporting. The training pipeline is operational, but no real pig
+checkpoint or accuracy result was produced during implementation.
 
 ## Phase 0 documentation
 
@@ -146,6 +153,18 @@ Phase 4.2 implements local annotation-dataset preparation tooling:
 * deterministic YOLO parsing/serialization independent from detector frameworks
 * sanitized dataset manifests and JSON/CSV/Markdown validation reports
 
+Phase 4.3 implements the replaceable baseline-training workflow:
+
+* immutable training configuration and `DetectorTrainer` contract
+* mandatory Phase 4.2 dataset, split, image, label, and class-map gate
+* isolated `YOLOBaselineTrainer` with train, validate, and resume behavior
+* deterministic seed configuration and a bounded 30-epoch maximum
+* local best-checkpoint and reproducibility metadata export
+* Phase 4.1 precision, recall, F1, and IoU evaluation reuse
+* separately labeled framework metrics, including framework mAP when available
+* local false-positive, false-negative, small-object, empty-frame, and
+  occlusion-limitation reports
+
 CI validates code quality and deterministic synthetic behavior. It does not
 validate real pig-video quality, annotation quality, detector accuracy, or
 counting performance. No mAP implementation is claimed.
@@ -158,6 +177,8 @@ counting performance. No mAP implementation is claimed.
 * [Source-video dataset splitting](docs/phase_4/phase_4_dataset_splitting.md)
 * [Frame planning and extraction](docs/phase_4/phase_4_frame_extraction.md)
 * [Phase 4.2 summary](docs/phase_4/phase_4_2_summary.md)
+* [Phase 4.3 local training](docs/phase_4/phase_4_3_training.md)
+* [Phase 4.3 summary](docs/phase_4/phase_4_3_summary.md)
 
 ## High-level pipeline
 
@@ -181,7 +202,7 @@ storage, operator UI, and evaluation only in their approved phases.
 * Phase 1: generic people/vehicle finite-segment proof of concept implemented
 * Phase 2: completed through Phase 2.1, Phase 2.2, and Phase 2.3
 * Phase 3: inventory infrastructure implemented; real authorized collection and review in progress
-* Phase 4: in progress — Phase 4.1 complete; Phase 4.2 tooling implemented; Phase 4.3 not started
+* Phase 4: implementation completed through Phase 4.3; real annotation and empirical detector validation may still be incomplete
 * Phase 5 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
@@ -197,10 +218,11 @@ real dataset has been acquired.
 
 ## Current limitations
 
-The generic pipeline has not been validated on pigs. No real pig annotation is
-complete and no pig detector has been trained or validated. Phase 3 motion estimates
-use bounded samples and can be wrong when moving animals dominate image
-features. HogFlow has no pig-specific detector, pig-specific tracker evaluation,
-sessions, SQLite persistence, operator UI, ground-truth comparison, analytics,
-or pilot workflow. Tracker ID switches and fragmentation remain count risks.
-Synthetic CI and evaluation tests do not prove real pig-video or model quality.
+The generic pipeline has not been validated on pigs. Real pig annotation may be
+incomplete, and no real pig detector was trained or validated during Phase 4.3
+implementation. Phase 3 motion estimates use bounded samples and can be wrong
+when moving animals dominate image features. HogFlow has no pig-specific
+tracking evaluation, sessions, SQLite persistence, operator UI, counting
+ground-truth comparison, analytics, or pilot workflow. Tracker ID switches and
+fragmentation remain count risks. Synthetic CI and training tests do not prove
+real pig-video or model quality.

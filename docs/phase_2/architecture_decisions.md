@@ -386,3 +386,73 @@ reruns idempotent while refusing mismatched overwrites.
 
 Selection can be audited without decoding media. Extraction remains optional,
 local, bounded, and separate from imports, installation, tests, and CI.
+
+## ADR-022 — Define detector training as a replaceable contract
+
+Status: Accepted
+
+### Context
+
+Phase 4.3 needs one baseline trainer without making the rest of HogFlow depend
+on Ultralytics or a YOLO model family.
+
+### Decision
+
+Define one small framework-neutral `DetectorTrainer` Protocol using immutable
+training configuration, prepared-dataset, training-output, and
+validation-output models. Place Ultralytics loading, training, validation,
+checkpoint handling, and result conversion in `YOLOBaselineTrainer` under the
+adapter boundary.
+
+### Consequences
+
+Another detector family can replace YOLO by implementing the same contract.
+Framework objects never enter training orchestration, reports, evaluation, or
+the detector runtime contract. Synthetic tests inject a fake backend and never
+download weights.
+
+## ADR-023 — Reuse HogFlow metrics and namespace framework metrics
+
+Status: Accepted
+
+### Context
+
+Ultralytics validation exposes precision, recall, and mAP, while Phase 4.1
+already defines HogFlow's deterministic one-to-one precision, recall, F1, and
+IoU evaluation.
+
+### Decision
+
+Require trainer adapters to return framework-neutral `DetectionFrame` values.
+Run the approved Phase 4.1 evaluator over those values. Export framework
+metrics under separate framework namespaces and make no HogFlow mAP claim.
+
+### Consequences
+
+Detector comparisons retain one independent HogFlow evaluation method.
+Framework mAP may be recorded as a framework value but cannot be confused with
+HogFlow metrics or counting-system evidence.
+
+## ADR-024 — Keep training artifacts local with sanitized provenance
+
+Status: Accepted
+
+### Context
+
+Reproducible training needs seed, configuration, dataset version, code version,
+Git commit, checkpoint, metrics, and failure records. Real dataset paths and
+outputs must remain local and private.
+
+### Decision
+
+Fingerprint the sanitized manifest, image checksums, and validated label
+content. Record only opaque dataset/run IDs, model filename, output-relative
+checkpoint path, package version, Git commit, and immutable configuration.
+Store checkpoints, runs, framework caches, metrics, and reports under ignored
+local output directories.
+
+### Consequences
+
+Local runs are auditable without publishing source filenames or absolute
+paths. Reproducing a result still requires the independently retained local
+dataset and checkpoint; Git contains neither.

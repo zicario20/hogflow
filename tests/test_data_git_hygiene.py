@@ -30,6 +30,8 @@ def test_local_data_artifacts_and_common_video_formats_are_ignored() -> None:
         "data/models/model.ckpt",
         "data/runs/inference.json",
         "data/evaluation/report.json",
+        "data/tensorboard/events.out.tfevents.synthetic",
+        "data/metrics/baseline/training_metadata.json",
         "data/yolo/dataset.yaml",
         "data/coco/instances.json",
         "data/raw/clip.mp4.review.json",
@@ -116,6 +118,8 @@ def test_repository_tracks_no_video_or_generated_data_artifacts() -> None:
                 "data/processed/",
                 "data/raw/",
                 "data/runs/",
+                "data/tensorboard/",
+                "data/metrics/",
             )
         )
         and not path.endswith(".gitkeep")

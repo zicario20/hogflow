@@ -10,8 +10,11 @@ only public, synthetic, or explicitly authorized data.
 - `processed/` contains generated inventories and other local outputs.
 - `annotations/` contains local raw, interim, and processed annotation work.
 - `models/` contains local checkpoints and model weights.
-- `runs/` contains local inference outputs.
+- `runs/` contains local training, validation, and inference outputs.
 - `evaluation/` contains local detector-evaluation reports and derived records.
+- `tensorboard/` is reserved for local training logs if explicitly enabled.
+- `metrics/` contains local training metadata, detector metrics, dataset
+  configuration, and failure-analysis reports.
 - Video files, frames, thumbnails, generated media, and model weights are ignored by Git.
 
 Before placing a clip here, confirm that its license or authorization permits project use.
@@ -79,3 +82,27 @@ reports are local-only and Git-ignored.
 
 See [the Phase 4.2 workflow](../docs/phase_4/phase_4_2_local_annotation_dataset.md) and
 [the finalized annotation policy](../docs/phase_4/phase_4_annotation_policy.md).
+
+## Phase 4.3 local baseline training
+
+Training is permitted only after Phase 4.2 validation passes and non-empty,
+source-isolated train and validation splits exist. The local command is:
+
+```bash
+python -m hogflow.adapters.yolo_training \
+  --dataset data/annotations/raw \
+  --output-root data \
+  --model yolo11n.pt \
+  --epochs 25 \
+  --run-name phase4-3-baseline
+```
+
+The command validates the dataset before loading a model, exports the best
+checkpoint under `models/`, retains framework runs under `runs/`, writes
+sanitized reproducibility and metric records under `metrics/`, and writes
+annotation/failure reports under local ignored output directories. Framework
+mAP values remain separate from HogFlow precision, recall, F1, and IoU.
+
+Resume requires an explicit local checkpoint through `--resume`. Use a new run
+name for a fresh experiment. None of these outputs may be committed or
+uploaded. See [Phase 4.3 training](../docs/phase_4/phase_4_3_training.md).

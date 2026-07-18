@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 4 in progress — Phase 4.1 complete; Phase 4.2 tooling implemented; real pig annotation may still be incomplete; no detector trained or validated; no accuracy claims; Phase 4.3 not started.
+Current repository status: Phase 4 implementation completed through Phase 4.3 — replaceable local baseline-training pipeline operational; real pig annotation and empirical detector validation may still be incomplete; no production or accuracy claim; Phase 5 not started.
 
 ## Project identity
 
@@ -134,9 +134,36 @@ NOT IMPLEMENTED in Phase 4.2:
 * tracking or counting evaluation
 * Phase 4.3
 
-PLANNED pig-specific implementation work:
+IMPLEMENTED Phase 4.3 training pipeline:
 
-* Pig-specific detector and tracker validation remain future work beginning in Phase 4.
+* Immutable framework-neutral training configuration, result, provenance, and
+  failure-analysis models.
+* One small `DetectorTrainer` contract for replaceable detector-training
+  implementations.
+* A mandatory pre-training gate that reuses Phase 4.2 annotation, image,
+  label, class-map, and source-split validation.
+* Deterministic dataset fingerprinting without source filenames or paths.
+* One isolated `YOLOBaselineTrainer` with local train, validate, resume,
+  checkpoint export, and framework-result conversion.
+* Reuse of Phase 4.1 deterministic precision, recall, F1, and IoU evaluation.
+* Explicit separation of framework metrics from HogFlow evaluation metrics.
+* Local-only reproducibility metadata and detector failure reports.
+* Synthetic contract, adapter, orchestration, privacy, and smoke tests without
+  model downloads or real data.
+
+NOT EMPIRICALLY COMPLETED in Phase 4.3:
+
+* completed real pig annotation
+* a real pig-detector training run
+* a validated pig checkpoint or detector-accuracy result
+* pig-specific tracking or counting evaluation
+* Phase 5
+
+PLANNED pig-specific evidence work:
+
+* Real annotation, pig-detector training/validation, and later pig-specific
+  tracker validation still require authorized representative data. The
+  replaceable Phase 4.3 training implementation does not supply that evidence.
 
 Candidate detector families mentioned in project guidance include YOLO, RF-DETR, or another compatible detector. The detector implementation must remain replaceable.
 
@@ -356,8 +383,10 @@ Phase 2.1, Phase 2.2, and Phase 2.3 are implemented. This subphase structure doe
 
 Phase 3 inventory infrastructure is implemented. Real authorized dataset acquisition and review may still be ongoing, so this status does not claim that a representative pig dataset has been completed or validated.
 
-Phase 4 is in progress through Phase 4.2 tooling. Real annotation may still be
-incomplete, Phase 4.3 has not started, and no detector-performance result exists.
+Phase 4 implementation is complete through Phase 4.3. The local replaceable
+training pipeline is operational, but real annotation may still be incomplete
+and no real detector-performance result was produced during implementation.
+Phase 5 has not started.
 
 ## Pilot readiness phase
 
@@ -428,14 +457,19 @@ IMPLEMENTED at repository level:
 * local frame extraction with opaque output names and sanitized reports
 * annotation manifest construction and local dataset validation
 * synthetic Phase 4.2 preparation, privacy, architecture, and end-to-end tests
+* Phase 4.3 framework-neutral detector-training contract and immutable models
+* validated local prepared-dataset training gate and deterministic fingerprint
+* isolated Ultralytics YOLO baseline trainer with resume and checkpoint export
+* reuse of Phase 4.1 metrics with separate framework metric reporting
+* local reproducibility metadata and detection failure-analysis output
+* synthetic Phase 4.3 training adapter and orchestration tests
 
 Not yet implemented:
 
-* Phase 4.3 and remaining Phase 4 detector-baseline work
 * Phase 5 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
-* pig-specific detector
+* a real trained and validated pig-specific detector checkpoint
 * pig-specific tracking evaluation
 * operational session management
 * receiving batches or groups
@@ -444,4 +478,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 4 in progress — Phase 4.1 complete; Phase 4.2 tooling implemented; real pig annotation may still be incomplete; no detector trained or validated; no accuracy claims; Phase 4.3 not started.
+Current roadmap status: Phase 4 implementation completed through Phase 4.3 — replaceable local baseline-training pipeline operational; real pig annotation and empirical detector validation may still be incomplete; no production or accuracy claim; Phase 5 not started.

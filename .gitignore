@@ -27,6 +27,8 @@ data/runs/**
 !data/runs/.gitkeep
 data/evaluation/**
 !data/evaluation/.gitkeep
+data/tensorboard/**
+data/metrics/**
 data/yolo/**
 data/coco/**
 data/*.local.json
@@ -62,6 +64,9 @@ data/**/*.sqlite3
 *.tmp
 *.npy
 *.npz
+events.out.tfevents*
+wandb/
+mlruns/
 
 *.[mM][pP]4
 *.[mM][oO][vV]

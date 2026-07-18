@@ -6,7 +6,8 @@ These rules define the dependency direction after Phase 2.3 integrates the
 approved contracts with concrete generic adapters and a synchronous pipeline,
 after Phase 3 adds local dataset-inventory infrastructure, after Phase 4.1
 adds framework-neutral detection-evaluation infrastructure, and after Phase 4.2
-adds local annotation-dataset preparation.
+adds local annotation-dataset preparation, and after Phase 4.3 adds the
+replaceable baseline detector-training boundary.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -26,6 +27,10 @@ Implemented direction:
 * `data splitting/frame planning → annotation models/core/data`
 * `frame extraction → data planning/annotation models/core/OpenCV`
 * `annotation validation → annotation models/YOLO/manifest/core/OpenCV`
+* `training contracts/models/configuration → annotation/evaluation/models/core`
+* `training dataset/orchestration/reporting → annotation/evaluation/training models/core`
+* `YOLO training adapter → training contracts/models/core/Ultralytics`
+* `YOLO training CLI → YOLO adapter/training/core`
 
 The current counting module remains independent from CV frameworks and does
 not need config or core.
@@ -43,7 +48,8 @@ not need config or core.
 | `annotation` | Immutable pig annotation/manifest models, policy geometry, YOLO text serialization, sanitized manifests, and local structural validation. | Domain modules: `evaluation` models, `models`, `core`; validation infrastructure: OpenCV | Detector frameworks, adapters, tracking, counting, pipeline, sessions, storage, UI logic; CV frameworks in models, policy, YOLO, or manifest modules |
 | `detection` | Framework-independent `Detector` contract. | `models` | Adapters, frameworks, video, tracking, pipeline, storage, UI code |
 | `tracking` | Framework-independent `Tracker` contract. | `models` | Adapters, frameworks, video, detection, pipeline, storage, UI code |
-| `adapters` | Concrete OpenCV and Ultralytics integration boundaries. | `models`, `core`; contracts/config when needed | Data inventory, pipeline orchestration, counting rules, sessions, storage, UI business logic |
+| `adapters` | Concrete OpenCV and Ultralytics integration boundaries, including the Phase 4.3 YOLO trainer. | `models`, `core`, contracts/config/training when needed | Data inventory, pipeline orchestration, counting rules, sessions, storage, UI business logic |
+| `training` | Framework-neutral detector-training configuration, contracts, prepared-dataset gate, orchestration, metrics reporting, and failure summaries. | `annotation`, `evaluation`, `models`, `core` | Concrete adapters, Ultralytics, Torch, OpenCV, NumPy, Supervision, tracking, counting, pipeline, sessions, storage, UI logic |
 | `pipeline` | Synchronous generic orchestration and immutable results. | `video`, `detection`, `tracking`, `models`, `counting`; `core/config` when needed | Data inventory, concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated counting geometry |
 | `video` | Framework-neutral source contract plus CLI/output and OpenCV metadata infrastructure. | `models` for contract; `adapters`, `pipeline`, `counting`, `core`, `config` for generic entrypoint/output; `data` models/validation for metadata inspection | Sessions, storage, UI business logic, duplicated counting rules |
 | `sessions` | Future operational session lifecycle. | `core`, `domain` | Video, detection, tracking, pipeline, direct UI code |
@@ -59,10 +65,11 @@ External CV libraries are allowed only in concrete infrastructure-facing code:
 * Supervision in annotated-output infrastructure
 * OpenCV and NumPy in the Phase 3 video-metadata infrastructure
 * OpenCV in Phase 4.2 local frame extraction and annotation image validation
+* Ultralytics and Torch inside the Phase 4.3 YOLO training adapter only
 
 The `core`, `config`, `models`, `counting`, `domain`, contract modules,
 framework-neutral `data` models/splitting/planning, annotation models/policy/YOLO/manifest,
-`evaluation`, and pipeline modules must not import
+`evaluation`, framework-neutral `training`, and pipeline modules must not import
 OpenCV, NumPy, Torch, Ultralytics, Supervision, ByteTrack, BoT-SORT, or another
 CV framework.
 
@@ -74,6 +81,12 @@ Phase 4.2 keeps real paths in an ignored source map consumed only by extraction.
 Sanitized split, frame, extraction, manifest, and validation outputs contain
 opaque IDs and controlled workspace-relative image paths only. YOLO is a text
 serialization boundary, not a detector-framework dependency.
+
+Phase 4.3 keeps model loading, training, validation, framework mAP, and tensor
+conversion inside the YOLO adapter. Training orchestration receives only
+validated HogFlow dataset records, immutable configuration, checkpoints, and
+framework-neutral `DetectionFrame` values. HogFlow metrics reuse the Phase 4.1
+evaluator. Framework metrics remain separately named.
 
 No framework object may appear in a contract signature or escape an adapter.
 The video CLI chooses concrete implementations; the pipeline depends only on
