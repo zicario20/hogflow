@@ -36,6 +36,16 @@ def test_local_data_artifacts_and_common_video_formats_are_ignored() -> None:
         "runs/predict/frame.jpg",
         "weights/checkpoint.safetensors",
         "data/yolo/labels.cache",
+        "data/processed/phase_4/local_source_map.json",
+        "data/processed/phase_4/source_split_plan.json",
+        "data/processed/phase_4/frame_selection_plan.json",
+        "data/annotations/raw/images/train/frame.jpg",
+        "data/annotations/raw/images/validation/frame.jpeg",
+        "data/annotations/raw/images/test/frame.png",
+        "data/annotations/raw/labels/train/frame.txt",
+        "data/annotations/raw/annotation-tool.cvat",
+        "data/annotations/raw/project.labelstudio",
+        "data/annotations/raw/metadata/dataset_manifest.json",
         "sample.mov",
         "sample.avi",
         "sample.mkv",
@@ -80,6 +90,9 @@ def test_repository_tracks_no_video_or_generated_data_artifacts() -> None:
         ".mkv",
         ".mov",
         ".mp4",
+        ".jpg",
+        ".jpeg",
+        ".png",
         ".onnx",
         ".npy",
         ".npz",
@@ -92,6 +105,7 @@ def test_repository_tracks_no_video_or_generated_data_artifacts() -> None:
     )
 
     assert not any(path.endswith(forbidden_extensions) for path in tracked)
+    assert not any(path.endswith(".txt") and "/labels/" in f"/{path}" for path in tracked)
     assert not any(
         path.startswith(
             (

@@ -2,8 +2,9 @@
 
 ## Status
 
-This is a draft for future authorized pig annotation. No real frame has been extracted or
-annotated by Phase 4.1, and no final annotation format has been selected.
+This Phase 4.1 draft is retained as historical design context. It was
+superseded by [the finalized Phase 4.2 annotation policy](phase_4_annotation_policy.md).
+No claim is made that real annotation is complete.
 
 ## Local-only workspace
 

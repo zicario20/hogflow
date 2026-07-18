@@ -58,3 +58,24 @@ extract frames, create annotations, download weights, run detector inference, or
 All real annotation files, manifests, dataset exports, weights, runs, and evaluation reports
 remain local and ignored. Only the documented examples and `.gitkeep` placeholders may be
 tracked.
+
+## Phase 4.2 local preparation workflow
+
+After Phase 4.1 selection:
+
+1. Create a source-level split plan with `hogflow.data.dataset_splitting`.
+2. Create an ignored local source map that resolves opaque clip IDs to authorized files.
+3. Plan timestamps with `hogflow.data.frame_selection`; planning does not decode video.
+4. Explicitly extract frames with `hogflow.data.frame_extraction`.
+5. Annotate pigs manually using the finalized `0 = pig` policy and YOLO text format.
+6. Mark every frame `annotated`, `verified_empty`, `needs_manual_review`, or `excluded`.
+7. Build the sanitized manifest with `hogflow.annotation.manifest`.
+8. Validate the local dataset with `hogflow.annotation.validation`.
+
+Frames from one original source must remain in one split. Empty labels are created only after
+human confirmation of `verified_empty`; extraction never creates labels. Source maps, split
+plans, frame plans, images, labels, status maps, manifests, annotation-tool projects, and
+reports are local-only and Git-ignored.
+
+See [the Phase 4.2 workflow](../docs/phase_4/phase_4_2_local_annotation_dataset.md) and
+[the finalized annotation policy](../docs/phase_4/phase_4_annotation_policy.md).

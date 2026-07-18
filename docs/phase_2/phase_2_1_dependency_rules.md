@@ -4,8 +4,9 @@
 
 These rules define the dependency direction after Phase 2.3 integrates the
 approved contracts with concrete generic adapters and a synchronous pipeline,
-after Phase 3 adds local dataset-inventory infrastructure, and after Phase 4.1
-adds framework-neutral detection-evaluation infrastructure.
+after Phase 3 adds local dataset-inventory infrastructure, after Phase 4.1
+adds framework-neutral detection-evaluation infrastructure, and after Phase 4.2
+adds local annotation-dataset preparation.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -21,6 +22,10 @@ Implemented direction:
 * `data inventory CLI → data models/validation/video metadata/core`
 * `evaluation models/metrics → models/core`
 * `evaluation dataset selection CLI → core`
+* `annotation models/policy/YOLO/manifest → evaluation models/models/core`
+* `data splitting/frame planning → annotation models/core/data`
+* `frame extraction → data planning/annotation models/core/OpenCV`
+* `annotation validation → annotation models/YOLO/manifest/core/OpenCV`
 
 The current counting module remains independent from CV frameworks and does
 not need config or core.
@@ -33,8 +38,9 @@ not need config or core.
 | `config` | Explicit immutable foundational settings. | `core` | `adapters`, `counting`, `data`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
 | `models` | Canonical immutable communication data. | `core` | `adapters`, `config`, `counting`, `data`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
 | `counting` | Detector-independent counting rules and geometry. | `core` or `config` only with concrete need; currently neither. | `adapters`, `data`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, UI code, CV frameworks |
-| `data` | Immutable inventory models, deterministic discovery, local sidecar/manifest parsing, suitability rules, inventory CLI, and metadata report output. | Models/validation: `core`; inventory CLI: `core`, `video` metadata infrastructure | Adapters, counting, detector/tracker contracts, pipeline, sessions, storage, domain business logic; CV frameworks in models or validation |
+| `data` | Inventory models/discovery, source-level splitting, frame planning, local extraction, sidecar parsing, suitability, and reporting. | Framework-neutral planning: `annotation`, `core`, `data`; inventory: `core`, `video`; extraction: OpenCV | Adapters, counting, detector/tracker contracts, pipeline, sessions, storage, domain business logic; CV frameworks outside explicit metadata/extraction infrastructure |
 | `evaluation` | Immutable detection-evaluation models, deterministic geometry/matching/metrics, and metadata-only local dataset selection. | `models`, `core` | Adapters, video decoding, detector/tracker implementations, pipeline, counting, sessions, storage, UI code, CV frameworks |
+| `annotation` | Immutable pig annotation/manifest models, policy geometry, YOLO text serialization, sanitized manifests, and local structural validation. | Domain modules: `evaluation` models, `models`, `core`; validation infrastructure: OpenCV | Detector frameworks, adapters, tracking, counting, pipeline, sessions, storage, UI logic; CV frameworks in models, policy, YOLO, or manifest modules |
 | `detection` | Framework-independent `Detector` contract. | `models` | Adapters, frameworks, video, tracking, pipeline, storage, UI code |
 | `tracking` | Framework-independent `Tracker` contract. | `models` | Adapters, frameworks, video, detection, pipeline, storage, UI code |
 | `adapters` | Concrete OpenCV and Ultralytics integration boundaries. | `models`, `core`; contracts/config when needed | Data inventory, pipeline orchestration, counting rules, sessions, storage, UI business logic |
@@ -52,15 +58,22 @@ External CV libraries are allowed only in concrete infrastructure-facing code:
 * Ultralytics and NumPy in detector/tracker adapters
 * Supervision in annotated-output infrastructure
 * OpenCV and NumPy in the Phase 3 video-metadata infrastructure
+* OpenCV in Phase 4.2 local frame extraction and annotation image validation
 
 The `core`, `config`, `models`, `counting`, `domain`, contract modules,
-framework-neutral `data` models/validation, `evaluation`, and pipeline modules must not import
+framework-neutral `data` models/splitting/planning, annotation models/policy/YOLO/manifest,
+`evaluation`, and pipeline modules must not import
 OpenCV, NumPy, Torch, Ultralytics, Supervision, ByteTrack, BoT-SORT, or another
 CV framework.
 
 Phase 4.1 dataset selection consumes inventory metadata only. It must not decode
 videos, expose local paths in its output, or infer detector quality from an
 inventory suitability label.
+
+Phase 4.2 keeps real paths in an ignored source map consumed only by extraction.
+Sanitized split, frame, extraction, manifest, and validation outputs contain
+opaque IDs and controlled workspace-relative image paths only. YOLO is a text
+serialization boundary, not a detector-framework dependency.
 
 No framework object may appear in a contract signature or escape an adapter.
 The video CLI chooses concrete implementations; the pipeline depends only on

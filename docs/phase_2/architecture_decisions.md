@@ -300,3 +300,89 @@ Selection is reproducible without accessing video bytes and cannot turn a
 counting-candidate label into a detector-performance claim. Authorized local
 inventory data remains outside source control, and later annotation work must
 resolve opaque IDs locally.
+
+## ADR-018 — Use YOLO text as a framework-neutral local annotation format
+
+Status: Accepted
+
+### Context
+
+Phase 4.2 needs one operational bounding-box format before real annotation can
+proceed, but the annotation domain must not depend on Ultralytics or another
+detector implementation.
+
+### Decision
+
+Use UTF-8 YOLO detection text with the single class `0 = pig`, normalized
+coordinates, deterministic line ordering, and strict validation. Treat YOLO as
+serialization only; immutable annotation models remain framework neutral.
+
+### Consequences
+
+Local annotation tools can exchange a simple established format without
+coupling HogFlow domain code to a model family. Empty labels require an
+explicit `verified_empty` status, and malformed or ambiguous labels fail
+validation.
+
+## ADR-019 — Split by source video and fall back to preparation-only plans
+
+Status: Accepted
+
+### Context
+
+Adjacent frames from one video are highly correlated. The currently available
+authorized source count may be too small for a defensible 70/20/10 experiment.
+
+### Decision
+
+Assign opaque source clip IDs, never frames, to dataset splits. Use
+seed-controlled deterministic ranking. Below the configured minimum source
+count, assign all clips to `preparation` and emit warnings instead of forcing
+train, validation, and test.
+
+### Consequences
+
+Source leakage is prevented and small datasets are not presented as
+statistically meaningful. More independent authorized sources may be required
+before model evaluation.
+
+## ADR-020 — Separate private source maps from sanitized preparation records
+
+Status: Accepted
+
+### Context
+
+Local frame extraction must resolve opaque clip IDs to real files, while plans,
+reports, tests, logs, and Git must not expose those paths or private names.
+
+### Decision
+
+Keep clip-to-path mappings in a separately ignored local source map. Split,
+frame, extraction, manifest, and validation outputs retain only opaque IDs and
+controlled annotation-workspace-relative paths.
+
+### Consequences
+
+Infrastructure can read authorized local videos without propagating source
+information across boundaries. A lost source map must be recreated locally;
+sanitized records deliberately cannot recover private paths.
+
+## ADR-021 — Plan timestamps before optional local extraction
+
+Status: Accepted
+
+### Context
+
+Direct frame dumping can create many adjacent duplicates and makes selection
+hard to review before media is written.
+
+### Decision
+
+Create a deterministic metadata-only timestamp plan first. Run OpenCV seeking
+only through an explicit extraction command, use opaque image names, and make
+reruns idempotent while refusing mismatched overwrites.
+
+### Consequences
+
+Selection can be audited without decoding media. Extraction remains optional,
+local, bounded, and separate from imports, installation, tests, and CI.

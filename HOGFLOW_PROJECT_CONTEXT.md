@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 4 in progress — Phase 4.1 infrastructure implemented; real pig annotation not completed; no pig detector trained or validated; Phase 4.2 not started.
+Current repository status: Phase 4 in progress — Phase 4.1 complete; Phase 4.2 tooling implemented; real pig annotation may still be incomplete; no detector trained or validated; no accuracy claims; Phase 4.3 not started.
 
 ## Project identity
 
@@ -105,6 +105,34 @@ NOT IMPLEMENTED in Phase 4.1:
 * mAP
 * tracking evaluation
 * counting evaluation
+
+IMPLEMENTED Phase 4.2 tooling:
+
+* Finalized local annotation policy for the single `pig` class and explicit
+  `annotated`, `verified_empty`, `needs_manual_review`, and `excluded` states.
+* Framework-neutral normalized pig boxes and deterministic YOLO text
+  serialization with no detector-framework dependency.
+* Seed-controlled source-video-level splitting that never distributes one
+  source across train, validation, and test.
+* Preparation-only plans and explicit warnings when source diversity is below
+  the configured minimum.
+* Deterministic fixed-interval, target-count, and bounded-uniform frame planning
+  from metadata without decoding video.
+* Explicit ignored local source maps separated from sanitized split, frame,
+  extraction, manifest, and validation outputs.
+* Optional local OpenCV extraction using opaque names, bounded timestamp seeks,
+  idempotent writes, and no automatic annotations.
+* Sanitized annotation manifests plus JSON, CSV, and Markdown checks for image,
+  label, status, checksum, dimension, duplicate, and source-split consistency.
+
+NOT IMPLEMENTED in Phase 4.2:
+
+* completed real pig annotation
+* a downloaded, trained, fine-tuned, or validated pig detector
+* detector inference or accuracy measurement
+* mAP
+* tracking or counting evaluation
+* Phase 4.3
 
 PLANNED pig-specific implementation work:
 
@@ -328,7 +356,8 @@ Phase 2.1, Phase 2.2, and Phase 2.3 are implemented. This subphase structure doe
 
 Phase 3 inventory infrastructure is implemented. Real authorized dataset acquisition and review may still be ongoing, so this status does not claim that a representative pig dataset has been completed or validated.
 
-Phase 4 is in progress through Phase 4.1 foundations only. Phase 4.2 has not started, and no detector-performance result exists.
+Phase 4 is in progress through Phase 4.2 tooling. Real annotation may still be
+incomplete, Phase 4.3 has not started, and no detector-performance result exists.
 
 ## Pilot readiness phase
 
@@ -393,10 +422,16 @@ IMPLEMENTED at repository level:
 * privacy-preserving metadata-only detection dataset selection
 * protected local annotation/model/run/evaluation workspaces
 * synthetic Phase 4.1 evaluation, selection, CI, architecture, and Git-hygiene tests
+* Phase 4.2 finalized annotation policy and normalized pig annotation models
+* deterministic YOLO label parsing and serialization
+* source-video split and metadata-only frame-selection planning
+* local frame extraction with opaque output names and sanitized reports
+* annotation manifest construction and local dataset validation
+* synthetic Phase 4.2 preparation, privacy, architecture, and end-to-end tests
 
 Not yet implemented:
 
-* Phase 4.2 and remaining Phase 4 detector-baseline work
+* Phase 4.3 and remaining Phase 4 detector-baseline work
 * Phase 5 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
@@ -409,4 +444,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 4 in progress — Phase 4.1 infrastructure implemented; real pig annotation not completed; no pig detector trained or validated; Phase 4.2 not started.
+Current roadmap status: Phase 4 in progress — Phase 4.1 complete; Phase 4.2 tooling implemented; real pig annotation may still be incomplete; no detector trained or validated; no accuracy claims; Phase 4.3 not started.

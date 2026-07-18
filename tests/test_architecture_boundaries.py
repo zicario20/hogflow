@@ -6,6 +6,7 @@ from pathlib import Path
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src" / "hogflow"
 INTERNAL_PACKAGES = {
     "adapters",
+    "annotation",
     "config",
     "core",
     "counting",
@@ -22,6 +23,7 @@ INTERNAL_PACKAGES = {
 }
 FORBIDDEN_IMPORTS = {
     "adapters": {
+        "annotation",
         "counting",
         "data",
         "domain",
@@ -31,6 +33,7 @@ FORBIDDEN_IMPORTS = {
         "storage",
     },
     "core": {
+        "annotation",
         "adapters",
         "config",
         "counting",
@@ -46,6 +49,7 @@ FORBIDDEN_IMPORTS = {
         "evaluation",
     },
     "config": {
+        "annotation",
         "adapters",
         "counting",
         "data",
@@ -60,6 +64,7 @@ FORBIDDEN_IMPORTS = {
         "evaluation",
     },
     "counting": {
+        "annotation",
         "adapters",
         "data",
         "video",
@@ -72,6 +77,7 @@ FORBIDDEN_IMPORTS = {
         "evaluation",
     },
     "domain": {
+        "annotation",
         "adapters",
         "config",
         "counting",
@@ -86,6 +92,7 @@ FORBIDDEN_IMPORTS = {
         "evaluation",
     },
     "models": {
+        "annotation",
         "adapters",
         "config",
         "counting",
@@ -99,7 +106,7 @@ FORBIDDEN_IMPORTS = {
         "domain",
         "evaluation",
     },
-    "pipeline": {"adapters", "data", "evaluation"},
+    "pipeline": {"adapters", "annotation", "data", "evaluation"},
     "data": {
         "adapters",
         "counting",
@@ -113,6 +120,20 @@ FORBIDDEN_IMPORTS = {
         "evaluation",
     },
     "evaluation": {
+        "adapters",
+        "annotation",
+        "config",
+        "counting",
+        "data",
+        "detection",
+        "domain",
+        "pipeline",
+        "sessions",
+        "storage",
+        "tracking",
+        "video",
+    },
+    "annotation": {
         "adapters",
         "config",
         "counting",
@@ -158,6 +179,12 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "evaluation" / "detection_models.py",
     SOURCE_ROOT / "evaluation" / "detection_metrics.py",
     SOURCE_ROOT / "evaluation" / "dataset_selection.py",
+    SOURCE_ROOT / "annotation" / "models.py",
+    SOURCE_ROOT / "annotation" / "policy.py",
+    SOURCE_ROOT / "annotation" / "yolo.py",
+    SOURCE_ROOT / "annotation" / "manifest.py",
+    SOURCE_ROOT / "data" / "dataset_splitting.py",
+    SOURCE_ROOT / "data" / "frame_selection.py",
 )
 
 
@@ -340,6 +367,15 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.data",
         "hogflow.data.models",
         "hogflow.data.validation",
+        "hogflow.data.dataset_splitting",
+        "hogflow.data.frame_selection",
+        "hogflow.data.frame_extraction",
+        "hogflow.annotation",
+        "hogflow.annotation.models",
+        "hogflow.annotation.policy",
+        "hogflow.annotation.yolo",
+        "hogflow.annotation.manifest",
+        "hogflow.annotation.validation",
         "hogflow.evaluation",
         "hogflow.evaluation.detection_models",
         "hogflow.evaluation.detection_metrics",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import tempfile
@@ -13,7 +12,13 @@ from pathlib import Path, PurePosixPath
 from re import fullmatch
 from typing import Any, Mapping, Sequence
 
-from hogflow.core import HogFlowError, InputDataError, configure_logging, get_logger
+from hogflow.core import (
+    HogFlowError,
+    InputDataError,
+    configure_logging,
+    get_logger,
+    phase4_clip_id,
+)
 
 LOGGER = get_logger(__name__)
 
@@ -301,7 +306,7 @@ def _select_one(
             reasons = ("detection_candidate_not_confirmed",)
 
     return DetectionSelectionDecision(
-        clip_id=_opaque_clip_id(relative_path),
+        clip_id=phase4_clip_id(relative_path),
         status=status,
         reasons=reasons,
     )
@@ -322,11 +327,6 @@ def _string_set(value: object, *, field_name: str) -> frozenset[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         raise InputDataError(f"Inventory {field_name} must be a JSON string array.")
     return frozenset(value)
-
-
-def _opaque_clip_id(relative_path: str) -> str:
-    digest = hashlib.sha256(f"hogflow-phase4:{relative_path}".encode()).hexdigest()
-    return digest[:24]
 
 
 def _atomic_write_text(path: Path, content: str) -> None:

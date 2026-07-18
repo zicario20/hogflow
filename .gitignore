@@ -30,8 +30,28 @@ data/evaluation/**
 data/yolo/**
 data/coco/**
 data/*.local.json
+data/**/*.local.json
 data/**/*manifest*.json
 !data/clip_manifest.example.json
+data/**/local_source_map*.json
+data/**/*split_plan*.json
+data/**/*frame_selection_plan*.json
+data/**/*annotation_status*.json
+data/**/images/**
+data/**/labels/**
+data/**/train/**
+data/**/validation/**
+data/**/test/**
+data/**/*.[jJ][pP][gG]
+data/**/*.[jJ][pP][eE][gG]
+data/**/*.[pP][nN][gG]
+data/**/*.cvat
+data/**/*.cvat.zip
+data/**/*.labelstudio
+data/**/*.labelimg
+data/**/*.pkl
+data/**/*.sqlite
+data/**/*.sqlite3
 
 # Dataset review records and tool-generated CV outputs are always local
 *.review.json
@@ -39,6 +59,7 @@ data/**/*manifest*.json
 /weights/**
 .ultralytics/
 *.cache
+*.tmp
 *.npy
 *.npz
 

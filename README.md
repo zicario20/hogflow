@@ -16,7 +16,7 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 4 in progress — Phase 4.1 infrastructure implemented; real pig annotation not completed; no pig detector trained or validated; Phase 4.2 not started.
+Current roadmap status: Phase 4 in progress — Phase 4.1 complete; Phase 4.2 tooling implemented; real pig annotation may still be incomplete; no detector trained or validated; no accuracy claims; Phase 4.3 not started.
 
 The repository contains Phase 0 documentation, an approved Phase 1 generic
 people/vehicle finite-segment proof of concept, and the completed Phase 2
@@ -35,6 +35,11 @@ Phase 4.1 adds source-only CI, framework-neutral detection-evaluation models,
 deterministic basic detection metrics, metadata-only dataset selection, and a
 protected local annotation workspace. It introduces no detector implementation
 or accuracy result.
+
+Phase 4.2 adds deterministic source-video splitting, timestamp planning, local
+frame extraction, a finalized pig bounding-box policy, framework-neutral YOLO
+label support, sanitized manifests, and local dataset validation. It does not
+train or run a detector.
 
 ## Phase 0 documentation
 
@@ -121,8 +126,7 @@ direction, and a usable virtual-line location. It does not validate counting.
 
 ## Phase 4
 
-Phase 4 remains in progress. Phase 4.1 implements evaluation and preparation
-foundations only:
+Phase 4 remains in progress. Phase 4.1 implements evaluation foundations:
 
 * GitHub Actions CI using synthetic/source-only tests
 * immutable ground-truth, prediction, frame, match, result, and dataset models
@@ -132,14 +136,28 @@ foundations only:
 * metadata-only Phase 3 inventory selection with opaque clip IDs
 * local annotation, model, inference-run, and evaluation workspaces protected by Git
 
+Phase 4.2 implements local annotation-dataset preparation tooling:
+
+* source-video-level train/validation/test planning with preparation-only handling for small datasets
+* fixed-interval, target-count, and bounded-uniform frame planning
+* explicit local source-map privacy boundary and opaque frame names
+* idempotent local JPEG/PNG extraction without automatic labels
+* finalized `0 = pig` bounding-box and explicit frame-status policy
+* deterministic YOLO parsing/serialization independent from detector frameworks
+* sanitized dataset manifests and JSON/CSV/Markdown validation reports
+
 CI validates code quality and deterministic synthetic behavior. It does not
 validate real pig-video quality, annotation quality, detector accuracy, or
 counting performance. No mAP implementation is claimed.
 
 * [Phase 4.1 CI and detection foundation](docs/phase_4/phase_4_1_ci_and_detection_foundation.md)
 * [Detection evaluation foundation](docs/phase_4/phase_4_detection_evaluation.md)
-* [Annotation policy draft](docs/phase_4/phase_4_annotation_policy_draft.md)
 * [Phase 4.1 summary](docs/phase_4/phase_4_1_summary.md)
+* [Phase 4.2 local annotation dataset](docs/phase_4/phase_4_2_local_annotation_dataset.md)
+* [Final annotation policy](docs/phase_4/phase_4_annotation_policy.md)
+* [Source-video dataset splitting](docs/phase_4/phase_4_dataset_splitting.md)
+* [Frame planning and extraction](docs/phase_4/phase_4_frame_extraction.md)
+* [Phase 4.2 summary](docs/phase_4/phase_4_2_summary.md)
 
 ## High-level pipeline
 
@@ -163,7 +181,7 @@ storage, operator UI, and evaluation only in their approved phases.
 * Phase 1: generic people/vehicle finite-segment proof of concept implemented
 * Phase 2: completed through Phase 2.1, Phase 2.2, and Phase 2.3
 * Phase 3: inventory infrastructure implemented; real authorized collection and review in progress
-* Phase 4: in progress — Phase 4.1 infrastructure implemented; Phase 4.2 not started
+* Phase 4: in progress — Phase 4.1 complete; Phase 4.2 tooling implemented; Phase 4.3 not started
 * Phase 5 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
