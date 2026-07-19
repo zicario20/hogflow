@@ -63,6 +63,10 @@ data/**/*.sqlite3
 *.review.json
 /runs/**
 /weights/**
+/models/**
+/model_provenance/**
+/inference_outputs/**
+/preview_snapshots/**
 .ultralytics/
 *.cache
 *.tmp

@@ -16,7 +16,7 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented and validated on one laptop USB webcam using OpenCV MSMF; RTSP, pig detector execution, pig tracking, and pig counting remain unvalidated; Phase 5.2 not started.
+Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation and Phase 5.2 live detector integration implemented; real pig inference is blocked by missing validated local pig-detector weights; tracking and counting are not implemented; Phase 5.3 not started.
 
 The repository contains Phase 0 documentation, an approved Phase 1 generic
 people/vehicle finite-segment proof of concept, and the completed Phase 2
@@ -53,6 +53,15 @@ runtime-only protected camera locators, isolated OpenCV USB/RTSP and local-file
 adapters, a deterministic synthetic source, fixed-capacity buffering,
 reconnection and health state, and a headless diagnostic CLI. It performs no
 detection, tracking, counting, recording, upload, or remote telemetry.
+
+Phase 5.2 connects that bounded stream to a lifecycle-aware, replaceable live
+detector contract. It adds latest-frame inference scheduling, explicit
+camera-drop/inference-skip telemetry, deterministic detector doubles, one
+explicit-local-file Ultralytics adapter, an optional local OpenCV preview, and
+a structured headless CLI. No valid local pig-detector weights were available,
+so real pig inference remains blocked and no pig-detection accuracy claim is
+made. One local USB-webcam smoke test used only the empty detector and saved no
+frames. Tracking, line crossing, and counting remain outside this phase.
 
 ## Phase 0 documentation
 
@@ -188,7 +197,7 @@ counting performance. No mAP implementation is claimed.
 
 ## Phase 5
 
-Phase 5 is in progress through the Phase 5.1 acquisition foundation:
+Phase 5 is in progress through the Phase 5.2 live detector integration:
 
 * stream-first USB and RTSP production-input architecture
 * explicit live, development-file, and synthetic source types
@@ -197,24 +206,34 @@ Phase 5 is in progress through the Phase 5.1 acquisition foundation:
 * deterministic live-source reconnect policy and bounded health reporting
 * credential-safe source identities and local-only camera data policy
 * headless diagnostics without automatic frame persistence
+* explicit detector load/infer/close lifecycle and immutable per-frame results
+* latest-useful-frame scheduling without an unbounded inference queue
+* separate source-drop, inference-skip, and inference-failure accounting
+* deterministic empty, scripted, slow, and failing detector doubles
+* explicit local Ultralytics artifact adapter with sanitized provenance
+* optional ephemeral local OpenCV preview
 
 Prerecorded videos remain development, training, and validation tools only.
-No pig detector was executed, no pig tracking or counting was implemented, and
-Phase 5.2 has not started.
+No valid local pig detector was available or executed. No pig tracking, line
+crossing, or counting was implemented, and Phase 5.3 has not started.
 
 * [Phase 5.1 live streaming](docs/phase_5/phase_5_1_live_streaming.md)
 * [Phase 5.1 real hardware validation](docs/phase_5/phase_5_1_hardware_validation.md)
 * [Phase 5.1 summary](docs/phase_5/phase_5_1_summary.md)
+* [Phase 5.2 live detection](docs/phase_5/phase_5_2_live_detection.md)
+* [Phase 5.2 summary](docs/phase_5/phase_5_2_summary.md)
 
 ## High-level pipeline
 
-Production input foundation implemented in Phase 5.1:
+Production input and detector-integration foundation implemented through Phase 5.2:
 
 LIVE CAMERA
 → CAMERA SOURCE ADAPTER
 → ORDERED FRAME PACKET
 → BOUNDED FRAME BUFFER
-→ FUTURE DETECTOR CONSUMER
+→ LATEST-FRAME INFERENCE SCHEDULER
+→ REPLACEABLE LIVE DETECTOR
+→ STRUCTURED FRAME DETECTIONS / LOCAL TELEMETRY
 
 Implemented generic Phase 2.3 development/video flow:
 
@@ -237,7 +256,7 @@ storage, operator UI, and evaluation only in their approved phases.
 * Phase 2: completed through Phase 2.1, Phase 2.2, and Phase 2.3
 * Phase 3: inventory infrastructure implemented; real authorized collection and review in progress
 * Phase 4: implementation completed through Phase 4.3; real annotation and empirical detector validation may still be incomplete
-* Phase 5: in progress — Phase 5.1 live-camera acquisition foundation implemented; Phase 5.2 not started
+* Phase 5: in progress — Phase 5.1 acquisition and Phase 5.2 live detector integration implemented; Phase 5.3 not started
 * Phase 6 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
@@ -255,7 +274,10 @@ that a suitable real dataset has been acquired.
 
 The generic pipeline has not been validated on pigs. The live-camera foundation
 has been validated on one laptop USB webcam through OpenCV MSMF, but not on
-RTSP, another camera model, or another backend. Real pig annotation may be
+RTSP, another camera model, or another backend. Phase 5.2 live detector control
+flow is validated synthetically and with one local USB-webcam-to-empty-detector
+smoke test, but no valid local pig-detector artifact was available and real pig
+inference was not validated. Real pig annotation may be
 incomplete, and no real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific

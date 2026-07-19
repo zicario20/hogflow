@@ -122,3 +122,17 @@ Supply USB device choices and RTSP locators only at runtime. Diagnostic output
 uses opaque stream identities and aggregate health statistics. Prerecorded
 videos remain development and validation tools rather than the production
 input model. See [Phase 5.1 live streaming](../docs/phase_5/phase_5_1_live_streaming.md).
+
+## Phase 5.2 live detector privacy
+
+Live detector integration consumes ephemeral `FramePacket` values and does not
+save camera frames, detections, screenshots, recordings, or preview output.
+Preview is local and disabled by default. Explicit local detector artifacts,
+provenance files, model weights, run outputs, and any model-specific reports
+remain local-only and Git-ignored.
+
+The live detector CLI prints sanitized source and model identity plus aggregate
+telemetry. It does not print camera locators or full model paths. No valid local
+pig-detector artifact was available during Phase 5.2 implementation, so real
+pig inference was not performed. See
+[Phase 5.2 live detection](../docs/phase_5/phase_5_2_live_detection.md).

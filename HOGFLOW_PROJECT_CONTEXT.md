@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented and validated on one laptop USB webcam using OpenCV MSMF; RTSP, pig detector execution, pig tracking, and pig counting remain unvalidated; Phase 5.2 not started.
+Current repository status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation and Phase 5.2 live detector integration implemented; real pig inference is blocked by missing validated local pig-detector weights; tracking and counting are not implemented; Phase 5.3 not started.
 
 ## Project identity
 
@@ -193,7 +193,39 @@ NOT EMPIRICALLY COMPLETED in Phase 5.1:
 * a live pig-camera stream
 * pig-detector execution
 * pig-specific tracking or counting
-* Phase 5.2
+
+IMPLEMENTED Phase 5.2 live detector integration:
+
+* A framework-neutral lifecycle-aware `LiveDetector` contract that consumes
+  immutable Phase 5.1 `FramePacket` values and returns immutable
+  `FrameDetections` tied to exact source sequence IDs.
+* Sanitized model metadata with local artifact filename, SHA-256 fingerprint,
+  class mapping, and optional structural provenance fields.
+* Latest-useful-frame inference scheduling over the fixed Phase 5.1 source
+  buffer, without a second unbounded inference queue.
+* Configurable every-N, target-FPS, and maximum-frame-age scheduling with
+  explicit inference-skip accounting.
+* Separate counters for source-buffer drops, inference skips, and inference
+  failures, plus bounded latency percentiles and frame-age telemetry.
+* Deterministic empty, scripted, slow, and failing detectors for tests and
+  local infrastructure diagnostics.
+* One isolated Ultralytics live-inference adapter that requires an explicit
+  existing local artifact, validates the pig class policy, and never downloads
+  model weights.
+* An optional local-only OpenCV preview and a sanitized JSON diagnostic CLI.
+* Synthetic end-to-end, scheduling, failure, adapter, privacy, CLI, and
+  architecture validation with no camera, GPU, internet, or model requirement.
+* One local laptop USB-webcam control-flow smoke test with the deterministic
+  empty detector; no frame was persisted and no pig model was involved.
+
+NOT EMPIRICALLY COMPLETED in Phase 5.2:
+
+* real pig inference, because no validated local pig-detector artifact exists
+* pig-detector accuracy, latency, or throughput validation
+* a Phase 5.2 physical-camera plus real-model validation
+* RTSP production readiness
+* multi-object tracking, line crossing, or pig counting
+* Phase 5.3
 
 ## Unique tracker counting concept
 
@@ -414,9 +446,13 @@ Phase 3 inventory infrastructure is implemented. Real authorized dataset acquisi
 Phase 4 implementation is complete through Phase 4.3. The local replaceable
 training pipeline is operational, but real annotation may still be incomplete
 and no real detector-performance result was produced during implementation.
-Phase 5 is in progress through Phase 5.1. The live acquisition foundation has
-synthetic, fake-backend, and one real laptop USB-webcam validation record.
-RTSP, Phase 5.2, and pig-specific tracking have not started.
+Phase 5 is in progress through Phase 5.2. The live acquisition foundation has
+synthetic, fake-backend, and one real laptop USB-webcam validation record. Live
+detector integration has deterministic synthetic/fake-framework evidence and
+one USB-webcam-to-empty-detector control-flow result, but no valid local
+pig-detector artifact was available for real pig inference.
+RTSP production validation, pig-specific tracking, and Phase 5.3 have not
+started.
 
 ## Pilot readiness phase
 
@@ -501,10 +537,19 @@ IMPLEMENTED at repository level:
 * synchronous live-stream lifecycle runner, reconnect policy, health, and statistics
 * headless no-persistence camera diagnostic CLI
 * synthetic Phase 5.1 lifecycle, latency, privacy, adapter, and architecture tests
+* Phase 5.2 immutable live inference, model provenance, telemetry, and run-summary models
+* lifecycle-aware framework-neutral `LiveDetector` and local preview contracts
+* latest-useful-frame detector orchestration over the bounded Phase 5.1 stream
+* explicit source-drop, inference-skip, and detector-failure accounting
+* deterministic empty, scripted, slow, and failing live detector doubles
+* isolated explicit-local-file Ultralytics live detector adapter
+* optional ephemeral OpenCV detection preview and sanitized JSON CLI
+* synthetic Phase 5.2 scheduling, latency, privacy, adapter, and architecture tests
+* one local Phase 5.2 USB-webcam smoke test using the empty detector only
 
 Not yet implemented:
 
-* Phase 5.2 and remaining pig-specific tracking work
+* Phase 5.3 and pig-specific tracking work
 * Phase 6 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
@@ -517,4 +562,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented and validated on one laptop USB webcam using OpenCV MSMF; RTSP, pig detector execution, pig tracking, and pig counting remain unvalidated; Phase 5.2 not started.
+Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation and Phase 5.2 live detector integration implemented; real pig inference is blocked by missing validated local pig-detector weights; tracking and counting are not implemented; Phase 5.3 not started.

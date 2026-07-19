@@ -152,6 +152,11 @@ class LiveStreamRunner:
         with self._lifecycle_lock:
             return self._running
 
+    def source_is_open(self) -> bool:
+        """Return whether the owned camera source still holds its resource."""
+
+        return self._source.is_open()
+
     def health(self) -> StreamHealth:
         """Return runner health merged with current buffer depth."""
 

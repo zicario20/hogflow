@@ -575,3 +575,100 @@ sanitized messages.
 The normal public surface does not serialize camera secrets or private paths.
 Callers remain responsible for supplying and protecting runtime credentials;
 Phase 5.1 does not add a credential manager.
+
+## ADR-030 — Add a lifecycle-aware live detector port without changing the finite-video contract
+
+Status: Accepted
+
+### Context
+
+The approved Phase 2 `Detector` receives a finite-video `Frame` through one
+`predict` call. Phase 5.2 needs explicit local model loading, sanitized artifact
+metadata, inference over `FramePacket`, and deterministic cleanup while
+preserving the older contract and Phase 1 behavior.
+
+### Decision
+
+Keep `Detector` unchanged. Add the small framework-neutral `LiveDetector` port
+with `load`, `metadata`, `infer`, and `close`. Require immutable
+`FrameDetections` to preserve source ID, sequence, dimensions, timestamps, and
+model identity. Keep the interface serial and make no thread-safety guarantee.
+
+### Consequences
+
+Finite-video compatibility remains intact while live model lifecycle is
+explicit. Future detector frameworks can replace Ultralytics through one
+adapter. Two contracts exist for genuinely different finite and continuous
+lifecycles, so callers must choose the appropriate composition root.
+
+## ADR-031 — Reuse the source buffer as the only inference backlog
+
+Status: Accepted
+
+### Context
+
+Camera acquisition can outrun detector inference. A second unbounded queue
+would increase memory and frame age even though Phase 5.1 already supplies a
+fixed-capacity real-time boundary.
+
+### Decision
+
+Run acquisition independently and let `LiveDetectionPipeline` drain currently
+available source packets before each inference, retaining only the newest
+useful frame. Support every-N, target-FPS, and maximum-age gates without
+sleeping in or blocking acquisition. Count source-buffer drops separately from
+inference-stage skips and failures.
+
+### Consequences
+
+Memory and backlog remain bounded, and recent camera state is prioritized over
+historical completeness. Not every acquired frame is inferred. Camera and
+inference stages have separate accounting invariants rather than one
+misleading cross-stage equality.
+
+## ADR-032 — Require explicit local artifacts and structural provenance
+
+Status: Accepted
+
+### Context
+
+Ultralytics accepts model nicknames that may trigger downloads. A loaded model
+also does not by itself establish that its classes, dataset, evaluation, or
+purpose are appropriate for pig detection.
+
+### Decision
+
+Accept only an existing local model file, calculate its SHA-256 fingerprint,
+validate the pig class mapping, and optionally validate a matching local
+provenance record. Expose only the artifact filename, hash, opaque identifiers,
+class mapping, and known metadata. Label provenance as structurally complete,
+not as detector-quality validation. Never infer missing provenance.
+
+### Consequences
+
+Phase 5.2 cannot silently download a generic model or call it a pig detector.
+Real pig inference remains blocked until an appropriate local artifact exists.
+The local model and provenance files remain ignored and independently managed.
+
+## ADR-033 — Keep preview optional, local, and failure-isolated
+
+Status: Accepted
+
+### Context
+
+Local diagnostics benefit from boxes and telemetry overlaid on current frames,
+but GUI behavior must not enter the domain, become required in headless CI, or
+compromise camera/detector cleanup.
+
+### Decision
+
+Define a small framework-neutral preview port and one OpenCV adapter. Disable
+preview by default, prohibit persistence, and interpret q/Escape as a
+cooperative stop request. If preview fails, record the failure, close the
+window, and continue headless inference.
+
+### Consequences
+
+Headless operation and framework boundaries remain intact. Preview failure is
+observable but does not become a camera or detector failure. The preview is a
+local diagnostic, not an operator UI or remote service.

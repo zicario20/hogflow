@@ -48,6 +48,10 @@ def test_camera_capture_and_debug_outputs_are_ignored() -> None:
         "runs/live/result.json",
         "logs/camera/source.log",
         "camera.camera.local.json",
+        "models/local-pig-detector.pt",
+        "model_provenance/local-pig-detector.json",
+        "inference_outputs/live-result.json",
+        "preview_snapshots/frame.png",
     )
     result = _git("check-ignore", *candidates)
 
