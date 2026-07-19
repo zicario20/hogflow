@@ -109,10 +109,14 @@ class LiveStreamRunner:
                 self._running = False
 
     def stop(self) -> None:
-        """Request shutdown, release the source, and unblock consumers."""
+        """Request cooperative shutdown and unblock waiting consumers.
+
+        The producer normally finishes its active read and releases the source
+        from the acquisition thread. ``join`` falls back to cross-thread close
+        only when a read remains blocked beyond a short grace period.
+        """
 
         self._stop_event.set()
-        self._source.close()
         self._buffer.close()
 
     def join(self, timeout_seconds: float | None = None, *, raise_on_failure: bool = False) -> bool:
@@ -121,7 +125,22 @@ class LiveStreamRunner:
         thread = self._thread
         if thread is None:
             return True
-        thread.join(timeout_seconds)
+        started_at = monotonic()
+        if self._stop_event.is_set():
+            cooperative_grace = 0.25
+            if timeout_seconds is not None:
+                cooperative_grace = min(cooperative_grace, max(0.0, timeout_seconds))
+            thread.join(cooperative_grace)
+            if thread.is_alive():
+                self._source.close()
+                remaining = (
+                    None
+                    if timeout_seconds is None
+                    else max(0.0, timeout_seconds - (monotonic() - started_at))
+                )
+                thread.join(remaining)
+        else:
+            thread.join(timeout_seconds)
         finished = not thread.is_alive()
         if finished and raise_on_failure and self._failure is not None:
             raise self._failure

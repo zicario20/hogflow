@@ -543,7 +543,9 @@ inference scheduler is required.
 Implement a synchronous `LiveStreamRunner` with an optional single producer
 thread. Use configurable bounded exponential backoff for live-source
 reconnection, injectable monotonic clock and sleep functions for deterministic
-tests, and never reconnect a development file after normal EOF.
+tests, and never reconnect a development file after normal EOF. On requested
+shutdown, allow the producer a short cooperative read-completion period before
+falling back to cross-thread source close for a genuinely blocked read.
 
 ### Consequences
 

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from threading import Event, get_ident
 
 from hogflow.streaming.buffering import BoundedFrameBuffer
 from hogflow.streaming.configuration import (
@@ -11,6 +12,7 @@ from hogflow.streaming.models import (
     BufferReadStatus,
     OverflowPolicy,
     StreamHealthState,
+    StreamReadResult,
 )
 from hogflow.streaming.synthetic import (
     SyntheticCameraSource,
@@ -28,6 +30,24 @@ class SteppingClock:
         current = self.value
         self.value += self.step
         return current
+
+
+class ControlledReadSyntheticSource(SyntheticCameraSource):
+    def __init__(self) -> None:
+        super().__init__(frame_count=1)
+        self.read_started = Event()
+        self.release_read = Event()
+        self.close_thread_ids: list[int] = []
+
+    def read(self) -> StreamReadResult:
+        self.read_started.set()
+        self.release_read.wait(2.0)
+        return super().read()
+
+    def close(self) -> None:
+        self.close_thread_ids.append(get_ident())
+        self.release_read.set()
+        super().close()
 
 
 def _runner(
@@ -212,6 +232,36 @@ def test_background_runner_stop_unblocks_consumer_and_closes_source() -> None:
     assert runner.join(2.0)
     assert not source.is_open()
     assert runner.buffer.statistics().closed
+
+
+def test_background_stop_releases_cooperatively_on_producer_thread() -> None:
+    source = ControlledReadSyntheticSource()
+    runner = _runner(source)
+    caller_thread_id = get_ident()
+    runner.start()
+    assert source.read_started.wait(1.0)
+
+    runner.stop()
+    assert source.is_open()
+    source.release_read.set()
+
+    assert runner.join(2.0, raise_on_failure=True)
+    assert not source.is_open()
+    assert caller_thread_id not in source.close_thread_ids
+
+
+def test_join_forces_close_when_source_read_remains_blocked() -> None:
+    source = ControlledReadSyntheticSource()
+    runner = _runner(source)
+    caller_thread_id = get_ident()
+    runner.start()
+    assert source.read_started.wait(1.0)
+
+    runner.stop()
+
+    assert runner.join(2.0, raise_on_failure=True)
+    assert not source.is_open()
+    assert caller_thread_id in source.close_thread_ids
 
 
 def test_synthetic_end_to_end_prioritizes_bounded_latency_for_slow_consumer() -> None:

@@ -16,7 +16,7 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented; production architecture is stream-first; no real camera validation, pig detector execution, pig tracking, or pig counting; Phase 5.2 not started.
+Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented and validated on one laptop USB webcam using OpenCV MSMF; RTSP, pig detector execution, pig tracking, and pig counting remain unvalidated; Phase 5.2 not started.
 
 The repository contains Phase 0 documentation, an approved Phase 1 generic
 people/vehicle finite-segment proof of concept, and the completed Phase 2
@@ -203,6 +203,7 @@ No pig detector was executed, no pig tracking or counting was implemented, and
 Phase 5.2 has not started.
 
 * [Phase 5.1 live streaming](docs/phase_5/phase_5_1_live_streaming.md)
+* [Phase 5.1 real hardware validation](docs/phase_5/phase_5_1_hardware_validation.md)
 * [Phase 5.1 summary](docs/phase_5/phase_5_1_summary.md)
 
 ## High-level pipeline
@@ -253,7 +254,8 @@ that a suitable real dataset has been acquired.
 ## Current limitations
 
 The generic pipeline has not been validated on pigs. The live-camera foundation
-has not been validated with a physical USB or RTSP camera. Real pig annotation may be
+has been validated on one laptop USB webcam through OpenCV MSMF, but not on
+RTSP, another camera model, or another backend. Real pig annotation may be
 incomplete, and no real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific

@@ -103,9 +103,8 @@ class StreamHealthMonitor:
                 interval = now - self._previous_success
                 if interval < 0:
                     raise InputDataError("Monotonic frame time must not move backward.")
-                if interval > 0:
-                    self._interval_sum += interval
-                    self._interval_count += 1
+                self._interval_sum += interval
+                self._interval_count += 1
             self._previous_success = now
             self._last_success = now
             self._observed_dimensions = dimensions

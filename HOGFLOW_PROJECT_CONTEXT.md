@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented; production architecture is stream-first; no real camera validation, pig detector execution, pig tracking, or pig counting; Phase 5.2 not started.
+Current repository status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented and validated on one laptop USB webcam using OpenCV MSMF; RTSP, pig detector execution, pig tracking, and pig counting remain unvalidated; Phase 5.2 not started.
 
 ## Project identity
 
@@ -188,7 +188,7 @@ IMPLEMENTED Phase 5.1 live acquisition foundation:
 
 NOT EMPIRICALLY COMPLETED in Phase 5.1:
 
-* physical USB-camera validation
+* validation on additional USB camera models or non-MSMF backends
 * real RTSP compatibility or interruption testing
 * a live pig-camera stream
 * pig-detector execution
@@ -414,9 +414,9 @@ Phase 3 inventory infrastructure is implemented. Real authorized dataset acquisi
 Phase 4 implementation is complete through Phase 4.3. The local replaceable
 training pipeline is operational, but real annotation may still be incomplete
 and no real detector-performance result was produced during implementation.
-Phase 5 is in progress through Phase 5.1. The live acquisition foundation is
-implemented using synthetic and fake-backend evidence only. Phase 5.2 and
-pig-specific tracking have not started.
+Phase 5 is in progress through Phase 5.1. The live acquisition foundation has
+synthetic, fake-backend, and one real laptop USB-webcam validation record.
+RTSP, Phase 5.2, and pig-specific tracking have not started.
 
 ## Pilot readiness phase
 
@@ -517,4 +517,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented; production architecture is stream-first; no real camera validation, pig detector execution, pig tracking, or pig counting; Phase 5.2 not started.
+Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation implemented and validated on one laptop USB webcam using OpenCV MSMF; RTSP, pig detector execution, pig tracking, and pig counting remain unvalidated; Phase 5.2 not started.

@@ -6,10 +6,11 @@ Phase 5.1 implements a stream-first local acquisition foundation for future
 HogFlow processing. The production input goal is a continuously operating live
 camera, while prerecorded files remain development and validation tools only.
 
-This phase does not establish real-camera compatibility or production
-readiness. Validation uses deterministic synthetic sources and fake OpenCV
-captures. No physical camera, RTSP endpoint, pig detector, tracker, counter,
-session, database, dashboard, or cloud service is used.
+This phase does not establish general camera compatibility or production
+readiness. Implementation validation used deterministic synthetic sources and
+fake OpenCV captures; a later Phase 5.1 validation used one laptop USB webcam
+through MSMF. No RTSP endpoint, pig detector, tracker, counter, session,
+database, dashboard, or cloud service was used.
 
 ## Architecture
 
@@ -125,6 +126,11 @@ Health states are `created`, `opening`, `warming_up`, `running`, `degraded`,
 one sanitized error category, not an unbounded error history or raw exception
 text. Durations and observed FPS use monotonic time.
 
+Observed-FPS aggregation counts every interval between acquired frames,
+including zero-duration intervals produced when a platform monotonic clock is
+coarser than frame delivery. This prevents quantized timestamps from
+systematically under-reporting acquisition rate.
+
 ## Credential and camera-data policy
 
 RTSP URLs and file paths live inside a runtime-only `ProtectedSource`. Its
@@ -200,6 +206,11 @@ resolution/FPS, acquired/delivered/dropped frames, reconnect count, buffer
 depth, and runtime. Ctrl+C requests shutdown and closes resources. Phase 5.1
 does not implement a preview window.
 
+Background shutdown first gives the acquisition thread a short cooperative
+grace period to finish its active read and release the source on that same
+thread. If the read remains blocked, `join()` falls back to closing the source
+from the caller so shutdown does not wait indefinitely.
+
 ## Validation
 
 ```bash
@@ -214,7 +225,8 @@ git diff --check
 
 ## Limitations
 
-- No real USB camera or RTSP endpoint was tested during implementation.
+- One laptop USB webcam was validated through OpenCV MSMF; other cameras,
+  backends, and RTSP remain unvalidated.
 - OpenCV backend timeout and requested-setting support varies by platform.
 - Releasing a capture is a best-effort interruption of backend blocking reads.
 - Packed RGB bytes require a copy at the OpenCV boundary.

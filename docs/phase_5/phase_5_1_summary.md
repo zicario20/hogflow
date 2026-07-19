@@ -3,9 +3,10 @@
 ## Status
 
 Phase 5.1 live-camera acquisition foundation implemented. The production input
-architecture is stream-first, but no real camera compatibility, pig detection,
-tracking, counting, or production readiness is claimed. Phase 5.2 has not
-started.
+architecture is stream-first and one laptop USB webcam passed a bounded real
+hardware validation through OpenCV MSMF. This does not establish general camera
+or RTSP compatibility, pig detection, tracking, counting, or production
+readiness. Phase 5.2 has not started.
 
 ## Delivered
 
@@ -33,6 +34,16 @@ drop-oldest buffer while the consumer remains slow. The buffer retains only
 sequences 46–49, reports 46 drops, never exceeds depth four, closes the source,
 and lets the consumer drain and terminate cleanly. This validates control flow
 and bounded memory only; it does not validate a physical camera or pig stream.
+
+## Real hardware result
+
+One \`HD User Facing\` laptop webcam at index 0 was validated at 640 × 480 and
+approximately 30 FPS through OpenCV MSMF. Five repeated 30-second lifecycles,
+a corrected 10-minute run, and a corrected 30-minute run completed with no
+read failures, reconnects, duplicate sequence IDs, non-monotonic sequence IDs,
+runaway memory growth, or post-fix OpenCV warning. The 30-minute run acquired
+53,997 frames, kept buffer depth at or below four, and released the camera in
+0.391 seconds. See [the hardware validation report](phase_5_1_hardware_validation.md).
 
 ## Roadmap boundary
 
