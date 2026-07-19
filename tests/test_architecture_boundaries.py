@@ -210,6 +210,20 @@ FORBIDDEN_IMPORTS = {
         "training",
         "video",
     },
+    "tracking": {
+        "adapters",
+        "annotation",
+        "config",
+        "counting",
+        "data",
+        "domain",
+        "evaluation",
+        "pipeline",
+        "sessions",
+        "storage",
+        "training",
+        "video",
+    },
 }
 CONTRACT_LAYER_FILES = (
     SOURCE_ROOT / "models.py",
@@ -271,6 +285,13 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "detection" / "telemetry.py",
     SOURCE_ROOT / "detection" / "fakes.py",
     SOURCE_ROOT / "pipeline" / "live_detection_pipeline.py",
+    SOURCE_ROOT / "tracking" / "config.py",
+    SOURCE_ROOT / "tracking" / "errors.py",
+    SOURCE_ROOT / "tracking" / "fakes.py",
+    SOURCE_ROOT / "tracking" / "models.py",
+    SOURCE_ROOT / "tracking" / "ports.py",
+    SOURCE_ROOT / "tracking" / "telemetry.py",
+    SOURCE_ROOT / "pipeline" / "live_tracking_pipeline.py",
 )
 
 
@@ -493,6 +514,12 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.detection.fakes",
         "hogflow.tracking",
         "hogflow.tracking.contracts",
+        "hogflow.tracking.config",
+        "hogflow.tracking.errors",
+        "hogflow.tracking.fakes",
+        "hogflow.tracking.models",
+        "hogflow.tracking.ports",
+        "hogflow.tracking.telemetry",
         "hogflow.video",
         "hogflow.video.contracts",
         "hogflow.video.metadata",
@@ -505,10 +532,13 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.adapters.camera_stream_cli",
         "hogflow.adapters.ultralytics_live_detector",
         "hogflow.adapters.opencv_detection_preview",
+        "hogflow.adapters.opencv_tracking_preview",
+        "hogflow.adapters.supervision_bytetrack",
         "hogflow.pipeline",
         "hogflow.pipeline.models",
         "hogflow.pipeline.generic_counting_pipeline",
         "hogflow.pipeline.live_detection_pipeline",
+        "hogflow.pipeline.live_tracking_pipeline",
         "hogflow.video.live_detection_cli",
         "hogflow.sessions",
         "hogflow.storage",
@@ -536,3 +566,32 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         assert result.returncode == 0, f"{package_name} failed to import: {result.stderr}"
         assert result.stdout == "", f"{package_name} wrote to stdout during import"
         assert result.stderr == "", f"{package_name} wrote to stderr during import"
+
+
+def test_phase_5_3_tracking_core_has_no_counting_or_framework_implementation() -> None:
+    files = (
+        SOURCE_ROOT / "tracking" / "config.py",
+        SOURCE_ROOT / "tracking" / "errors.py",
+        SOURCE_ROOT / "tracking" / "fakes.py",
+        SOURCE_ROOT / "tracking" / "models.py",
+        SOURCE_ROOT / "tracking" / "ports.py",
+        SOURCE_ROOT / "tracking" / "telemetry.py",
+        SOURCE_ROOT / "pipeline" / "live_tracking_pipeline.py",
+    )
+    forbidden_tokens = (
+        "DirectionalLineCounter",
+        "line_crossing",
+        "counted_tracker_ids",
+        "cv2",
+        "supervision",
+        "ultralytics",
+    )
+
+    violations = [
+        f"{source_file.name}: {token}"
+        for source_file in files
+        for token in forbidden_tokens
+        if token in source_file.read_text(encoding="utf-8")
+    ]
+
+    assert not violations

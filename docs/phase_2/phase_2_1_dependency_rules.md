@@ -11,7 +11,9 @@ replaceable baseline detector-training boundary. Phase 5.1 adds a
 framework-neutral live-streaming domain and isolates camera frameworks inside
 adapters. Phase 5.2 adds framework-neutral live detector ports/results and a
 pipeline-level stream-to-detector orchestrator while keeping model and preview
-frameworks in adapters.
+frameworks in adapters. Phase 5.3 adds framework-neutral live tracker
+ports/results and a serial detector-to-tracker composition while keeping
+Supervision ByteTrack and OpenCV tracking preview code in adapters.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -42,6 +44,10 @@ Implemented direction:
 * `live detection pipeline → detection/streaming/models/core`
 * `live detector and preview adapters → detection/streaming/models/core/frameworks`
 * `live detection CLI → camera/detector/preview adapters/pipeline/streaming/core`
+* `live tracking models/ports/telemetry → detection/streaming/models/core`
+* `live tracking pipeline → tracking/detection/streaming/models/core`
+* `ByteTrack and tracking preview adapters → tracking/detection/streaming/models/core/frameworks`
+* `live CLI with tracking → camera/detector/tracker/preview adapters/pipeline/streaming/core`
 
 The current counting module remains independent from CV frameworks and does
 not need config or core.
@@ -58,11 +64,11 @@ not need config or core.
 | `evaluation` | Immutable detection-evaluation models, deterministic geometry/matching/metrics, and metadata-only local dataset selection. | `models`, `core` | Adapters, video decoding, detector/tracker implementations, pipeline, counting, sessions, storage, UI code, CV frameworks |
 | `annotation` | Immutable pig annotation/manifest models, policy geometry, YOLO text serialization, sanitized manifests, and local structural validation. | Domain modules: `evaluation` models, `models`, `core`; validation infrastructure: OpenCV | Detector frameworks, adapters, tracking, counting, pipeline, sessions, storage, UI logic; CV frameworks in models, policy, YOLO, or manifest modules |
 | `detection` | Framework-independent finite-video and live detector contracts, immutable live results, bounded telemetry, errors, and deterministic doubles. | `models`, `streaming`, `core` | Adapters, frameworks, video, tracking, counting, pipeline, storage, UI code |
-| `tracking` | Framework-independent `Tracker` contract. | `models` | Adapters, frameworks, video, detection, pipeline, storage, UI code |
-| `adapters` | Concrete OpenCV and Ultralytics integration boundaries, including the Phase 4.3 YOLO trainer and Phase 5.2 live detector/preview. | `models`, `core`, detection/streaming contracts, config/training when needed | Data inventory, pipeline orchestration, counting rules, sessions, storage, UI business logic |
+| `tracking` | Framework-independent finite-video `Tracker` plus live tracker contracts, immutable requests/results, configuration, bounded telemetry, errors, and deterministic doubles. | `models`, `detection`, `streaming`, `core` | Adapters, frameworks, video, counting, pipeline, sessions, storage, UI code |
+| `adapters` | Concrete OpenCV, Ultralytics, and Supervision integration boundaries, including the Phase 4.3 YOLO trainer, Phase 5.2 live detector/preview, and Phase 5.3 ByteTrack/tracking preview. | `models`, `core`, detection/tracking/streaming contracts, config/training when needed | Data inventory, pipeline orchestration, counting rules, sessions, storage, UI business logic |
 | `training` | Framework-neutral detector-training configuration, contracts, prepared-dataset gate, orchestration, metrics reporting, and failure summaries. | `annotation`, `evaluation`, `models`, `core` | Concrete adapters, Ultralytics, Torch, OpenCV, NumPy, Supervision, tracking, counting, pipeline, sessions, storage, UI logic |
 | `streaming` | Framework-neutral live-frame contracts, immutable packets, source configuration, bounded buffering, health, lifecycle, reconnect policy, and synthetic source. | `core` and Python standard library | `adapters`, OpenCV, NumPy, Torch, Ultralytics, Supervision, detection, tracking, counting, pipeline, sessions, storage, UI logic |
-| `pipeline` | Synchronous generic counting and live detector orchestration with immutable results. | `video`, `detection`, `tracking`, `streaming`, `models`, `counting`; `core/config` when needed | Data inventory, concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated counting geometry |
+| `pipeline` | Synchronous generic counting, live detector, and live temporary-ID tracking orchestration with immutable results. | `video`, `detection`, `tracking`, `streaming`, `models`, `counting`; `core/config` when needed | Data inventory, concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated counting geometry |
 | `video` | Framework-neutral source contract plus CLI/output and OpenCV metadata infrastructure. | `models` for contract; `adapters`, `pipeline`, `counting`, `core`, `config` for generic entrypoint/output; `data` models/validation for metadata inspection | Sessions, storage, UI business logic, duplicated counting rules |
 | `sessions` | Future operational session lifecycle. | `core`, `domain` | Video, detection, tracking, pipeline, direct UI code |
 | `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | Video, detection, tracking, pipeline, direct UI code |
@@ -81,6 +87,8 @@ External CV libraries are allowed only in concrete infrastructure-facing code:
 * OpenCV inside the Phase 5.1 USB, RTSP, and development-file camera adapters
 * Ultralytics, Torch, NumPy, and OpenCV inside the Phase 5.2 live detector adapter
 * OpenCV and NumPy inside the optional Phase 5.2 local preview adapter
+* Supervision and NumPy inside the Phase 5.3 ByteTrack adapter
+* OpenCV and NumPy inside the optional Phase 5.3 tracking preview adapter
 
 The `core`, `config`, `models`, `counting`, `domain`, contract modules,
 framework-neutral `data` models/splitting/planning, annotation models/policy/YOLO/manifest,
@@ -115,6 +123,13 @@ live detection pipeline may depend inward on both packages, but neither may
 depend on that pipeline. The pipeline has no framework imports, no second
 unbounded queue, and no tracking or counting dependency. Framework-specific
 inference and preview conversion remain inside adapters.
+
+Phase 5.3 leaves `streaming` independent from both detection and tracking, and
+leaves `detection` independent from tracking. The application-level live
+tracking pipeline may depend inward on all three packages. Tracking runs
+serially after successful detection and adds no queue. The tracking domain
+does not import counting, sessions, storage, OpenCV, NumPy, Supervision, or
+Ultralytics; only concrete adapters import tracking frameworks.
 
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on

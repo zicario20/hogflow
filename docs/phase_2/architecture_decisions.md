@@ -672,3 +672,98 @@ window, and continue headless inference.
 Headless operation and framework boundaries remain intact. Preview failure is
 observable but does not become a camera or detector failure. The preview is a
 local diagnostic, not an operator UI or remote service.
+
+## ADR-034 — Add a lifecycle-aware live tracker without replacing the finite-video contract
+
+Status: Accepted
+
+### Context
+
+The Phase 2 `Tracker` contract supports finite generic video integration, but
+live tracking requires explicit startup, stream binding, reset, reconnect, and
+cleanup semantics. Changing the approved finite-video contract would risk
+Phase 1 and Phase 2 compatibility.
+
+### Decision
+
+Keep `Tracker` unchanged. Add a small framework-neutral `LiveTracker` contract
+whose instance is bound to one opaque stream lifecycle and exposes `start`,
+`update`, `reset`, and `close`. Reuse canonical `Detection` and `Track` models
+inside immutable live request and result wrappers.
+
+### Consequences
+
+Live resources and temporary identity state have explicit ownership without
+altering the finite-video pipeline. Track IDs remain lifecycle-scoped and may
+be reused after reset; they are not permanent animal identities or counts.
+
+## ADR-035 — Use one tracker instance per stream lifecycle
+
+Status: Accepted
+
+### Context
+
+Stateful multi-object trackers can mix identities if one backend instance
+receives detections from unrelated cameras. A global stream-keyed registry
+would also need abandonment and cleanup policy beyond this phase.
+
+### Decision
+
+Bind each live tracker instance to exactly one stream ID and reject cross-stream
+requests. A pipeline owns that instance for one source lifecycle. Reset the
+instance after an observed source reconnect; use another instance for another
+stream or a new pipeline lifecycle.
+
+### Consequences
+
+Stream state cannot leak accidentally, cleanup remains explicit, and no
+unbounded tracker registry is introduced. Future multi-camera orchestration
+must compose independent pipeline/tracker pairs.
+
+## ADR-036 — Track serially after latest-useful-frame detection
+
+Status: Accepted
+
+### Context
+
+Phase 5.2 already bounds latency by keeping the Phase 5.1 source buffer as the
+only backlog. Adding an independent tracking queue could retain stale detection
+results and complicate exact frame association and shutdown.
+
+### Decision
+
+Run tracking synchronously in the successful detector-result callback. Keep
+the original source ID and frame sequence in every request and result. Do not
+invoke tracking after detector failure, and do not fabricate intermediate
+detections for source frame gaps.
+
+### Consequences
+
+There is no additional unbounded queue, stale detections cannot be applied to
+newer frames, and detector/tracker failures remain distinct. Slow tracking can
+reduce inference throughput while acquisition continues to follow the source
+buffer's documented drop policy.
+
+## ADR-037 — Isolate the installed Supervision ByteTrack API behind one adapter
+
+Status: Accepted
+
+### Context
+
+The installed and pinned `supervision==0.29.1` exposes ByteTrack through
+`update_with_detections` and `reset`, but marks that bundled class deprecated
+for removal in 0.30. Domain code must not depend on that unstable API.
+
+### Decision
+
+Use a lazy-loading `SupervisionByteTrackAdapter` that accepts only HogFlow
+tracking requests, calls the verified 0.29.1 API, and returns only HogFlow
+tracking results. Expose only constructor fields actually supported by that
+version. Keep framework objects private and document migration as technical
+debt.
+
+### Consequences
+
+Phase 5.3 has a usable real tracker adapter without coupling the domain or
+pipeline to Supervision. A future dependency upgrade may replace this one
+adapter while preserving contracts, tests, and orchestration.

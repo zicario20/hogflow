@@ -1,4 +1,4 @@
-"""Local stream-first CLI for Phase 5.2 live detector integration."""
+"""Local stream-first CLI for live detection and optional tracking."""
 
 from __future__ import annotations
 
@@ -9,15 +9,19 @@ from typing import Sequence
 
 from hogflow.adapters.camera_source_factory import create_camera_source
 from hogflow.adapters.opencv_detection_preview import OpenCVDetectionPreview
+from hogflow.adapters.opencv_tracking_preview import OpenCVTrackingPreview
+from hogflow.adapters.supervision_bytetrack import SupervisionByteTrackAdapter
 from hogflow.adapters.ultralytics_live_detector import UltralyticsLiveDetector
 from hogflow.core import HogFlowError, configure_logging
 from hogflow.detection import (
     EmptyDetector,
     LiveDetectionRunSummary,
     LiveDetectionStats,
+    LiveDetector,
     LiveInferenceConfiguration,
+    SyntheticMovingBoxDetector,
 )
-from hogflow.pipeline import LiveDetectionPipeline
+from hogflow.pipeline import LiveDetectionPipeline, LiveTrackingPipeline
 from hogflow.streaming import (
     BoundedFrameBuffer,
     BufferConfiguration,
@@ -27,6 +31,14 @@ from hogflow.streaming import (
     SourceType,
     StreamConfiguration,
 )
+from hogflow.tracking import (
+    ByteTrackConfiguration,
+    DeterministicIoUTracker,
+    EmptyTracker,
+    LiveTracker,
+    LiveTrackingRunSummary,
+    LiveTrackingSnapshot,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,7 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Run bounded-latency live detection without tracking, counting, recording, or upload."
+            "Run bounded-latency live detection with optional temporary-ID tracking; "
+            "never count, record, or upload."
         )
     )
     parser.add_argument(
@@ -70,7 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--maximum-reconnect-attempts", type=int, default=10)
     parser.add_argument("--synthetic-frames", type=int, default=100)
 
-    parser.add_argument("--detector", choices=("empty", "yolo"), default="empty")
+    parser.add_argument(
+        "--detector",
+        choices=("empty", "synthetic-moving", "yolo"),
+        default="empty",
+    )
     parser.add_argument("--model-path", type=Path)
     parser.add_argument("--model-provenance", type=Path)
     parser.add_argument("--confidence", type=_probability_argument, default=0.4)
@@ -78,6 +95,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--permitted-class-ids", type=_class_ids)
+
+    parser.add_argument(
+        "--tracker",
+        choices=("disabled", "empty", "deterministic-iou", "bytetrack"),
+        default="disabled",
+    )
+    parser.add_argument("--track-activation-threshold", type=_unit_interval_argument, default=0.25)
+    parser.add_argument("--lost-track-buffer", type=int, default=30)
+    parser.add_argument(
+        "--minimum-matching-threshold",
+        type=_unit_interval_argument,
+        default=0.8,
+    )
+    parser.add_argument("--tracker-frame-rate", type=float, default=30.0)
+    parser.add_argument("--minimum-consecutive-frames", type=int, default=1)
+    parser.add_argument("--deterministic-iou-threshold", type=_unit_interval_argument, default=0.3)
+    parser.add_argument(
+        "--show-track-ids",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
 
     parser.add_argument("--inference-every", type=int, default=1)
     parser.add_argument("--target-inference-fps", type=float)
@@ -90,7 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Compose one local camera-to-detector run and print sanitized JSON."""
+    """Compose one local camera-to-detector/tracker run and print sanitized JSON."""
 
     configure_logging()
     parser = build_parser()
@@ -103,6 +141,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             maximum_frame_age_ms=arguments.maximum_frame_age_ms,
         )
         detector = _detector(arguments)
+        tracker = _tracker(arguments)
         source = create_camera_source(
             stream_configuration,
             synthetic_frame_count=arguments.synthetic_frames,
@@ -121,23 +160,49 @@ def main(argv: Sequence[str] | None = None) -> int:
                 maximum_attempts=arguments.maximum_reconnect_attempts,
             ),
         )
-        preview = OpenCVDetectionPreview() if arguments.preview else None
-        pipeline = LiveDetectionPipeline(
-            stream_runner,
-            detector,
-            inference_configuration,
-            preview=preview,
-            statistics_callback=lambda statistics: print(
-                json.dumps(_statistics_payload(statistics, final=False), sort_keys=True),
-                flush=True,
-            ),
-        )
-        summary = pipeline.run(
-            maximum_frames=arguments.maximum_frames,
-            maximum_duration_seconds=arguments.maximum_duration,
-            statistics_interval_seconds=arguments.statistics_interval,
-        )
-        print(json.dumps(_summary_payload(summary), sort_keys=True), flush=True)
+        if tracker is None:
+            preview = OpenCVDetectionPreview() if arguments.preview else None
+            pipeline = LiveDetectionPipeline(
+                stream_runner,
+                detector,
+                inference_configuration,
+                preview=preview,
+                statistics_callback=lambda statistics: print(
+                    json.dumps(_statistics_payload(statistics, final=False), sort_keys=True),
+                    flush=True,
+                ),
+            )
+            summary = pipeline.run(
+                maximum_frames=arguments.maximum_frames,
+                maximum_duration_seconds=arguments.maximum_duration,
+                statistics_interval_seconds=arguments.statistics_interval,
+            )
+            print(json.dumps(_summary_payload(summary), sort_keys=True), flush=True)
+        else:
+            tracking_preview = (
+                OpenCVTrackingPreview(show_track_ids=arguments.show_track_ids)
+                if arguments.preview
+                else None
+            )
+            tracking_pipeline = LiveTrackingPipeline(
+                stream_runner,
+                detector,
+                tracker,
+                inference_configuration,
+                preview=tracking_preview,
+                statistics_callback=lambda snapshot: print(
+                    json.dumps(_tracking_statistics_payload(snapshot, final=False), sort_keys=True),
+                    flush=True,
+                ),
+            )
+            tracking_summary = tracking_pipeline.run(
+                maximum_frames=arguments.maximum_frames,
+                maximum_duration_seconds=arguments.maximum_duration,
+                statistics_interval_seconds=arguments.statistics_interval,
+            )
+            print(
+                json.dumps(_tracking_summary_payload(tracking_summary), sort_keys=True), flush=True
+            )
     except (HogFlowError, ValueError) as exc:
         parser.error(str(exc))
     return 0
@@ -170,9 +235,11 @@ def _stream_configuration(arguments: argparse.Namespace) -> StreamConfiguration:
     return StreamConfiguration.synthetic(arguments.stream_id, **settings)
 
 
-def _detector(arguments: argparse.Namespace):
+def _detector(arguments: argparse.Namespace) -> LiveDetector:
     if arguments.detector == "empty":
         return EmptyDetector()
+    if arguments.detector == "synthetic-moving":
+        return SyntheticMovingBoxDetector()
     if arguments.model_path is None:
         raise ValueError("YOLO detector requires an explicit existing --model-path.")
     return UltralyticsLiveDetector(
@@ -184,6 +251,26 @@ def _detector(arguments: argparse.Namespace):
         device=arguments.device,
         permitted_class_ids=arguments.permitted_class_ids,
     )
+
+
+def _tracker(arguments: argparse.Namespace) -> LiveTracker | None:
+    if arguments.tracker == "disabled":
+        return None
+    if arguments.tracker == "empty":
+        return EmptyTracker()
+    if arguments.tracker == "deterministic-iou":
+        return DeterministicIoUTracker(
+            iou_threshold=arguments.deterministic_iou_threshold,
+            lost_track_buffer=arguments.lost_track_buffer,
+        )
+    configuration = ByteTrackConfiguration(
+        track_activation_threshold=arguments.track_activation_threshold,
+        lost_track_buffer=arguments.lost_track_buffer,
+        minimum_matching_threshold=arguments.minimum_matching_threshold,
+        frame_rate=arguments.tracker_frame_rate,
+        minimum_consecutive_frames=arguments.minimum_consecutive_frames,
+    )
+    return SupervisionByteTrackAdapter(configuration)
 
 
 def _class_ids(value: str) -> tuple[int, ...]:
@@ -203,6 +290,16 @@ def _probability_argument(value: str) -> float:
         raise argparse.ArgumentTypeError("Probability must be numeric.") from exc
     if not 0 < probability <= 1:
         raise argparse.ArgumentTypeError("Probability must be greater than 0 and at most 1.")
+    return probability
+
+
+def _unit_interval_argument(value: str) -> float:
+    try:
+        probability = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("Threshold must be numeric.") from exc
+    if not 0 <= probability <= 1:
+        raise argparse.ArgumentTypeError("Threshold must be from 0 through 1.")
     return probability
 
 
@@ -241,6 +338,59 @@ def _summary_payload(summary: LiveDetectionRunSummary) -> dict[str, object]:
             "source": summary.source_type.value,
             "source_id": summary.source_id,
             "source_identity": summary.source_display_name,
+        }
+    )
+    return payload
+
+
+def _tracking_statistics_payload(
+    snapshot: LiveTrackingSnapshot,
+    *,
+    final: bool,
+) -> dict[str, object]:
+    payload = _statistics_payload(snapshot.detection, final=final)
+    tracking = snapshot.tracking
+    payload.update(
+        {
+            "active_tracks_current": tracking.active_tracks_current,
+            "active_tracks_peak": tracking.active_tracks_peak,
+            "average_tracking_latency_ms": round(tracking.average_tracking_latency_ms, 3),
+            "frames_with_tracks": tracking.frames_with_tracks,
+            "frames_without_tracks": tracking.frames_without_tracks,
+            "last_tracking_error": tracking.last_tracking_error.value,
+            "last_tracking_frame_id": tracking.last_tracking_frame_id,
+            "tracker_health": tracking.current_health_state.value,
+            "tracker_restarts": tracking.tracker_restarts,
+            "tracker_resets": tracking.tracker_resets,
+            "tracking_enabled": True,
+            "tracking_failures": tracking.tracking_failures,
+            "tracking_requests": tracking.tracking_requests,
+            "tracking_successes": tracking.tracking_successes,
+            "tracks_emitted": tracking.tracks_emitted,
+            "zero_detection_updates": tracking.zero_detection_updates,
+        }
+    )
+    return payload
+
+
+def _tracking_summary_payload(summary: LiveTrackingRunSummary) -> dict[str, object]:
+    payload = _summary_payload(summary.detection_summary)
+    payload.update(
+        _tracking_statistics_payload(
+            LiveTrackingSnapshot(
+                detection=summary.detection_summary.statistics,
+                tracking=summary.tracking_statistics,
+            ),
+            final=True,
+        )
+    )
+    payload.update(
+        {
+            "tracker_closed": summary.tracker_closed,
+            "tracker_configuration_fingerprint": summary.tracker.configuration_fingerprint,
+            "tracker_framework": summary.tracker.framework,
+            "tracker_identity": summary.tracker.tracker_id,
+            "tracker_version": summary.tracker.framework_version,
         }
     )
     return payload

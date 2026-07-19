@@ -184,7 +184,10 @@ class LiveDetectionPipeline:
                             )
                             statistics = self.statistics()
                             if self._result_callback is not None:
-                                self._result_callback(frame, result, statistics)
+                                callback_action = self._result_callback(frame, result, statistics)
+                                if callback_action is PreviewAction.STOP:
+                                    shutdown_reason = DetectionShutdownReason.PREVIEW_REQUESTED
+                                    break
                             if preview_active and self._preview is not None:
                                 try:
                                     action = self._preview.show(frame, result, statistics)

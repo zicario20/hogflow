@@ -10,7 +10,7 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation and Phase 5.2 live detector integration implemented; real pig inference is blocked by missing validated local pig-detector weights; tracking and counting are not implemented; Phase 5.3 not started.
+Current repository status: Phase 5 in progress — Phase 5.1 live-camera acquisition, Phase 5.2 live detector integration, and Phase 5.3 live multi-object tracking integration implemented; real pig detection and tracking validation are blocked by missing validated local pig-detector weights; counting is not implemented; Phase 5.4 not started.
 
 ## Project identity
 
@@ -226,6 +226,42 @@ NOT EMPIRICALLY COMPLETED in Phase 5.2:
 * RTSP production readiness
 * multi-object tracking, line crossing, or pig counting
 * Phase 5.3
+
+IMPLEMENTED Phase 5.3 live multi-object tracking integration:
+
+* A framework-neutral lifecycle-aware `LiveTracker` contract that consumes
+  immutable per-frame detection requests and returns immutable tracking
+  results tied to exact stream IDs and source frame sequences.
+* Temporary track identities expressed through the canonical `Track` model;
+  IDs are lifecycle-scoped and are not permanent animal identities or counts.
+* One tracker instance per stream lifecycle, cross-stream rejection, explicit
+  reset, idempotent close, and reconnect-triggered state reset.
+* Immutable ByteTrack configuration, sanitized provenance, bounded tracking
+  telemetry, health/error categories, snapshots, and run summaries.
+* Deterministic empty, scripted, IoU, slow, and failing tracker doubles for CI
+  and local control-flow diagnostics.
+* An isolated Supervision 0.29.1 ByteTrack adapter using the installed
+  `update_with_detections` and `reset` APIs without leaking NumPy or
+  Supervision objects.
+* Serial tracking composition after successful Phase 5.2 detection. The fixed
+  Phase 5.1 source buffer remains the only queue, so tracking adds no unbounded
+  backlog.
+* Optional ephemeral OpenCV tracking preview and structured CLI telemetry for
+  temporary IDs, visible-track volume, failures, resets, and latency.
+* Synthetic lifecycle, identity, frame-gap, multi-stream, adapter, preview,
+  CLI, privacy, and architecture tests.
+* One local built-in USB-webcam integration validation with synthetic moving
+  boxes and the installed ByteTrack adapter: a long run and immediate reopen
+  both closed resources cleanly and saved no frames.
+
+NOT EMPIRICALLY COMPLETED in Phase 5.3:
+
+* real pig tracking, because no validated local pig-detector artifact exists
+* representative occlusion, dense-group, ID-switch, or fragmentation evaluation
+* a claim that temporary tracker IDs correspond to unique biological animals
+* live virtual-line crossing or pig counting
+* RTSP tracking validation or production readiness
+* Phase 5.4
 
 ## Unique tracker counting concept
 
@@ -446,13 +482,14 @@ Phase 3 inventory infrastructure is implemented. Real authorized dataset acquisi
 Phase 4 implementation is complete through Phase 4.3. The local replaceable
 training pipeline is operational, but real annotation may still be incomplete
 and no real detector-performance result was produced during implementation.
-Phase 5 is in progress through Phase 5.2. The live acquisition foundation has
+Phase 5 is in progress through Phase 5.3. The live acquisition foundation has
 synthetic, fake-backend, and one real laptop USB-webcam validation record. Live
 detector integration has deterministic synthetic/fake-framework evidence and
 one USB-webcam-to-empty-detector control-flow result, but no valid local
 pig-detector artifact was available for real pig inference.
-RTSP production validation, pig-specific tracking, and Phase 5.3 have not
-started.
+Live temporary-ID tracking has deterministic synthetic and installed-adapter
+evidence, but no representative pig-detection input or real pig-tracking
+accuracy evidence. RTSP production validation and Phase 5.4 have not started.
 
 ## Pilot readiness phase
 
@@ -546,10 +583,18 @@ IMPLEMENTED at repository level:
 * optional ephemeral OpenCV detection preview and sanitized JSON CLI
 * synthetic Phase 5.2 scheduling, latency, privacy, adapter, and architecture tests
 * one local Phase 5.2 USB-webcam smoke test using the empty detector only
+* Phase 5.3 framework-neutral live tracker lifecycle and immutable results
+* one-stream-per-tracker state isolation, explicit reset, and cleanup
+* deterministic empty, scripted, IoU, slow, and failing live tracker doubles
+* isolated Supervision 0.29.1 ByteTrack adapter over structured detections
+* serial detector-to-tracker orchestration without a second queue
+* bounded tracking health, failure, visible-track, reset, and latency telemetry
+* optional ephemeral OpenCV temporary-ID preview and extended structured CLI
+* synthetic Phase 5.3 identity, lifecycle, adapter, pipeline, privacy, and architecture tests
 
 Not yet implemented:
 
-* Phase 5.3 and pig-specific tracking work
+* Phase 5.4 and live counting integration
 * Phase 6 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
@@ -562,4 +607,4 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition foundation and Phase 5.2 live detector integration implemented; real pig inference is blocked by missing validated local pig-detector weights; tracking and counting are not implemented; Phase 5.3 not started.
+Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition, Phase 5.2 live detector integration, and Phase 5.3 live multi-object tracking integration implemented; real pig detection and tracking validation are blocked by missing validated local pig-detector weights; counting is not implemented; Phase 5.4 not started.

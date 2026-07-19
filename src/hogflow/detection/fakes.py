@@ -15,7 +15,7 @@ from hogflow.detection.errors import (
     TemporaryInferenceError,
 )
 from hogflow.detection.inference import FrameDetections, ModelArtifactMetadata
-from hogflow.models import Detection
+from hogflow.models import BoundingBox, Detection
 from hogflow.streaming.models import FramePacket
 
 
@@ -175,4 +175,41 @@ class FailingDetector(ScriptedDetector):
         return super().infer(frame)
 
 
-__all__ = ["EmptyDetector", "FailingDetector", "ScriptedDetector", "SlowDetector"]
+class SyntheticMovingBoxDetector(EmptyDetector):
+    """Emit one deterministic synthetic box for integration diagnostics.
+
+    The box is generated from frame sequence only. It is not an inferred pig
+    detection and provides no detector-quality evidence.
+    """
+
+    def __init__(self, **settings: object) -> None:
+        super().__init__(model_id="synthetic-moving-box-detector", **settings)
+
+    def _detections_for(self, frame: FramePacket) -> tuple[Detection, ...]:
+        box_width = max(1.0, frame.dimensions.width / 4.0)
+        box_height = max(1.0, frame.dimensions.height / 3.0)
+        travel = max(0.0, frame.dimensions.width - box_width)
+        x_min = min(travel, float(frame.sequence_number % 20) / 19.0 * travel)
+        y_min = max(0.0, (frame.dimensions.height - box_height) / 2.0)
+        return (
+            Detection(
+                BoundingBox(
+                    x_min,
+                    y_min,
+                    min(float(frame.dimensions.width), x_min + box_width),
+                    min(float(frame.dimensions.height), y_min + box_height),
+                ),
+                0.9,
+                0,
+                "pig",
+            ),
+        )
+
+
+__all__ = [
+    "EmptyDetector",
+    "FailingDetector",
+    "ScriptedDetector",
+    "SlowDetector",
+    "SyntheticMovingBoxDetector",
+]

@@ -136,3 +136,14 @@ telemetry. It does not print camera locators or full model paths. No valid local
 pig-detector artifact was available during Phase 5.2 implementation, so real
 pig inference was not performed. See
 [Phase 5.2 live detection](../docs/phase_5/phase_5_2_live_detection.md).
+
+## Phase 5.3 live tracking privacy
+
+Phase 5.3 consumes ephemeral in-memory detections and frame payloads and emits
+temporary tracker IDs and aggregate telemetry. It does not record frames,
+save preview images, write track histories, or create counting/session data.
+Temporary IDs and visible-track metrics remain local diagnostics and are not
+unique-animal counts. Real media, tracker debug dumps, model weights, private
+source configuration, and runtime outputs remain ignored under the existing
+local-data policy. See
+[Phase 5.3 live tracking](../docs/phase_5/phase_5_3_live_tracking.md).

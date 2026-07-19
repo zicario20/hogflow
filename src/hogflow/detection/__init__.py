@@ -12,7 +12,13 @@ from hogflow.detection.errors import (
     MalformedDetectorOutputError,
     TemporaryInferenceError,
 )
-from hogflow.detection.fakes import EmptyDetector, FailingDetector, ScriptedDetector, SlowDetector
+from hogflow.detection.fakes import (
+    EmptyDetector,
+    FailingDetector,
+    ScriptedDetector,
+    SlowDetector,
+    SyntheticMovingBoxDetector,
+)
 from hogflow.detection.inference import (
     DetectionShutdownReason,
     FrameDetections,
@@ -49,5 +55,6 @@ __all__ = [
     "PreviewAction",
     "ScriptedDetector",
     "SlowDetector",
+    "SyntheticMovingBoxDetector",
     "TemporaryInferenceError",
 ]

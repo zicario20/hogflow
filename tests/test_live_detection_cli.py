@@ -18,6 +18,10 @@ def test_live_detection_cli_help_lists_source_detector_and_scheduling_options() 
         "--target-inference-fps",
         "--maximum-frame-age-ms",
         "--preview",
+        "--tracker",
+        "--lost-track-buffer",
+        "--tracker-frame-rate",
+        "--show-track-ids",
     ):
         assert option in help_text
 
@@ -51,6 +55,53 @@ def test_synthetic_empty_detector_cli_emits_sanitized_final_json(capsys) -> None
 def test_yolo_cli_requires_explicit_local_model_path() -> None:
     with pytest.raises(SystemExit) as captured:
         main(["--source-type", "synthetic", "--detector", "yolo"])
+
+    assert captured.value.code == 2
+
+
+def test_synthetic_tracking_cli_emits_structured_temporary_id_summary(capsys) -> None:
+    result = main(
+        [
+            "--source-type",
+            "synthetic",
+            "--synthetic-frames",
+            "8",
+            "--detector",
+            "synthetic-moving",
+            "--tracker",
+            "deterministic-iou",
+            "--statistics-interval",
+            "100",
+        ]
+    )
+
+    payload = json.loads([line for line in capsys.readouterr().out.splitlines() if line][-1])
+    assert result == 0
+    assert payload["tracking_enabled"] is True
+    assert payload["tracker_identity"] == "deterministic-iou-tracker"
+    assert payload["tracks_emitted"] > 0
+    assert payload["tracker_closed"] is True
+    assert "count" not in payload
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ["--source-type", "synthetic", "--lost-track-buffer", "-1", "--tracker", "bytetrack"],
+        ["--source-type", "synthetic", "--tracker-frame-rate", "0", "--tracker", "bytetrack"],
+        [
+            "--source-type",
+            "synthetic",
+            "--minimum-consecutive-frames",
+            "0",
+            "--tracker",
+            "bytetrack",
+        ],
+    ),
+)
+def test_cli_rejects_invalid_tracker_configuration(arguments: list[str]) -> None:
+    with pytest.raises(SystemExit) as captured:
+        main(arguments)
 
     assert captured.value.code == 2
 
