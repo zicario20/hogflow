@@ -125,6 +125,7 @@ class OpenCVCrossingPreview(OpenCVTrackingPreview):
                 ),
                 event_text,
                 f"line_id={crossing.line_id} config={configuration[:8]}",
+                *self._additional_diagnostic_lines(),
             )
             for index, text in enumerate(lines):
                 self._cv2.putText(
@@ -145,6 +146,11 @@ class OpenCVCrossingPreview(OpenCVTrackingPreview):
         except Exception:
             raise CrossingPreviewError("Local OpenCV crossing preview failed.") from None
         return PreviewAction.STOP if key in {27, ord("q"), ord("Q")} else PreviewAction.CONTINUE
+
+    def _additional_diagnostic_lines(self) -> tuple[str, ...]:
+        """Return bounded adapter-specific text for the current frame."""
+
+        return ()
 
     @staticmethod
     def _pixel_point(frame: FramePacket, x: float, y: float) -> tuple[int, int]:

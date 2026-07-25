@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Sequence
 
 from hogflow.adapters.camera_source_factory import create_camera_source
+from hogflow.adapters.opencv_counting_preview import OpenCVCountingPreview
 from hogflow.adapters.opencv_crossing_preview import OpenCVCrossingPreview
 from hogflow.adapters.opencv_detection_preview import OpenCVDetectionPreview
 from hogflow.adapters.opencv_tracking_preview import OpenCVTrackingPreview
@@ -15,7 +16,13 @@ from hogflow.adapters.supervision_bytetrack import SupervisionByteTrackAdapter
 from hogflow.adapters.ultralytics_live_detector import UltralyticsLiveDetector
 from hogflow.core import HogFlowError, configure_logging
 from hogflow.counting import (
+    LifecycleDirectionalCounter,
+    LiveCountingConfiguration,
+    LiveCountingResult,
+    LiveCountingRunSummary,
+    LiveCountingSnapshot,
     LiveCrossingConfiguration,
+    LiveCrossingDirection,
     LiveCrossingRunSummary,
     LiveCrossingSnapshot,
     NormalizedLine,
@@ -31,7 +38,12 @@ from hogflow.detection import (
     LiveInferenceConfiguration,
     SyntheticMovingBoxDetector,
 )
-from hogflow.pipeline import LiveCrossingPipeline, LiveDetectionPipeline, LiveTrackingPipeline
+from hogflow.pipeline import (
+    LiveCountingPipeline,
+    LiveCrossingPipeline,
+    LiveDetectionPipeline,
+    LiveTrackingPipeline,
+)
 from hogflow.streaming import (
     BoundedFrameBuffer,
     BufferConfiguration,
@@ -56,8 +68,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Run bounded-latency live detection with optional temporary-ID tracking; "
-            "never count, record, or upload."
+            "Run bounded-latency live detection with optional temporary-ID tracking, "
+            "crossing events, and lifecycle-only directional counting; never record or upload."
         )
     )
     parser.add_argument(
@@ -136,6 +148,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--crossing-epsilon", type=float, default=0.005)
     parser.add_argument("--crossing-track-retention-updates", type=int, default=30)
+    parser.add_argument("--enable-counting", action="store_true")
+    parser.add_argument(
+        "--positive-direction",
+        choices=tuple(item.value for item in LiveCrossingDirection),
+    )
+    parser.add_argument("--maximum-counted-identities", type=int, default=100_000)
 
     parser.add_argument("--inference-every", type=int, default=1)
     parser.add_argument("--target-inference-fps", type=float)
@@ -160,9 +178,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             target_inference_fps=arguments.target_inference_fps,
             maximum_frame_age_ms=arguments.maximum_frame_age_ms,
         )
+        crossing_configuration = _crossing_configuration(arguments)
+        counting_configuration = _counting_configuration(
+            arguments,
+            crossing_configuration,
+        )
         detector = _detector(arguments)
         tracker = _tracker(arguments)
-        crossing_configuration = _crossing_configuration(arguments)
         source = create_camera_source(
             stream_configuration,
             synthetic_frame_count=arguments.synthetic_frames,
@@ -224,7 +246,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(
                 json.dumps(_tracking_summary_payload(tracking_summary), sort_keys=True), flush=True
             )
-        else:
+        elif not counting_configuration.enabled:
             crossing_detector = VirtualLineCrossingDetector(crossing_configuration)
             crossing_preview = (
                 OpenCVCrossingPreview(
@@ -253,6 +275,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             print(
                 json.dumps(_crossing_summary_payload(crossing_summary), sort_keys=True),
+                flush=True,
+            )
+        else:
+            crossing_detector = VirtualLineCrossingDetector(crossing_configuration)
+            counter = LifecycleDirectionalCounter(counting_configuration)
+            counting_preview = (
+                OpenCVCountingPreview(
+                    crossing_configuration,
+                    counting_configuration,
+                    show_track_ids=arguments.show_track_ids,
+                )
+                if arguments.preview
+                else None
+            )
+            counting_pipeline = LiveCountingPipeline(
+                stream_runner,
+                detector,
+                tracker,
+                crossing_detector,
+                counter,
+                inference_configuration,
+                preview=counting_preview,
+                result_callback=_print_counting_decisions,
+                statistics_callback=lambda snapshot: print(
+                    json.dumps(_counting_statistics_payload(snapshot, final=False), sort_keys=True),
+                    flush=True,
+                ),
+            )
+            counting_summary = counting_pipeline.run(
+                maximum_frames=arguments.maximum_frames,
+                maximum_duration_seconds=arguments.maximum_duration,
+                statistics_interval_seconds=arguments.statistics_interval,
+            )
+            print(
+                json.dumps(_counting_summary_payload(counting_summary), sort_keys=True),
                 flush=True,
             )
     except (HogFlowError, ValueError) as exc:
@@ -342,6 +399,27 @@ def _crossing_configuration(arguments: argparse.Namespace) -> LiveCrossingConfig
         anchor=TrackAnchor(arguments.crossing_anchor),
         epsilon=arguments.crossing_epsilon,
         absent_track_retention_updates=arguments.crossing_track_retention_updates,
+    )
+
+
+def _counting_configuration(
+    arguments: argparse.Namespace,
+    crossing: LiveCrossingConfiguration,
+) -> LiveCountingConfiguration:
+    direction = arguments.positive_direction
+    if not arguments.enable_counting:
+        if direction is not None:
+            raise ValueError("Positive direction requires --enable-counting.")
+        return LiveCountingConfiguration()
+    if not crossing.enabled:
+        raise ValueError("Live counting requires --enable-crossing and a complete line.")
+    if direction is None:
+        raise ValueError("Enabled counting requires --positive-direction.")
+    return LiveCountingConfiguration(
+        enabled=True,
+        positive_direction=LiveCrossingDirection(direction),
+        crossing_configuration_fingerprint=crossing.fingerprint,
+        maximum_counted_identities=arguments.maximum_counted_identities,
     )
 
 
@@ -527,6 +605,89 @@ def _crossing_summary_payload(summary: LiveCrossingRunSummary) -> dict[str, obje
         }
     )
     return payload
+
+
+def _counting_statistics_payload(
+    snapshot: LiveCountingSnapshot,
+    *,
+    final: bool,
+) -> dict[str, object]:
+    payload = _crossing_statistics_payload(snapshot.crossing, final=final)
+    counting = snapshot.counting
+    payload.update(
+        {
+            "counting_enabled": True,
+            "counting_failures": counting.failures,
+            "counting_health": counting.health_state.value,
+            "counting_last_error": counting.last_error.value,
+            "counting_resets": counting.resets,
+            "crossing_events_processed_for_counting": counting.crossing_events_processed,
+            "duplicate_positives": counting.duplicate_positives,
+            "lifecycle_directional_count": counting.lifecycle_directional_count,
+            "positives_counted": counting.positives_counted,
+            "reverses": counting.reverses,
+        }
+    )
+    return payload
+
+
+def _counting_summary_payload(summary: LiveCountingRunSummary) -> dict[str, object]:
+    crossing_summary = summary.crossing_summary
+    tracking_summary = crossing_summary.tracking_summary
+    payload = _crossing_summary_payload(crossing_summary)
+    payload.update(
+        _counting_statistics_payload(
+            LiveCountingSnapshot(
+                source_id=summary.source_id,
+                counting_lifecycle_id=summary.counting_lifecycle_id,
+                crossing_lifecycle_id=summary.crossing_lifecycle_id,
+                crossing=LiveCrossingSnapshot(
+                    tracking=LiveTrackingSnapshot(
+                        detection=tracking_summary.detection_summary.statistics,
+                        tracking=tracking_summary.tracking_statistics,
+                    ),
+                    crossing=crossing_summary.crossing_statistics,
+                ),
+                counting=summary.counting_statistics,
+            ),
+            final=True,
+        )
+    )
+    payload.update(
+        {
+            "counting_closed": summary.counting_closed,
+            "counting_configuration_fingerprint": summary.configuration_fingerprint,
+            "counting_lifecycle_id": summary.counting_lifecycle_id,
+            "crossing_lifecycle_id": summary.crossing_lifecycle_id,
+            "limitations": summary.limitations,
+        }
+    )
+    return payload
+
+
+def _print_counting_decisions(
+    _frame,
+    _detections,
+    _tracking,
+    _crossing,
+    counting: LiveCountingResult,
+    _snapshot,
+) -> None:
+    for decision in counting.decisions:
+        print(
+            json.dumps(
+                {
+                    "count_increment": decision.count_increment,
+                    "counting_decision": decision.decision_type.value,
+                    "crossing_direction": decision.geometric_direction.value,
+                    "frame_sequence": decision.frame_sequence,
+                    "lifecycle_directional_count": decision.total_after,
+                    "tracker_id": decision.tracker_id,
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

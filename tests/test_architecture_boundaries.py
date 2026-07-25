@@ -245,6 +245,11 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "models.py",
     SOURCE_ROOT / "counting" / "line_crossing.py",
     SOURCE_ROOT / "counting" / "live_crossing.py",
+    SOURCE_ROOT / "counting" / "live_counting.py",
+    SOURCE_ROOT / "counting" / "live_counting_errors.py",
+    SOURCE_ROOT / "counting" / "live_counting_models.py",
+    SOURCE_ROOT / "counting" / "live_counting_ports.py",
+    SOURCE_ROOT / "counting" / "live_counting_telemetry.py",
     SOURCE_ROOT / "counting" / "live_errors.py",
     SOURCE_ROOT / "counting" / "live_models.py",
     SOURCE_ROOT / "counting" / "live_ports.py",
@@ -301,6 +306,7 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "tracking" / "telemetry.py",
     SOURCE_ROOT / "pipeline" / "live_tracking_pipeline.py",
     SOURCE_ROOT / "pipeline" / "live_crossing_pipeline.py",
+    SOURCE_ROOT / "pipeline" / "live_counting_pipeline.py",
 )
 
 
@@ -482,6 +488,11 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.config",
         "hogflow.counting",
         "hogflow.counting.live_crossing",
+        "hogflow.counting.live_counting",
+        "hogflow.counting.live_counting_errors",
+        "hogflow.counting.live_counting_models",
+        "hogflow.counting.live_counting_ports",
+        "hogflow.counting.live_counting_telemetry",
         "hogflow.counting.live_errors",
         "hogflow.counting.live_models",
         "hogflow.counting.live_ports",
@@ -556,6 +567,7 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.adapters.opencv_detection_preview",
         "hogflow.adapters.opencv_tracking_preview",
         "hogflow.adapters.opencv_crossing_preview",
+        "hogflow.adapters.opencv_counting_preview",
         "hogflow.adapters.supervision_bytetrack",
         "hogflow.pipeline",
         "hogflow.pipeline.models",
@@ -563,6 +575,7 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.pipeline.live_detection_pipeline",
         "hogflow.pipeline.live_tracking_pipeline",
         "hogflow.pipeline.live_crossing_pipeline",
+        "hogflow.pipeline.live_counting_pipeline",
         "hogflow.video.live_detection_cli",
         "hogflow.sessions",
         "hogflow.storage",
@@ -671,6 +684,38 @@ def test_phase_6_evaluation_has_no_framework_or_phase_7_logic() -> None:
         "ultralytics",
         "auto_select_line",
         "adapt_line_during_run",
+    )
+
+    violations = [
+        f"{source_file.name}: {token}"
+        for source_file in files
+        for token in forbidden_tokens
+        if token in source_file.read_text(encoding="utf-8").lower()
+    ]
+
+    assert not violations
+
+
+def test_phase_7_counting_core_has_no_framework_or_phase_8_implementation() -> None:
+    files = (
+        SOURCE_ROOT / "counting" / "live_counting.py",
+        SOURCE_ROOT / "counting" / "live_counting_errors.py",
+        SOURCE_ROOT / "counting" / "live_counting_models.py",
+        SOURCE_ROOT / "counting" / "live_counting_ports.py",
+        SOURCE_ROOT / "counting" / "live_counting_telemetry.py",
+    )
+    forbidden_tokens = (
+        "cv2",
+        "numpy",
+        "supervision",
+        "ultralytics",
+        "session_id",
+        "section_number",
+        "load_id",
+        "sqlite",
+        "storage",
+        "net_count",
+        "reidentification",
     )
 
     violations = [

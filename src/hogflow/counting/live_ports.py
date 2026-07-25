@@ -32,6 +32,12 @@ class LiveCrossingDetector(Protocol):
 
         ...
 
+    @property
+    def lifecycle_id(self) -> str:
+        """Return the current crossing lifecycle ID after startup."""
+
+        ...
+
     def start(self, source_id: str) -> None:
         """Bind crossing state to one opaque source lifecycle."""
 

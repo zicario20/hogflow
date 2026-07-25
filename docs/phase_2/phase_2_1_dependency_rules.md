@@ -70,7 +70,7 @@ modules may consume immutable tracking-domain models but never tracker adapters.
 | `core` | Shared expected-error types and logging configuration. | Python standard library only. | `adapters`, `config`, `counting`, `data`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
 | `config` | Explicit immutable foundational settings. | `core` | `adapters`, `counting`, `data`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
 | `models` | Canonical immutable communication data. | `core` | `adapters`, `config`, `counting`, `data`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
-| `counting` | Detector-independent Phase 1 counting plus Phase 5.4 event-only live geometry and lifecycle state. | `tracking.models` for immutable live results; `core`/`config` with concrete need. | `adapters`, concrete trackers, `data`, `video`, `detection`, `pipeline`, `sessions`, `storage`, UI code, CV frameworks |
+| `counting` | Detector-independent Phase 1 counting, Phase 5.4 event-only live geometry, and Phase 7 lifecycle directional decisions. | `tracking.models` for immutable live results; `core`/`config` with concrete need. | `adapters`, concrete trackers, `data`, `video`, `detection`, `pipeline`, `sessions`, `storage`, UI code, CV frameworks |
 | `data` | Inventory models/discovery, source-level splitting, frame planning, local extraction, sidecar parsing, suitability, and reporting. | Framework-neutral planning: `annotation`, `core`, `data`; inventory: `core`, `video`; extraction: OpenCV | Adapters, counting, detector/tracker contracts, pipeline, sessions, storage, domain business logic; CV frameworks outside explicit metadata/extraction infrastructure |
 | `evaluation` | Immutable detection evaluation plus offline virtual-line candidate replay, matching, ranking, reporting, and metadata-only local dataset selection. | `models`, `core`; Phase 6 line evaluation may consume `counting` and immutable `tracking.models` | Adapters, video decoding, detector/tracker implementations, live pipeline, sessions, storage, UI code, CV frameworks |
 | `annotation` | Immutable pig annotation/manifest models, policy geometry, YOLO text serialization, sanitized manifests, and local structural validation. | Domain modules: `evaluation` models, `models`, `core`; validation infrastructure: OpenCV | Detector frameworks, adapters, tracking, counting, pipeline, sessions, storage, UI logic; CV frameworks in models, policy, YOLO, or manifest modules |
@@ -101,6 +101,7 @@ External CV libraries are allowed only in concrete infrastructure-facing code:
 * Supervision and NumPy inside the Phase 5.3 ByteTrack adapter
 * OpenCV and NumPy inside the optional Phase 5.3 tracking preview adapter
 * OpenCV and NumPy inside the optional Phase 5.4 crossing preview adapter
+* OpenCV and NumPy inside the optional Phase 7 counting preview adapter
 
 The `core`, `config`, `models`, `counting`, `domain`, contract modules,
 framework-neutral `data` models/splitting/planning, annotation models/policy/YOLO/manifest,
@@ -159,6 +160,15 @@ pipelines, adapters, camera/detector implementations, CV frameworks, sessions,
 storage, or UI. `counting` and `tracking` never depend back on evaluation, so
 the new direction introduces no cycle. Reports cannot configure the live line
 without an explicit external action.
+
+Phase 7 adds lifecycle-qualified directional decisions inside `counting`.
+`LifecycleDirectionalCounter` consumes immutable Phase 5.4 crossing results,
+keeps one bounded counted-identity set for one crossing lifecycle, and imports
+no framework, adapter, persistence, session, or UI module.
+`LiveCountingPipeline` composes the existing crossing pipeline serially and
+adds no queue. Reconnect lifecycle changes reset the Phase 7 total before the
+next result. The optional OpenCV preview renders immutable counting results but
+owns no counting policy.
 
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on

@@ -10,11 +10,11 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 6 evaluation infrastructure implemented —
-candidate line plans, deterministic tracking replay, optional crossing-event
-ground-truth metrics, explicit ranking, and sanitized offline reports are
-implemented; representative pig line-position evaluation remains pending;
-Phase 7 has not started.
+Current repository status: Phase 7 lifecycle-aware directional counting
+infrastructure implemented - explicit positive direction, reverse and duplicate
+decisions, atomic frame updates, and reconnect-isolated lifecycle totals are
+implemented; representative pig duplicate-counting and reverse-movement
+validation remains pending; Phase 8 has not started.
 
 ## Project identity
 
@@ -321,23 +321,56 @@ NOT EMPIRICALLY COMPLETED in Phase 6:
 * a validated or optimal virtual-line position for pigs
 * pig-count accuracy, operational counting, deduplication, or Phase 7
 
+IMPLEMENTED Phase 7 reverse and duplicate counting infrastructure:
+
+* Immutable explicit positive-direction configuration tied to the exact Phase
+  5.4 crossing fingerprint.
+* `TemporaryTrackIdentity` qualified by source, crossing lifecycle, and numeric
+  tracker ID; separate Phase 7 counting lifecycle provenance.
+* Atomic `LifecycleDirectionalCounter` frame processing with first-positive
+  increment, duplicate-positive suppression, and reverse decisions without
+  decrement.
+* Counted identities retained for the lifecycle and bounded by a fail-safe
+  capacity rather than silent eviction.
+* Strict source, lifecycle, stale-sequence, line, frame, and crossing-provenance
+  validation.
+* Reconnect/reset isolation that clears total and counted identities before the
+  next crossing lifecycle.
+* Serial optional `LiveCountingPipeline` composition with no additional queue,
+  disabled-by-default CLI activation, bounded telemetry, and optional ephemeral
+  preview.
+* Synthetic policy, atomicity, reconnect, lifecycle, CLI, preview, privacy,
+  architecture, and regression tests.
+
+NOT EMPIRICALLY COMPLETED in Phase 7:
+
+* pig-specific duplicate-counting or reverse-movement validation
+* biological re-identification or identity continuity across reconnect
+* representative ID-switch, fragmentation, dense-group, or occlusion analysis
+* session totals, persistence, UI, ground-truth count accuracy, or Phase 8
+
 ## Unique tracker counting concept
 
-PLANNED business concept:
+IMPLEMENTED per-lifecycle policy and PLANNED session extension:
 
 * HogFlow counts unique tracked individuals, not per-frame detections.
 * A pig seen across many frames must not increment the count once per frame.
-* Session-scoped counted tracker IDs should be maintained conceptually as `counted_tracker_ids = set()`.
-* A tracker ID may contribute at most one positive count per active session.
+* Phase 7 maintains lifecycle-qualified counted identities for one crossing
+  lifecycle.
+* Phase 8 remains responsible for session scope; Phase 7 totals are not session
+  totals.
 
 ## Directional crossing and reverse movement rules
 
-PLANNED counting rules:
+IMPLEMENTED Phase 7 lifecycle rules:
 
-* Only crossings in the configured direction toward the weighing area may create a positive counting candidate.
+* Only crossings in an explicitly configured positive geometric direction may
+  increment the lifecycle total.
 * Reverse-direction crossings may be recorded as events.
 * Reverse crossings must not automatically increment the positive count.
-* Repeated positive crossings from the same tracker ID during the same session must not increment the count again.
+* Repeated positive crossings from the same lifecycle-qualified tracker
+  identity do not increment again.
+* Reverse events do not decrement or remove counted identities.
 
 Tracking uncertainty remains a measured risk rather than something to hide. Relevant risks include ID switches, lost tracks, re-identification, occlusion, and fragmented tracks.
 
@@ -551,8 +584,9 @@ accuracy evidence. Event-only virtual-line crossing has deterministic synthetic
 evidence but no representative line calibration or event-accuracy result.
 Phase 6 offline evaluation infrastructure has deterministic synthetic evidence,
 but representative pig replay, human crossing-event ground truth, and line
-calibration remain pending. RTSP production validation and Phase 7 have not
-started.
+calibration remain pending. Phase 7 lifecycle counting has deterministic
+synthetic evidence only; representative reverse/duplicate validation and RTSP
+production validation remain pending. Phase 8 has not started.
 
 ## Pilot readiness phase
 
@@ -663,11 +697,17 @@ IMPLEMENTED at repository level:
 * explicit evidence-aware ranking with no default recommendation without ground truth
 * strict sanitized JSON replay/report IO and offline technical CLI
 * synthetic Phase 6 clean-pass, finite-extension, jitter/gap, matching, ranking, privacy, and architecture tests
+* immutable Phase 7 configuration, temporary identity, decision, result, snapshot, and summary models
+* atomic lifecycle-aware first-positive, duplicate-positive, and reverse policy
+* bounded counted-identity capacity and reconnect-isolated counting lifecycle
+* serial Phase 7 live composition, optional preview, telemetry, and technical CLI
+* synthetic Phase 7 policy, atomicity, reconnect, privacy, architecture, and regression tests
 
 Not yet implemented:
 
 * representative pig line-position evaluation and calibrated line selection
-* Phase 7 through Phase 16
+* representative pig reverse-movement and duplicate-counting validation
+* Phase 8 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
@@ -679,8 +719,6 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 6 evaluation infrastructure implemented —
-candidate line plans, deterministic tracking replay, optional crossing-event
-ground-truth metrics, explicit ranking, and sanitized offline reports are
-implemented; representative pig line-position evaluation remains pending;
-Phase 7 has not started.
+Current roadmap status: Phase 7 lifecycle-aware directional counting
+infrastructure implemented - representative pig duplicate-counting and
+reverse-movement validation remains pending; Phase 8 has not started.

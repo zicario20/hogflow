@@ -320,6 +320,17 @@ class LiveCrossingEvent:
         if fullmatch(_SHA256, self.configuration_fingerprint) is None:
             raise InputDataError("Crossing configuration fingerprint must be SHA-256 text.")
 
+    @property
+    def crossing_lifecycle_id(self) -> str:
+        """Return the crossing lifecycle stored under the legacy field name.
+
+        ``tracker_lifecycle_id`` is retained for Phase 5.4 compatibility. The
+        value identifies the crossing-detector lifecycle, not a tracker-owned
+        or biological identity.
+        """
+
+        return self.tracker_lifecycle_id
+
 
 @dataclass(frozen=True, slots=True)
 class LiveCrossingResult:
@@ -374,6 +385,12 @@ class LiveCrossingResult:
         ):
             raise InputDataError("Crossing latency must be a finite non-negative number.")
         object.__setattr__(self, "crossing_latency_ms", float(self.crossing_latency_ms))
+
+    @property
+    def crossing_lifecycle_id(self) -> str:
+        """Return the crossing lifecycle stored under the legacy field name."""
+
+        return self.tracker_lifecycle_id
 
 
 @dataclass(frozen=True, slots=True)

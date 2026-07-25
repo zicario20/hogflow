@@ -26,6 +26,8 @@ def test_live_detection_cli_help_lists_source_detector_and_scheduling_options() 
         "--crossing-line-start",
         "--crossing-line-end",
         "--crossing-anchor",
+        "--enable-counting",
+        "--positive-direction",
     ):
         assert option in help_text
 
@@ -114,6 +116,86 @@ def test_synthetic_crossing_cli_emits_event_diagnostics_without_animal_total(cap
     assert payload["crossing_closed"] is True
     assert "total_pigs" not in payload
     assert "animal_count" not in payload
+
+
+def test_synthetic_counting_cli_emits_lifecycle_total_without_session_state(capsys) -> None:
+    result = main(
+        [
+            "--source-type",
+            "synthetic",
+            "--synthetic-frames",
+            "4",
+            "--tracker",
+            "empty",
+            "--enable-crossing",
+            "--crossing-line-start",
+            "0.1,0.5",
+            "--crossing-line-end",
+            "0.9,0.5",
+            "--enable-counting",
+            "--positive-direction",
+            "negative_to_positive",
+            "--statistics-interval",
+            "100",
+        ]
+    )
+
+    payload = json.loads([line for line in capsys.readouterr().out.splitlines() if line][-1])
+    assert result == 0
+    assert payload["counting_enabled"] is True
+    assert payload["lifecycle_directional_count"] == 0
+    assert payload["counting_closed"] is True
+    assert "session_id" not in payload
+    assert "storage" not in payload
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ["--source-type", "synthetic", "--enable-counting"],
+        [
+            "--source-type",
+            "synthetic",
+            "--tracker",
+            "empty",
+            "--enable-crossing",
+            "--crossing-line-start",
+            "0.1,0.5",
+            "--crossing-line-end",
+            "0.9,0.5",
+            "--enable-counting",
+        ],
+        [
+            "--source-type",
+            "synthetic",
+            "--positive-direction",
+            "negative_to_positive",
+        ],
+        [
+            "--source-type",
+            "synthetic",
+            "--tracker",
+            "empty",
+            "--enable-crossing",
+            "--crossing-line-start",
+            "0.1,0.5",
+            "--crossing-line-end",
+            "0.9,0.5",
+            "--enable-counting",
+            "--positive-direction",
+            "negative_to_positive",
+            "--maximum-counted-identities",
+            "0",
+        ],
+    ),
+)
+def test_cli_rejects_invalid_counting_configuration_before_runtime(
+    arguments: list[str],
+) -> None:
+    with pytest.raises(SystemExit) as captured:
+        main(arguments)
+
+    assert captured.value.code == 2
 
 
 @pytest.mark.parametrize(

@@ -16,11 +16,11 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 6 evaluation infrastructure implemented —
-candidate line plans, deterministic tracking replay, optional crossing-event
-ground-truth metrics, explicit ranking, and sanitized offline reports are
-implemented; representative pig line-position evaluation remains pending;
-Phase 7 has not started.
+Current roadmap status: Phase 7 lifecycle-aware directional counting
+infrastructure implemented - explicit positive direction, reverse and duplicate
+decisions, atomic frame updates, and reconnect-isolated lifecycle totals are
+implemented; representative pig duplicate-counting and reverse-movement
+validation remains pending; Phase 8 has not started.
 
 ## Official project memory
 
@@ -101,6 +101,13 @@ ground-truth matching, explicit ranking policies, strict path-free JSON, and a
 technical CLI. Synthetic fixtures validate the infrastructure; no
 representative pig ground truth was evaluated and no production line placement
 is recommended.
+
+Phase 7 consumes Phase 5.4 crossing events through a separate lifecycle-aware
+counter. The first positive event for a source/lifecycle/tracker identity
+increments once; repeated positives and reverse events remain explicit
+zero-increment decisions. Reconnect creates a fresh total and counted-identity
+set. This is a lifecycle diagnostic, not a session result or validated
+biological pig count.
 
 ## Phase 0 documentation
 
@@ -291,9 +298,22 @@ default report makes no automatic recommendation.
 * [Phase 6 validation](docs/phase_6/phase_6_validation.md)
 * [Phase 6 summary](docs/phase_6/phase_6_summary.md)
 
+## Phase 7
+
+Phase 7 provides framework-neutral, atomic directional decisions over live
+crossing events. Positive direction is explicit, counted identities are
+qualified by source and crossing lifecycle, reverses never decrement, and
+duplicates never increment again within that lifecycle. Counting remains
+disabled by default.
+
+* [Phase 7 reverse and duplicate counting](docs/phase_7/phase_7_reverse_duplicate_counting.md)
+* [Phase 7 validation](docs/phase_7/phase_7_validation.md)
+* [Phase 7 summary](docs/phase_7/phase_7_summary.md)
+
 ## High-level pipeline
 
-Production input through event-only crossing implemented through Phase 5.4:
+Production input through lifecycle directional decisions implemented through
+Phase 7:
 
 LIVE CAMERA
 → CAMERA SOURCE ADAPTER
@@ -305,10 +325,11 @@ LIVE CAMERA
 → REPLACEABLE LIVE TRACKER
 → STRUCTURED TEMPORARY TRACKS
 → NORMALIZED FINITE VIRTUAL LINE
-→ DIRECTIONAL CROSSING EVENTS / LOCAL TELEMETRY
+→ DIRECTIONAL CROSSING EVENTS
+→ LIFECYCLE DIRECTIONAL DECISIONS / LOCAL TELEMETRY
 
-Accumulated counting, unique-animal deduplication, operational direction,
-sessions, and storage are not implemented in the live pipeline.
+Session totals, biological re-identification, persistence, and operator UI are
+not implemented in the live pipeline.
 
 Implemented generic Phase 2.3 development/video flow:
 
@@ -343,7 +364,8 @@ TRACKING REPLAY
 * Phase 4: implementation completed through Phase 4.3; real annotation and empirical detector validation may still be incomplete
 * Phase 5: implemented through authorized Phase 5.4 event-only live crossing; empirical pig validation remains absent
 * Phase 6: evaluation infrastructure implemented; representative pig line-position evaluation remains pending
-* Phase 7 through Phase 16: not started
+* Phase 7: lifecycle-aware directional counting infrastructure implemented; representative duplicate/reverse validation remains pending
+* Phase 8 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
 The source-controlled repository contains no real pig video and makes no claim
@@ -371,8 +393,12 @@ only with synthetic tracks; line placement, event accuracy, and count accuracy
 have not been measured on pigs. Phase 6 compares candidate lines reproducibly,
 but its evidence remains synthetic: representative tracking replay and
 human-verified crossing-event ground truth are absent, so it establishes
-neither an optimal line nor pig-count accuracy. Real pig annotation may be
-incomplete, and no real pig detector was trained or validated during Phase 4.3
+neither an optimal line nor pig-count accuracy. Phase 7 policy mechanics are
+validated synthetically, but ID switches, fragmentation, ID reuse, reconnect
+boundaries, real reverse movement, and duplicate-count accuracy have not been
+evaluated with representative pigs. The lifecycle total is not a session total
+and reverses do not decrement it. Real pig annotation may be incomplete, and no
+real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific
 tracking evaluation, sessions, SQLite persistence, operator UI, live counting

@@ -151,6 +151,13 @@ Implement and evaluate virtual counting line positions.
 
 Handle reverse movement and duplicate counting.
 
+Phase 7 may maintain an accumulated directional total only inside one explicit
+source/crossing lifecycle. Its counted identity is temporary and must include
+source, lifecycle, and tracker ID. Reverse events do not decrement the initial
+total, repeated positive events do not increment again, and reconnect/reset
+starts a new independent total. This lifecycle total is not a session count;
+Phase 8 remains responsible for session scope.
+
 ### Phase 8
 
 Build three-section session manager.

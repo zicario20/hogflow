@@ -974,3 +974,81 @@ timestamp, or trajectory.
 Short and long lines can be compared with explicit endpoint evidence while
 geometry remains centralized in Phase 5.4. Endpoint proximity remains a
 diagnostic, not a business rule or automatic line adjustment.
+
+## ADR-046 - Qualify Phase 7 identities by source and crossing lifecycle
+
+Status: Accepted
+
+### Context
+
+A numeric tracker ID is temporary, may be reused after reconnect/reset, and
+does not identify one biological animal globally. Phase 5.4's historical
+`tracker_lifecycle_id` field actually identifies its crossing-detector
+lifecycle.
+
+### Decision
+
+Define `TemporaryTrackIdentity` as `(source_id, crossing_lifecycle_id,
+tracker_id)`. Preserve the Phase 5.4 field for compatibility and expose a clear
+`crossing_lifecycle_id` alias. Give Phase 7 state a distinct
+`counting_lifecycle_id`. Reset Phase 7 whenever Phase 5.4 emits a new crossing
+lifecycle; never combine totals across those lifecycles.
+
+### Consequences
+
+The same numeric tracker ID may contribute once in separate lifecycles without
+state leakage. Reconnect may still allow the same physical animal to contribute
+again because HogFlow has no biological re-identification or session policy.
+
+## ADR-047 - Use first-positive counting without reverse decrement
+
+Status: Accepted
+
+### Context
+
+Phase 5.4 emits neutral directional events. Phase 7 must make every event
+auditable while preventing repeated positive crossings from incrementing
+again. A reverse event alone does not prove permanent departure or justify
+changing a prior total.
+
+### Decision
+
+Configure one explicit geometric positive direction. The first positive event
+for a lifecycle-qualified identity increments once. Later positive events are
+`IGNORED_DUPLICATE_POSITIVE`. Opposite-direction events are
+`IGNORED_REVERSE`; they never decrement and never remove an identity from the
+counted set.
+
+### Consequences
+
+Behavior is deterministic and conservative within one lifecycle. ID switches
+or fragmentation can overcount, while inappropriate ID reuse can undercount.
+There is no net count, correction policy, session count, or biological
+deduplication.
+
+## ADR-048 - Apply Phase 7 frames atomically in the serial live path
+
+Status: Accepted
+
+### Context
+
+One crossing result may contain events for several tracks. Partially applying a
+frame before discovering invalid provenance would corrupt the lifecycle total.
+Evicting counted IDs to limit memory would silently permit duplicates. Adding a
+counting queue would weaken exact frame correspondence.
+
+### Decision
+
+Validate every event, canonicalize by tracker ID, calculate decisions against a
+prospective identity set, validate the complete immutable result, and only then
+commit state. Keep counted IDs for the entire lifecycle. Bound them by an
+explicit capacity that fails the whole frame instead of evicting. Compose
+`LiveCountingPipeline` serially in the Phase 5.4 callback with no new queue.
+Treat core counting failures as fatal and preview failures as non-fatal.
+
+### Consequences
+
+Frame updates are all-or-nothing, duplicate suppression survives temporary
+misses, memory has a hard limit, and the Phase 5.1 buffer remains the only
+queue. Deployments must size capacity for a lifecycle; reaching it stops the
+run safely rather than returning a misleading partial count.

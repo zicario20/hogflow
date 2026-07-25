@@ -4,11 +4,12 @@
 > `AGENTS.md`, no en sustitución de sus reglas normativas.
 
 Última reconstrucción integral: 25 de julio de 2026.
+Última actualización incremental: Phase 7, 25 de julio de 2026.
 
-Línea base técnica de Phase 6:
-`86ef52f92c92a0ca72007eab286c1f82698a43ce`
-(`Implement Phase 5.4 live line crossing events`). Phase 6 se publica mediante
-el commit `Implement Phase 6 line position evaluation`; su SHA final debe
+Línea base técnica de Phase 7:
+`ee40b6529aa833b9ab701da06347defccfd3fb52`
+(`Implement Phase 6 line position evaluation`). Phase 7 se publica mediante el
+commit `Implement Phase 7 reverse and duplicate counting`; su SHA final debe
 consultarse con Git porque un documento no puede incluir de forma
 autorreferencial el SHA del mismo commit que lo contiene.
 
@@ -235,7 +236,7 @@ Camera
 | Tracker | Asociar detecciones con IDs temporales. | Tracking finito y `LiveTracker` **IMPLEMENTADOS**; tracking real de cerdos no validado. |
 | Virtual Line | Definir segmento finito y lado/dirección. | **IMPLEMENTADO** en Phase 1/2 finita y Phase 5.4 live normalizada; no calibrada con cerdos. |
 | Crossing Event | Emitir transiciones geométricas direccionales. | **IMPLEMENTADO** en Phase 1/2 y como evento live sin conteo en Phase 5.4. |
-| Counter | Incrementar una vez por tracker elegible. | **IMPLEMENTADO** por ejecución genérica; no es contador vivo ni por sesión operativa. |
+| Counter | Incrementar una vez por identidad temporal elegible. | **IMPLEMENTADO** en Phase 1 finita y Phase 7 live por lifecycle; no es identidad biológica ni total de sesión. |
 | Session | Limitar IDs contados a una sección/sesión. | **PLANNED**, Phase 8. |
 | Storage | Persistir sesiones y eventos. | **PLANNED**, Phase 10; paquete placeholder solamente. |
 | Dashboard | Interfaz del operador y revisión. | **PLANNED**, Phase 9; no existe UI operativa. |
@@ -350,24 +351,26 @@ default; incluye eventos geométricos pero no conteo acumulado.
 | `.github/workflows/ci.yml` | CI source-only/synthetic en Ubuntu/Python 3.12. |
 | `docs/phase_0/` | Problema, proceso, solución conceptual, supuestos y resumen. |
 | `docs/phase_1/` | Diseño, uso y evidencia del contador genérico. |
-| `docs/phase_2/` | Foundation, contratos, integración, reglas y ADR-001–037. |
+| `docs/phase_2/` | Foundation, contratos, integración, reglas y ADR-001–048. |
 | `docs/phase_3/` | Adquisición autorizada, inventario y uso local. |
 | `docs/phase_4/` | Evaluación, anotación, splitting, extracción y training baseline. |
 | `docs/phase_5/` | Streaming, hardware, detección live y tracking live. |
+| `docs/phase_6/` | Evaluación offline de posiciones de línea. |
+| `docs/phase_7/` | Política lifecycle de positivos, duplicates y reversos. |
 | `src/hogflow/core/` | Excepciones, logging e identificadores comunes. |
 | `src/hogflow/config/` | Configuración mínima inmutable. |
 | `src/hogflow/models.py` | Modelos canónicos de frame/detección/track finitos. |
 | `src/hogflow/adapters/` | OpenCV, Ultralytics, YOLO training y Supervision ByteTrack. |
 | `src/hogflow/annotation/` | Política, YOLO serialization, manifest y validación. |
 | `src/hogflow/data/` | Inventario, splits, selección y extracción local. |
-| `src/hogflow/evaluation/` | Modelos y métricas básicas de detección. |
+| `src/hogflow/evaluation/` | Métricas de detección y evaluación offline Phase 6. |
 | `src/hogflow/training/` | Contrato, configuración, dataset gates, resultados y reportes de training. |
 | `src/hogflow/video/` | Contrato finito, CLI genérico/live, metadata y output OpenCV. |
 | `src/hogflow/streaming/` | Fuente viva, packet, buffer, lifecycle, health y sintéticos. |
 | `src/hogflow/detection/` | Contratos finito/live, resultados, errores, telemetry y fakes. |
 | `src/hogflow/tracking/` | Contratos finito/live, modelos, config, telemetry y fakes. |
-| `src/hogflow/counting/` | Geometría y conteo direccional genérico. |
-| `src/hogflow/pipeline/` | Orquestación genérica, live detection y live tracking. |
+| `src/hogflow/counting/` | Geometría/eventos Phase 5.4 y política lifecycle Phase 7, además del contador genérico. |
+| `src/hogflow/pipeline/` | Orquestación genérica y composición serial live detection/tracking/crossing/counting. |
 | `src/hogflow/domain/` | Placeholder de dominio operativo; sin entidades. |
 | `src/hogflow/sessions/` | Placeholder; Phase 8 no implementada. |
 | `src/hogflow/storage/` | Placeholder; Phase 10 no implementada. |
@@ -382,8 +385,8 @@ CLIs relevantes:
 - módulos de splitting, selección de frames, extracción y validación de
   anotaciones en `hogflow.data`/`hogflow.annotation`;
 - `python -m hogflow.adapters.camera_stream_cli`: diagnóstico de stream;
-- `python -m hogflow.video.live_detection_cli`: detección live y tracking
-  opcional, sin conteo.
+- `python -m hogflow.video.live_detection_cli`: detección, tracking, crossing y
+  counting lifecycle opcionales; sin sesión ni persistencia.
 
 No hay aplicación de operador, dashboard, implementación de sesiones ni base de
 datos. Los nombres de esas fronteras no implican funcionalidad.
@@ -404,6 +407,9 @@ Resumen de madurez:
 | Phase 5.1 | Adquisición live completada. | Webcam USB real en un equipo. | Completa con observaciones; no RTSP production proof. |
 | Phase 5.2 | Live detector integration completada. | Detector vacío en webcam; no pesos de cerdo. | Completa como integración; evidencia pig-specific bloqueada. |
 | Phase 5.3 | Live tracking integration completada y observaciones técnicas cerradas. | ByteTrack real con boxes sintéticos en webcam. | Cerrada técnicamente; accuracy real no validada. |
+| Phase 5.4 | Eventos live de cruce implementados. | Tracks sintéticos solamente. | Implementación completa; eventos reales no validados. |
+| Phase 6 | Evaluador offline de líneas implementado. | Replays/ground truth sintéticos. | Infraestructura completa; calibración representativa pendiente. |
+| Phase 7 | Política lifecycle de reversos y duplicates implementada. | Fixtures sintéticos solamente. | Infraestructura completa; deduplicación real no validada. |
 
 ### 5.1 Phase 0 — Define problem and map process
 
@@ -616,13 +622,39 @@ Resumen de madurez:
 - **Estado:** infraestructura de evaluación implementada; evaluación
   representativa con cerdos, ground truth humano y línea calibrada pendientes.
 
-### 5.15 Estado de las fases 7–16
+### 5.15 Phase 7 — Reverse movement and duplicate counting
+
+- **Objetivo:** convertir eventos geométricos live en decisiones direccionales
+  auditables y un total limitado al lifecycle actual.
+- **Entregado:** `LiveCountingConfiguration`, `TemporaryTrackIdentity`,
+  `LiveCountingDecision`, `LiveCountingResult`, snapshots/summaries,
+  `LiveDirectionalCounter`, `LifecycleDirectionalCounter`, telemetry,
+  `LiveCountingPipeline`, preview OpenCV opcional y CLI.
+- **Decisiones:** dirección positiva geométrica explícita; identidad mínima
+  `(source_id, crossing_lifecycle_id, tracker_id)`; primer positivo incrementa;
+  positivos repetidos y reversos producen decisiones con incremento cero;
+  ningún decremento; aplicación atómica por frame; counted IDs no expiran
+  durante el lifecycle; capacidad excedida falla sin eviction; reconnect crea
+  lifecycle y total nuevos.
+- **Compatibilidad:** el campo histórico Phase 5.4
+  `tracker_lifecycle_id` se preserva, con alias claro
+  `crossing_lifecycle_id`; Phase 6 continúa evaluando eventos geométricos sin
+  deduplicación.
+- **Evidencia:** fixtures sintéticos de positivos, reversos, duplicados, dos
+  tracks, gaps, stale, atomicidad, capacidad, reconnect, preview, CLI,
+  boundaries y regresión.
+- **Commit:** `Implement Phase 7 reverse and duplicate counting` (consultar SHA
+  final en Git por la autorreferencia del documento).
+- **Estado:** infraestructura lifecycle-aware implementada; validación
+  representativa de cerdos, reversos, duplicates, ID switches y accuracy
+  pendiente.
+
+### 5.16 Estado de las fases 8–16
 
 No iniciadas. Sus nombres normativos son:
 
 | Fase | Alcance normativo | Estado |
 | --- | --- | --- |
-| 7 | Movimiento reverso y duplicate counting. | NOT STARTED |
 | 8 | Session manager de tres secciones. | NOT STARTED |
 | 9 | Operator MVP UI. | NOT STARTED |
 | 10 | SQLite para sesiones/eventos. | NOT STARTED |
@@ -699,6 +731,9 @@ tabla preserva su razonamiento operativo.
 | 043 | 6 | Pickle/manifests con paths o JSON estricto sanitizado. | Esquema JSON versionado y path-free, con IO atómico. | Replays/reports son inspeccionables sin media ni rutas privadas. Aceptada. |
 | 044 | 6 | Elegir más eventos o condicionar recomendación a evidencia. | Sin ground truth no hay recomendación automática; con ground truth ranking explícito. | Evita presentar señal descriptiva como accuracy. Aceptada. |
 | 045 | 6 | Cambiar emisión cerca de extremos o solo diagnosticar. | Reusar intersección finita y medir proximidad sin alterar eventos. | Permite comparar segmentos cortos/largos sin nueva regla de negocio. Aceptada. |
+| 046 | 7 | ID numérico global o identidad calificada por lifecycle. | `(source, crossing lifecycle, tracker ID)` más lifecycle propio de counting. | Reconnect no hereda total/IDs; no implica identidad biológica. Aceptada. |
+| 047 | 7 | Reverso decrementa/corrige o solo se registra. | Primer positivo incrementa; duplicate/reverse no incrementan ni decrementan. | Política conservadora y auditable; no existe net count. Aceptada. |
+| 048 | 7 | Mutación evento-a-evento/eviction o frame atómico/capacidad fatal. | Validar y calcular lote completo antes de commit; capacidad falla sin expulsar IDs. | Sin estado parcial ni duplicados por eviction; pipeline serial sin cola. Aceptada. |
 
 ---
 
@@ -725,6 +760,9 @@ tabla preserva su razonamiento operativo.
 | Afirmar RTSP production readiness por tests USB/sintéticos. | Rechazada | No existe evidencia RTSP representativa. | Validación autorizada por backend/cámara/red. |
 | Afirmar protección de patente desde invention log. | Rechazada | Un registro conceptual no otorga protección. | Solo evidencia jurídica externa documentada. |
 | Definir Phase 5.4 por inferencia. | Resuelta | El owner aprobó el alcance event-only y sus exclusiones. | Cualquier ampliación hacia conteo pertenece a una fase posterior autorizada. |
+| Decrementar el total al observar un reverso. | Rechazada en Phase 7 | Un reverso no demuestra salida definitiva ni corrige una identidad. | Solo con evidencia y una fase/regla futura explícitamente autorizada. |
+| Expulsar IDs contados para liberar capacidad. | Rechazada en Phase 7 | Permitiría que un positivo repetido vuelva a incrementar silenciosamente. | Rediseño aprobado con semántica equivalente y evidencia; el default actual falla seguro. |
+| Combinar totales de reconnect/lifecycles. | Pospuesta | No existe sesión ni re-identificación biológica. | Phase 8+ con reglas explícitas y riesgos medidos. |
 
 ---
 
@@ -735,8 +773,8 @@ tabla preserva su razonamiento operativo.
 | Elemento | Estado verificado al 25-07-2026 |
 | --- | --- |
 | Branch | `main` |
-| Línea base técnica de Phase 6 | `86ef52f92c92a0ca72007eab286c1f82698a43ce` |
-| `origin/main` al iniciar esta memoria | Mismo SHA que la línea base |
+| Línea base técnica de Phase 7 | `ee40b6529aa833b9ab701da06347defccfd3fb52` |
+| `origin/main` al iniciar Phase 7 | Mismo SHA que la línea base |
 | Working tree al iniciar | Limpio |
 | Remote | `https://github.com/zicario20/hogflow.git` |
 | CI | GitHub Actions `CI`, run `29681085740`, conclusión `success` |
@@ -744,6 +782,7 @@ tabla preserva su razonamiento operativo.
 | Suite de cierre Phase 5.3 | 465 passed; 1 warning de ByteTrack deprecated |
 | Suite Phase 5.4 | 524 passed; 1 warning de ByteTrack deprecated |
 | Suite local Phase 6 | 570 passed; 1 warning de ByteTrack deprecated |
+| Suite local Phase 7 | 625 passed; 1 warning de ByteTrack deprecated |
 | Python local verificado | 3.12.13; proyecto declara `>=3.10` |
 | Python CI | 3.12 en Ubuntu latest |
 
@@ -777,6 +816,8 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 - evaluación offline determinista de candidatos de línea con replay idéntico,
   lifecycles aislados, métricas descriptivas/ground truth opcional, ranking
   explícito y reportes sanitizados;
+- decisiones live lifecycle-aware para primer positivo, positivo duplicado y
+  reverso, con actualización atómica, capacidad acotada y reset por reconnect;
 - hardware USB para adquisición, lifecycle detector vacío y tracking de cajas
   sintéticas;
 - CI source-only y boundaries automatizados.
@@ -787,7 +828,7 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 - detección real de cerdos en el pipeline live;
 - tracking de cerdos representativo y métricas de identidad;
 - evaluación representativa de posiciones con ground truth humano;
-- conteo acumulado/deduplicado dentro del pipeline live;
+- validación representativa del conteo lifecycle-aware, reversos y duplicados;
 - sesiones de tres secciones;
 - SQLite, UI, dashboard, analytics y review clips;
 - evaluación contra ground truth y error de conteo;
@@ -799,10 +840,10 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 
 El cierre técnico de Phase 5.3 resolvió HF-D001–HF-D003 y formalizó la decisión
 arquitectónica de HF-D004–HF-D006. Phase 5.4 mitiga HF-D007 para estado
-geométrico mediante lifecycle/reset, pero no resuelve deduplicación futura.
-Phase 6 mitiga HF-D018 con tooling reproducible, no con evidencia
-representativa. La calibración empírica y las demás deudas permanecen
-explícitas.
+geométrico y Phase 7 lo mitiga para deduplicación dentro de un lifecycle, sin
+resolver identidad física entre lifecycles. Phase 6 mitiga HF-D018 con tooling
+reproducible, no con evidencia representativa. La calibración empírica y las
+demás deudas permanecen explícitas.
 
 | ID | Severidad | Evidencia | Archivo / símbolo | Descripción y riesgo | Solución recomendada | Estado |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -812,7 +853,7 @@ explícitas.
 | HF-D004 | Media | **HECHO VERIFICADO** | `tracking/config.py::ByteTrackConfiguration.frame_rate`; ADR-038 | ByteTrack recibe FPS estático y la cámara/inferencia pueden operar a frecuencias distintas. | `frame_rate` se define como frecuencia esperada de updates exitosos del tracker; no se adapta automáticamente. | Decisión cerrada; calibración por deployment pendiente. |
 | HF-D005 | Alta para evidencia futura | **HECHO VERIFICADO** | ADR-036/038; `LiveTrackingPipeline` | Frames omitidos por scheduling no generan updates intermedios. | Preservar gaps y no fabricar detecciones/updates; test verifica una llamada por request real. | Política cerrada; efecto empírico pendiente. |
 | HF-D006 | Alta para oclusión | **HECHO VERIFICADO EN API 0.29.1** | `ByteTrackConfiguration.lost_track_buffer`; ADR-038 | Supervision calcula `max_time_lost = int(frame_rate / 30 * lost_track_buffer)` y lo consume en pasos de update. | Tratar `lost_track_buffer` como referencia a 30 FPS y configurar `frame_rate` según updates efectivos esperados. | Semántica cerrada; tuning con oclusión real pendiente. |
-| HF-D007 | Alta para conteo futuro | **HECHO VERIFICADO** | ADR-034/035/041; `LiveCrossingEvent.tracker_lifecycle_id` | Reset/reconnect puede reutilizar IDs. Crossing ya limpia lados y califica eventos por lifecycle, pero un contador futuro todavía podría deduplicar mal entre lifecycles. | Phase 7 debe usar lifecycle explícito y evidencia; no inventar identidad biológica. | Mitigada para crossing; abierta para counting. |
+| HF-D007 | Alta para conteo | **HECHO VERIFICADO** | ADR-034/035/041/046; `TemporaryTrackIdentity` | Reset/reconnect puede reutilizar IDs. Phase 7 califica por source/crossing lifecycle y resetea el total, pero no sabe si dos lifecycles observan el mismo animal físico. | Mantener lifecycles separados y medir el riesgo; no inventar identidad biológica. | Mitigada dentro del lifecycle; abierta entre lifecycles. |
 | HF-D008 | Alta de mantenimiento | **HECHO VERIFICADO** | `adapters/supervision_bytetrack.py`; ADR-037 | Supervision 0.29.1 advierte que ByteTrack está deprecated desde 0.28 y se elimina en 0.30. | Migrar/reemplazar solo el adapter, manteniendo contratos. | Pin `<0.30`; warning visible. |
 | HF-D009 | Baja/Media | **HECHO VERIFICADO** | ADR-012/026 | RGB bytes exige BGR↔RGB y reconstrucción/copy. Puede afectar CPU/latencia. | Perfilar con detector real antes de rediseñar contrato. | Aceptada conscientemente. |
 | HF-D010 | Baja | **HECHO empírico** | hardware Phase 5.3 | Un intento de reopen de 15 s terminó sin frames porque el límite incluía apertura/warm-up; una ventana extendida funcionó. | Separar timeout de startup y duración de frame flow si una fase lo exige. | Limitación, no defecto confirmado. |
@@ -827,6 +868,10 @@ explícitas.
 | HF-D019 | Bloqueante empírico | **HECHO VERIFICADO** | `evaluation/line_models.py::EvidenceLevel`; docs Phase 6 | No existe replay representativo con ground truth humano de crossing en Git. | Crear evidencia local autorizada y preservar provenance; no inferir accuracy desde fixtures sintéticos. | Abierta. |
 | HF-D020 | Media metodológica | **HECHO VERIFICADO** | `evaluation/line_matching.py` | El matching greedy uno-a-uno es determinista, pero puede no maximizar globalmente matches en casos ambiguos. | Auditar ventanas/ambigüedad con ground truth representativo antes de cambiar algoritmo. | Limitación explícita. |
 | HF-D021 | Alta para calibración | **INFERENCIA respaldada por diseño** | `LineCandidate`; métricas near-endpoint | Anchor, epsilon y longitud/posición de segmento pueden sesgar eventos, especialmente con jitter, gaps y oclusión. | Comparar candidatos estratificados y revisar eventos near-endpoint/gap con datos representativos. | Pendiente empírica. |
+| HF-D022 | Alta para count accuracy | **INFERENCIA respaldada por diseño** | `LifecycleDirectionalCounter`; ADR-047 | ID switch o fragmentación puede asignar varios IDs al mismo animal y permitir varios incrementos. | Medir con tracking/ground truth representativo antes de afirmar deduplicación real. | Abierta empírica. |
+| HF-D023 | Alta para undercount | **INFERENCIA respaldada por diseño** | counted identity set Phase 7 | Reutilizar indebidamente un tracker ID dentro del mismo lifecycle puede bloquear un animal distinto. | Medir ID reuse y limitar lifecycles con reglas futuras explícitas. | Abierta empírica. |
+| HF-D024 | Alta entre reconnects | **HECHO VERIFICADO EN DISEÑO** | ADR-046; `LiveCountingPipeline` | Reset evita state leakage pero permite que el mismo animal físico contribuya en otro lifecycle; los totales no se combinan. | Phase 8/11 deben definir y evaluar límites operativos sin re-ID inventada. | Abierta; fuera de Phase 7. |
+| HF-D025 | Media de capacidad | **HECHO VERIFICADO** | `maximum_counted_identities` | Alcanzar el límite detiene el run para evitar eviction; una configuración insuficiente afecta disponibilidad. | Dimensionar por deployment y observar capacity errors; no expulsar IDs silenciosamente. | Riesgo explícito/fail-safe. |
 
 ---
 
@@ -939,49 +984,44 @@ de estas métricas de conteo tiene todavía resultado empírico con cerdos.
 
 ### 12.1 Siguiente trabajo confirmado
 
-**HECHO VERIFICADO:** el owner autorizó Phase 6 como infraestructura offline de
-evaluación de posiciones. La implementación compara eventos geométricos y no
-adelanta conteo, deduplicación, sesiones o storage.
+**HECHO VERIFICADO:** el owner autorizó Phase 7 con política conservadora por
+lifecycle: primer positivo incrementa, positivos repetidos y reversos no
+incrementan, y un reverso no decrementa. La implementación no añade sesiones,
+storage o UI.
 
-**Recomendación actual:** auditar el commit Phase 6 y su CI; después ejecutar
-una evaluación Phase 6 local, autorizada y representativa con ground truth
-humano antes de considerar Phase 7.
+**Recomendación actual:** auditar Phase 7 y su CI antes de comenzar Phase 8.
+En paralelo, la evaluación representativa pendiente de Phase 6/7 debe
+permanecer explícita y no bloquear la honestidad del estado técnico.
 
 ### 12.2 Siguiente fase normativa
 
-Phase 7 conserva su propósito: manejar movimiento reverso y duplicate counting.
-No está iniciada ni autorizada por este cambio. El tooling Phase 6 no demuestra
-todavía qué línea debe usarse ni suministra accuracy de conteo.
-
-Trabajo pendiente dentro de la validación empírica Phase 6:
-
-- generar replay desde tracking representativo autorizado;
-- producir ground truth humano de crossing events separado de tracker IDs;
-- ejecutar múltiples candidatos con el mismo replay;
-- revisar falsos/missed events, gaps, endpoints, densidad y oclusión;
-- documentar resultados sin elevar event metrics a count accuracy.
+Phase 8 conserva su propósito normativo: construir el session manager de tres
+secciones. No está iniciada por Phase 7. Debe componer el contador existente,
+no copiar sus reglas, y definir cuándo comienza/termina un lifecycle operativo
+sin convertir IDs temporales en identidad biológica.
 
 Fuera del siguiente trabajo salvo aprobación expresa:
 
-- deduplicación y one-ID-one-count de Phase 7;
-- sesiones, storage, UI y fases posteriores;
-- afirmar count accuracy a partir de eventos sintéticos.
+- SQLite/storage de Phase 10;
+- Operator MVP UI de Phase 9;
+- re-identificación, net count o decremento por reverso;
+- combinar cámaras o reconnects sin regla validada;
+- afirmar count accuracy desde fixtures sintéticos.
 
-### 12.3 Condiciones de inicio de Phase 7
+### 12.3 Condiciones de inicio de Phase 8
 
-- auditoría técnica y CI de Phase 6 verificados;
-- resultados representativos Phase 6 revisados o limitación explícitamente
-  aceptada por el owner;
-- especificación escrita para reversos/deduplicación;
-- lifecycle IDs, gaps y tracker failure risks incorporados al diseño;
-- no convertir event totals sintéticos en regla de negocio;
+- auditoría técnica y CI de Phase 7 verificados;
+- límites entre crossing, counting lifecycle y session lifecycle revisados;
+- reglas de una sola sesión activa y reset de IDs especificadas;
+- riesgos de reconnect, ID switch, fragmentación y total parcial visibles;
+- ninguna dependencia de storage/UI adelantada;
 - actualización de esta memoria incluida en el commit autorizado.
 
 ### 12.4 Criterios mínimos del siguiente cierre
 
-- ninguna regresión Phase 0–6;
-- reglas de Phase 7 basadas en evidencia y alcance aprobado;
-- evento geométrico separado de conteo operacional;
+- ninguna regresión Phase 0–7;
+- Phase 8 limitada al session manager autorizado;
+- evento geométrico, decisión lifecycle y sesión separados;
 - ID switches, fragmentación y reconnect tratados como riesgos observables;
 - resultados pobres y fallos conservados;
 - documentación, ADRs y memoria sincronizadas;
@@ -994,8 +1034,9 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 ### 13.1 Roadmap normativo Phase 0–16
 
 - **CONFIRMADO / implementado:** Phase 0, Phase 1, Phase 2.1–2.3, tooling Phase
-  3, tooling Phase 4.1–4.3, Phase 5.1–5.4 y tooling Phase 6 según sus alcances.
-- **CONFIRMADO / no iniciado:** Phase 7–16 con nombres y límites definidos en
+  3, tooling Phase 4.1–4.3, Phase 5.1–5.4, tooling Phase 6 y Phase 7 según sus
+  alcances.
+- **CONFIRMADO / no iniciado:** Phase 8–16 con nombres y límites definidos en
   `AGENTS.md`.
 
 ### 13.2 Cierre técnico inmediato
@@ -1003,9 +1044,11 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 1. **COMPLETADO:** cierre de observaciones técnicas de Phase 5.3.
 2. **COMPLETADO:** definición e implementación event-only de Phase 5.4.
 3. **COMPLETADO:** infraestructura offline de evaluación Phase 6.
-4. **PENDIENTE:** auditar Phase 6 y ejecutar evaluación representativa.
-5. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
-6. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
+4. **COMPLETADO:** infraestructura lifecycle-aware de Phase 7.
+5. **PENDIENTE:** auditar Phase 7 y ejecutar evaluación representativa Phase
+   6/7.
+6. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
+7. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
 
 ### 13.3 Validación técnica
 
@@ -1013,7 +1056,7 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 2. Entrenar/evaluar un detector pig-specific con provenance.
 3. Medir tracking real: ID switches, fragmentación, oclusión y gaps.
 4. Phase 6: aplicar el evaluador a posiciones con datos representativos.
-5. Phase 7: reversos y deduplicación de conteo.
+5. Phase 7: medir reversos y duplicate-counting con eventos representativos.
 6. Phase 11–12: ground truth, error y failure analytics.
 
 Estas tareas son **TENTATIVAS en calendario**, aunque las fases 6–12 son parte
@@ -1077,9 +1120,10 @@ implementarse hasta que una necesidad medida justifique su coste.
 15. En el reporte final, confirmar si esta memoria cambió y por qué. Si no
     cambió, explicar por qué el cambio no alteró el conocimiento del proyecto.
 16. Preservar el historial de invención y separar market research de resultados.
-17. Nunca convertir IDs temporales, detecciones o tracks visibles en conteos.
-18. No convertir la evaluación Phase 6 en deduplicación, reversos o conteo;
-    Phase 7 requiere autorización propia.
+17. Nunca presentar IDs temporales, detecciones, tracks visibles o el total
+    Phase 7 como identidad biológica, conteo de sesión o accuracy validada.
+18. No convertir la evaluación Phase 6 en deduplicación/reversos ni contaminar
+    sus métricas con Phase 7; cada contrato conserva su alcance.
 19. Todo cambio aprobado debe terminar con tests, commit descriptivo, push a
     la rama autorizada y verificación `HEAD == origin/<rama>`, salvo que el
     usuario retire expresamente autorización de push.
@@ -1118,6 +1162,11 @@ Checklist mínimo antes de commit:
 | `VirtualLine` | Segmento finito dirigido; Phase 5.4 usa `NormalizedLine` independiente de resolución. |
 | `CrossingEvent` | Evento Phase 1 con `counted`; no debe confundirse con el evento live event-only. |
 | `LiveCrossingEvent` | Transición geométrica live ligada a frame, línea y lifecycle; no contiene conteo acumulado. |
+| `TemporaryTrackIdentity` | Clave Phase 7 `(source, crossing lifecycle, tracker ID)`; temporal, no biológica. |
+| `LiveCountingDecision` | Resultado auditable por evento: positivo contado, positivo duplicado o reverso ignorado. |
+| `LiveCountingResult` | Lote atómico de decisiones y total del lifecycle para un frame; no es resultado de sesión. |
+| `LifecycleDirectionalCounter` | Contador Phase 7 que permite un incremento positivo por identidad temporal dentro de un crossing lifecycle. |
+| Lifecycle directional count | Total Phase 7 limitado al lifecycle actual; se reinicia tras reconnect/reset y no prueba animales únicos. |
 | `LineSide` | Lado explícito `NEGATIVE`, `ON_LINE` o `POSITIVE` respecto a línea orientada. |
 | `TrackAnchor` | Política determinista para punto representativo; default live `BOTTOM_CENTER`. |
 | `LineCandidate` | Configuración inmutable y fingerprinted de línea, anchor, epsilon y retención para evaluación offline. |

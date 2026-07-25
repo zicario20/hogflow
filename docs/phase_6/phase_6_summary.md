@@ -61,5 +61,6 @@ pig detector, real pig tracking, or count-accuracy result was produced.
 
 ## Next boundary
 
-Audit Phase 6 and perform an explicitly authorized representative Phase 6
-evaluation before considering Phase 7. Phase 7 is not started.
+At the Phase 6 completion boundary, the recommendation was to audit Phase 6
+and perform an explicitly authorized representative evaluation before Phase 7.
+The later Phase 7 implementation does not change Phase 6 metrics or evidence.
