@@ -209,7 +209,9 @@ class LiveTrackingPipeline:
             tracking=self._telemetry.snapshot(),
         )
         if self._result_callback is not None:
-            self._result_callback(frame, detections, tracking, snapshot)
+            callback_action = self._result_callback(frame, detections, tracking, snapshot)
+            if callback_action is PreviewAction.STOP:
+                return PreviewAction.STOP
         if self._preview_active and self._preview is not None:
             try:
                 return self._preview.show_tracking(

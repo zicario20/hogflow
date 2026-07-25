@@ -796,3 +796,78 @@ The adapter remains simple, deterministic, and truthful about work performed.
 Deployments must configure the expected update rate from measured inference and
 tracking throughput; a mismatch changes wall-clock retention. Representative
 occlusion and gap behavior remains an empirical validation requirement.
+
+## ADR-039 — Separate live crossing events from the Phase 1 counter
+
+Status: Accepted
+
+### Context
+
+Phase 1 combines finite-segment crossing events with positive-direction
+deduplication and accumulated count state. Phase 5.4 is authorized to emit
+geometric live events only; Phase 7 still owns reverse and unique-count rules.
+
+### Decision
+
+Add a separate lifecycle-aware `VirtualLineCrossingDetector` that consumes
+immutable `TrackingResult` values and emits immutable `LiveCrossingEvent`
+values. Reuse the proven finite-segment and near-line concepts, but do not
+reuse `DirectionalLineCounter`, `counted_tracker_ids`, or accumulated totals.
+
+### Consequences
+
+The Phase 1 workflow remains compatible, while the live pipeline can observe
+both geometric directions without silently implementing Phase 7. A crossing
+event is not a pig count.
+
+## ADR-040 — Use normalized finite geometry and bottom-center anchors
+
+Status: Accepted
+
+### Context
+
+Live camera resolutions may differ, full-box centers are weaker ground-plane
+proxies, floating-point jitter occurs near a line, and the historical Phase 1
+infinite-extension defect must not recur.
+
+### Decision
+
+Configure one oriented finite segment with normalized endpoints. Classify
+normalized representative points by signed perpendicular distance and explicit
+epsilon; use `BOTTOM_CENTER` by default and support `CENTER` only as a simple
+alternative. A side transition emits an event only when the segment between
+the two real stable observations intersects the configured finite line
+segment. No intermediate frame, timestamp, trajectory, or crossing point is
+created.
+
+### Consequences
+
+Geometry is resolution-independent and endpoint reversal predictably reverses
+side and direction. Large sequence gaps preserve uncertainty: the current
+frame is the observable event time, not an estimated crossing time.
+
+## ADR-041 — Compose live crossing serially and reset it with tracking
+
+Status: Accepted
+
+### Context
+
+Phase 5.3 already runs tracking serially after latest-useful-frame detection
+and resets temporary IDs after reconnect. A second queue could misassociate
+tracking results and crossing state; reused tracker IDs could inherit a prior
+side if crossing state were not reset.
+
+### Decision
+
+Keep the Phase 5.3 path unchanged when crossing is disabled. When explicitly
+enabled, `LiveCrossingPipeline` composes `LiveTrackingPipeline`, processes
+crossing in its successful-result callback, and mirrors every reported tracker
+reconnect reset before the next crossing update. Qualify events with a crossing
+lifecycle identifier. Treat configuration, lifecycle, stale-result, contract,
+and geometry failures as fatal for that run; isolate preview failures.
+
+### Consequences
+
+There is still one bounded source buffer and no crossing queue or frame
+history. A reconnect cannot leak remembered sides, but no cross-lifecycle
+biological re-identification or deduplication exists.

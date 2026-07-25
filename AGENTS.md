@@ -27,6 +27,7 @@ Before making architectural, implementation, roadmap, product, or documentation 
 Priority documents include:
 
 * `HOGFLOW_PROJECT_CONTEXT.md`
+* `HOGFLOW_PROJECT_MEMORY.md`
 * `AGENTS.md`
 * `INVENTION_LOG.md`
 * `MARKET_RESEARCH.md`
@@ -37,6 +38,10 @@ If a listed document does not yet exist, report that clearly.
 Do not invent its contents.
 
 `HOGFLOW_PROJECT_CONTEXT.md` is the primary technical and roadmap context.
+
+`HOGFLOW_PROJECT_MEMORY.md` is the official living technical and operational
+memory. It must be checked against the repository and updated in the same
+commit whenever a change alters project knowledge.
 
 `AGENTS.md` defines agent behavior and engineering constraints.
 
@@ -128,6 +133,16 @@ Build pig detection baseline.
 
 Add multi-object tracking.
 
+Authorized Phase 5 subphase:
+
+* Phase 5.4 — Live virtual-line crossing event integration.
+
+Phase 5.4 consumes live tracking results, classifies normalized representative
+points against one configured finite directed line, and emits directional
+crossing events. It does not maintain an accumulated animal count, deduplicate
+animals, apply session rules, persist events, or change the responsibilities
+of Phase 6 or Phase 7.
+
 ### Phase 6
 
 Implement and evaluate virtual counting line positions.
@@ -182,26 +197,27 @@ Before implementing any requested phase:
 
 1. Read `AGENTS.md`.
 2. Read `HOGFLOW_PROJECT_CONTEXT.md`.
-3. Inspect `INVENTION_LOG.md` if it exists.
-4. Inspect `MARKET_RESEARCH.md` if relevant to the task.
-5. Inspect the repository structure.
-6. Inspect existing code relevant to the requested phase.
-7. Inspect existing tests.
-8. Identify the current roadmap phase.
-9. Identify dependencies from previous phases.
-10. Briefly state the intended changes.
+3. Read `HOGFLOW_PROJECT_MEMORY.md`.
+4. Inspect `INVENTION_LOG.md` if it exists.
+5. Inspect `MARKET_RESEARCH.md` if relevant to the task.
+6. Inspect the repository structure.
+7. Inspect existing code relevant to the requested phase.
+8. Inspect existing tests.
+9. Identify the current roadmap phase.
+10. Identify dependencies from previous phases.
+11. Briefly state the intended changes.
 
 Then:
 
-11. Implement only the requested phase.
-12. Add or update relevant tests.
-13. Run relevant tests.
-14. Run Ruff when configured.
-15. Inspect the resulting diff.
-16. Report files changed.
-17. Report test results.
-18. Report known limitations.
-19. Identify the recommended next phase.
+12. Implement only the requested phase.
+13. Add or update relevant tests.
+14. Run relevant tests.
+15. Run Ruff when configured.
+16. Inspect the resulting diff.
+17. Report files changed.
+18. Report test results.
+19. Report known limitations.
+20. Identify the recommended next phase.
 
 Do not implement the recommended next phase unless explicitly requested.
 
@@ -816,6 +832,20 @@ Before reporting completion:
 * confirm no confidential data was added
 * confirm no unrelated phase was implemented
 * confirm tests relevant to the phase were executed
+
+For every approved implementation or governance change, complete this
+publication workflow unless the user explicitly withholds push authorization:
+
+1. run the required tests and quality gates;
+2. inspect scope, privacy, the diff, and project-memory impact;
+3. update `HOGFLOW_PROJECT_MEMORY.md` when project knowledge changed;
+4. create one descriptive commit;
+5. push to the authorized branch;
+6. verify local `HEAD` equals `origin/<authorized-branch>`;
+7. report the SHA, message, branch, push result, and actual CI status.
+
+Never claim that GitHub Actions is green without retrieving its result. Never
+leave a local-only commit without stating that fact clearly.
 
 Do not claim tests passed if they were not run.
 

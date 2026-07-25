@@ -10,7 +10,10 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 5 in progress — Phase 5.1 live-camera acquisition, Phase 5.2 live detector integration, and Phase 5.3 live multi-object tracking integration implemented; real pig detection and tracking validation are blocked by missing validated local pig-detector weights; counting is not implemented; Phase 5.4 not started.
+Current repository status: Phase 5 implemented through the authorized Phase
+5.4 scope — live acquisition, detector integration, temporary-ID tracking, and
+event-only virtual-line crossing are implemented; no accumulated pig count or
+representative pig validation exists; Phase 6 and Phase 7 have not started.
 
 ## Project identity
 
@@ -259,9 +262,34 @@ NOT EMPIRICALLY COMPLETED in Phase 5.3:
 * real pig tracking, because no validated local pig-detector artifact exists
 * representative occlusion, dense-group, ID-switch, or fragmentation evaluation
 * a claim that temporary tracker IDs correspond to unique biological animals
-* live virtual-line crossing or pig counting
 * RTSP tracking validation or production readiness
-* Phase 5.4
+
+IMPLEMENTED Phase 5.4 live virtual-line crossing events:
+
+* Immutable normalized points and one oriented finite line segment with
+  explicit `NEGATIVE`, `ON_LINE`, and `POSITIVE` classification.
+* Deterministic `BOTTOM_CENTER` and optional `CENTER` representative track
+  anchors independent from frame resolution.
+* Immutable lifecycle-qualified events in neutral
+  `NEGATIVE_TO_POSITIVE` and `POSITIVE_TO_NEGATIVE` directions.
+* Finite-segment validation between two real stable observations, explicit
+  normalized epsilon, and no fabricated intermediate frame or timestamp.
+* Bounded per-track stable-side state, update-based absence cleanup,
+  cross-stream rejection, stale-sequence rejection, and reset/reconnect state
+  clearing.
+* Serial optional `LiveCrossingPipeline` composition after successful tracking,
+  with no additional queue and unchanged Phase 5.3 behavior when disabled.
+* Bounded diagnostic event telemetry, optional ephemeral OpenCV preview, and
+  structured CLI activation using normalized endpoints.
+* Synthetic geometry, lifecycle, pipeline, preview, CLI, privacy, architecture,
+  and regression tests.
+
+NOT EMPIRICALLY COMPLETED in Phase 5.4:
+
+* representative pig crossing validation or calibrated line placement
+* event accuracy, count accuracy, ID-switch, fragmentation, or occlusion claims
+* accumulated counting, unique-ID deduplication, operational direction,
+  sessions, storage, Phase 6, or Phase 7
 
 ## Unique tracker counting concept
 
@@ -482,14 +510,16 @@ Phase 3 inventory infrastructure is implemented. Real authorized dataset acquisi
 Phase 4 implementation is complete through Phase 4.3. The local replaceable
 training pipeline is operational, but real annotation may still be incomplete
 and no real detector-performance result was produced during implementation.
-Phase 5 is in progress through Phase 5.3. The live acquisition foundation has
+Phase 5 is implemented through the authorized Phase 5.4 scope. The live acquisition foundation has
 synthetic, fake-backend, and one real laptop USB-webcam validation record. Live
 detector integration has deterministic synthetic/fake-framework evidence and
 one USB-webcam-to-empty-detector control-flow result, but no valid local
 pig-detector artifact was available for real pig inference.
 Live temporary-ID tracking has deterministic synthetic and installed-adapter
 evidence, but no representative pig-detection input or real pig-tracking
-accuracy evidence. RTSP production validation and Phase 5.4 have not started.
+accuracy evidence. Event-only virtual-line crossing has deterministic synthetic
+evidence but no representative line calibration or event-accuracy result.
+RTSP production validation and Phase 6 have not started.
 
 ## Pilot readiness phase
 
@@ -591,10 +621,12 @@ IMPLEMENTED at repository level:
 * bounded tracking health, failure, visible-track, reset, and latency telemetry
 * optional ephemeral OpenCV temporary-ID preview and extended structured CLI
 * synthetic Phase 5.3 identity, lifecycle, adapter, pipeline, privacy, and architecture tests
+* normalized finite-line models and lifecycle-qualified live crossing events
+* bounded crossing state, reset/reconnect alignment, telemetry, preview, and CLI
+* synthetic Phase 5.4 geometry, lifecycle, pipeline, privacy, and architecture tests
 
 Not yet implemented:
 
-* Phase 5.4 and live counting integration
 * Phase 6 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
@@ -607,4 +639,7 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition, Phase 5.2 live detector integration, and Phase 5.3 live multi-object tracking integration implemented; real pig detection and tracking validation are blocked by missing validated local pig-detector weights; counting is not implemented; Phase 5.4 not started.
+Current roadmap status: Phase 5 implemented through the authorized Phase 5.4
+scope — live acquisition, detector integration, temporary-ID tracking, and
+event-only virtual-line crossing are implemented; no accumulated pig count or
+representative pig validation exists; Phase 6 and Phase 7 have not started.

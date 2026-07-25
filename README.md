@@ -16,7 +16,10 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition, Phase 5.2 live detector integration, and Phase 5.3 live multi-object tracking integration implemented; real pig detection and tracking validation are blocked by missing validated local pig-detector weights; counting is not implemented; Phase 5.4 not started.
+Current roadmap status: Phase 5 implemented through the authorized Phase 5.4
+scope — live acquisition, detector integration, temporary-ID tracking, and
+event-only virtual-line crossing are implemented; no accumulated pig count or
+representative pig validation exists; Phase 6 and Phase 7 have not started.
 
 ## Official project memory
 
@@ -81,6 +84,13 @@ One local USB-webcam integration test used synthetic moving boxes with the
 installed ByteTrack adapter, completed a long run and immediate reopen, and
 saved no frames. It validates lifecycle and data flow only, not real pig
 tracking.
+
+Phase 5.4 adds normalized finite-line geometry, explicit side and neutral
+direction models, bottom-center track anchors, lifecycle-qualified crossing
+events, bounded side-state cleanup, reconnect reset alignment, and serial
+integration after successful tracking. Crossing is disabled by default. It
+emits geometric events only: there is no accumulated pig total, one-ID-one-count
+rule, operational direction, session, persistence, or accuracy claim.
 
 ## Phase 0 documentation
 
@@ -237,12 +247,15 @@ Phase 5 is in progress through the Phase 5.3 live tracking integration:
 * isolated Supervision ByteTrack adapter with framework conversion boundaries
 * tracking telemetry for updates, failures, visible tracks, resets, and latency
 * optional ephemeral local preview of temporary track IDs
+* normalized finite virtual-line configuration and bottom-center track anchors
+* lifecycle-qualified directional crossing events without accumulated counting
+* bounded crossing state, telemetry, reconnect reset, and optional local preview
 
 Prerecorded videos remain development, training, and validation tools only.
 No valid local pig detector was available or executed. Temporary-ID tracking
 integration is implemented, but real pig tracking is not validated and the
-live Phase 5.3 path performs no line crossing or counting. Phase 5.4 has not
-started.
+live Phase 5.4 path has only synthetic event validation and performs no
+accumulated counting.
 
 * [Phase 5.1 live streaming](docs/phase_5/phase_5_1_live_streaming.md)
 * [Phase 5.1 real hardware validation](docs/phase_5/phase_5_1_hardware_validation.md)
@@ -252,10 +265,13 @@ started.
 * [Phase 5.3 live tracking](docs/phase_5/phase_5_3_live_tracking.md)
 * [Phase 5.3 validation](docs/phase_5/phase_5_3_validation.md)
 * [Phase 5.3 summary](docs/phase_5/phase_5_3_summary.md)
+* [Phase 5.4 live crossing](docs/phase_5/phase_5_4_live_crossing.md)
+* [Phase 5.4 validation](docs/phase_5/phase_5_4_validation.md)
+* [Phase 5.4 summary](docs/phase_5/phase_5_4_summary.md)
 
 ## High-level pipeline
 
-Production input, detector, and temporary-ID integration implemented through Phase 5.3:
+Production input through event-only crossing implemented through Phase 5.4:
 
 LIVE CAMERA
 → CAMERA SOURCE ADAPTER
@@ -265,10 +281,12 @@ LIVE CAMERA
 → REPLACEABLE LIVE DETECTOR
 → STRUCTURED FRAME DETECTIONS
 → REPLACEABLE LIVE TRACKER
-→ STRUCTURED TEMPORARY TRACKS / LOCAL TELEMETRY
+→ STRUCTURED TEMPORARY TRACKS
+→ NORMALIZED FINITE VIRTUAL LINE
+→ DIRECTIONAL CROSSING EVENTS / LOCAL TELEMETRY
 
-Virtual-line crossing and counting are not implemented in the live Phase 5.3
-pipeline.
+Accumulated counting, unique-animal deduplication, operational direction,
+sessions, and storage are not implemented in the live pipeline.
 
 Implemented generic Phase 2.3 development/video flow:
 
@@ -291,7 +309,7 @@ storage, operator UI, and evaluation only in their approved phases.
 * Phase 2: completed through Phase 2.1, Phase 2.2, and Phase 2.3
 * Phase 3: inventory infrastructure implemented; real authorized collection and review in progress
 * Phase 4: implementation completed through Phase 4.3; real annotation and empirical detector validation may still be incomplete
-* Phase 5: in progress — Phase 5.1 acquisition, Phase 5.2 live detector integration, and Phase 5.3 live tracking integration implemented; Phase 5.4 not started
+* Phase 5: implemented through authorized Phase 5.4 event-only live crossing; empirical pig validation remains absent
 * Phase 6 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
@@ -315,7 +333,9 @@ smoke test, but no valid local pig-detector artifact was available and real pig
 inference was not validated. Phase 5.3 temporary-ID integration is validated
 with deterministic synthetic detections and the installed Supervision adapter,
 but not with representative pig detections; ID-switch, fragmentation, and
-occlusion behavior remain unmeasured. Real pig annotation may be
+occlusion behavior remain unmeasured. Phase 5.4 crossing logic is validated
+only with synthetic tracks; line placement, event accuracy, and count accuracy
+have not been measured on pigs. Real pig annotation may be
 incomplete, and no real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific

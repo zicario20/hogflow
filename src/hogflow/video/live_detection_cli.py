@@ -8,11 +8,21 @@ from pathlib import Path
 from typing import Sequence
 
 from hogflow.adapters.camera_source_factory import create_camera_source
+from hogflow.adapters.opencv_crossing_preview import OpenCVCrossingPreview
 from hogflow.adapters.opencv_detection_preview import OpenCVDetectionPreview
 from hogflow.adapters.opencv_tracking_preview import OpenCVTrackingPreview
 from hogflow.adapters.supervision_bytetrack import SupervisionByteTrackAdapter
 from hogflow.adapters.ultralytics_live_detector import UltralyticsLiveDetector
 from hogflow.core import HogFlowError, configure_logging
+from hogflow.counting import (
+    LiveCrossingConfiguration,
+    LiveCrossingRunSummary,
+    LiveCrossingSnapshot,
+    NormalizedLine,
+    NormalizedPoint,
+    TrackAnchor,
+    VirtualLineCrossingDetector,
+)
 from hogflow.detection import (
     EmptyDetector,
     LiveDetectionRunSummary,
@@ -21,7 +31,7 @@ from hogflow.detection import (
     LiveInferenceConfiguration,
     SyntheticMovingBoxDetector,
 )
-from hogflow.pipeline import LiveDetectionPipeline, LiveTrackingPipeline
+from hogflow.pipeline import LiveCrossingPipeline, LiveDetectionPipeline, LiveTrackingPipeline
 from hogflow.streaming import (
     BoundedFrameBuffer,
     BufferConfiguration,
@@ -116,6 +126,16 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
+    parser.add_argument("--enable-crossing", action="store_true")
+    parser.add_argument("--crossing-line-start", type=_normalized_point_argument)
+    parser.add_argument("--crossing-line-end", type=_normalized_point_argument)
+    parser.add_argument(
+        "--crossing-anchor",
+        choices=tuple(item.value for item in TrackAnchor),
+        default=TrackAnchor.BOTTOM_CENTER.value,
+    )
+    parser.add_argument("--crossing-epsilon", type=float, default=0.005)
+    parser.add_argument("--crossing-track-retention-updates", type=int, default=30)
 
     parser.add_argument("--inference-every", type=int, default=1)
     parser.add_argument("--target-inference-fps", type=float)
@@ -142,6 +162,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         detector = _detector(arguments)
         tracker = _tracker(arguments)
+        crossing_configuration = _crossing_configuration(arguments)
         source = create_camera_source(
             stream_configuration,
             synthetic_frame_count=arguments.synthetic_frames,
@@ -178,7 +199,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 statistics_interval_seconds=arguments.statistics_interval,
             )
             print(json.dumps(_summary_payload(summary), sort_keys=True), flush=True)
-        else:
+        elif not crossing_configuration.enabled:
             tracking_preview = (
                 OpenCVTrackingPreview(show_track_ids=arguments.show_track_ids)
                 if arguments.preview
@@ -202,6 +223,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             print(
                 json.dumps(_tracking_summary_payload(tracking_summary), sort_keys=True), flush=True
+            )
+        else:
+            crossing_detector = VirtualLineCrossingDetector(crossing_configuration)
+            crossing_preview = (
+                OpenCVCrossingPreview(
+                    crossing_configuration,
+                    show_track_ids=arguments.show_track_ids,
+                )
+                if arguments.preview
+                else None
+            )
+            crossing_pipeline = LiveCrossingPipeline(
+                stream_runner,
+                detector,
+                tracker,
+                crossing_detector,
+                inference_configuration,
+                preview=crossing_preview,
+                statistics_callback=lambda snapshot: print(
+                    json.dumps(_crossing_statistics_payload(snapshot, final=False), sort_keys=True),
+                    flush=True,
+                ),
+            )
+            crossing_summary = crossing_pipeline.run(
+                maximum_frames=arguments.maximum_frames,
+                maximum_duration_seconds=arguments.maximum_duration,
+                statistics_interval_seconds=arguments.statistics_interval,
+            )
+            print(
+                json.dumps(_crossing_summary_payload(crossing_summary), sort_keys=True),
+                flush=True,
             )
     except (HogFlowError, ValueError) as exc:
         parser.error(str(exc))
@@ -271,6 +323,38 @@ def _tracker(arguments: argparse.Namespace) -> LiveTracker | None:
         minimum_consecutive_frames=arguments.minimum_consecutive_frames,
     )
     return SupervisionByteTrackAdapter(configuration)
+
+
+def _crossing_configuration(arguments: argparse.Namespace) -> LiveCrossingConfiguration:
+    start = arguments.crossing_line_start
+    end = arguments.crossing_line_end
+    if not arguments.enable_crossing:
+        if start is not None or end is not None:
+            raise ValueError("Crossing line endpoints require --enable-crossing.")
+        return LiveCrossingConfiguration()
+    if arguments.tracker == "disabled":
+        raise ValueError("Live crossing requires an enabled tracker.")
+    if start is None or end is None:
+        raise ValueError("Enabled crossing requires --crossing-line-start and --crossing-line-end.")
+    return LiveCrossingConfiguration(
+        enabled=True,
+        line=NormalizedLine(start, end),
+        anchor=TrackAnchor(arguments.crossing_anchor),
+        epsilon=arguments.crossing_epsilon,
+        absent_track_retention_updates=arguments.crossing_track_retention_updates,
+    )
+
+
+def _normalized_point_argument(value: str) -> NormalizedPoint:
+    try:
+        parts = value.split(",")
+        if len(parts) != 2:
+            raise ValueError
+        return NormalizedPoint(float(parts[0]), float(parts[1]))
+    except (ValueError, HogFlowError) as exc:
+        raise argparse.ArgumentTypeError(
+            "Normalized points must use x,y values from 0 through 1."
+        ) from exc
 
 
 def _class_ids(value: str) -> tuple[int, ...]:
@@ -391,6 +475,55 @@ def _tracking_summary_payload(summary: LiveTrackingRunSummary) -> dict[str, obje
             "tracker_framework": summary.tracker.framework,
             "tracker_identity": summary.tracker.tracker_id,
             "tracker_version": summary.tracker.framework_version,
+        }
+    )
+    return payload
+
+
+def _crossing_statistics_payload(
+    snapshot: LiveCrossingSnapshot,
+    *,
+    final: bool,
+) -> dict[str, object]:
+    payload = _tracking_statistics_payload(snapshot.tracking, final=final)
+    crossing = snapshot.crossing
+    payload.update(
+        {
+            "crossing_enabled": True,
+            "crossing_events_emitted": crossing.events_emitted,
+            "crossing_failures": crossing.failures,
+            "crossing_health": crossing.health_state.value,
+            "crossing_last_error": crossing.last_error.value,
+            "crossing_requests": crossing.requests_processed,
+            "crossing_resets": crossing.resets,
+            "crossing_successes": crossing.successful_results,
+            "negative_to_positive_events": crossing.negative_to_positive_events,
+            "positive_to_negative_events": crossing.positive_to_negative_events,
+            "tracks_on_line": crossing.tracks_on_line,
+        }
+    )
+    return payload
+
+
+def _crossing_summary_payload(summary: LiveCrossingRunSummary) -> dict[str, object]:
+    tracking_summary = summary.tracking_summary
+    payload = _tracking_summary_payload(tracking_summary)
+    payload.update(
+        _crossing_statistics_payload(
+            LiveCrossingSnapshot(
+                tracking=LiveTrackingSnapshot(
+                    detection=tracking_summary.detection_summary.statistics,
+                    tracking=tracking_summary.tracking_statistics,
+                ),
+                crossing=summary.crossing_statistics,
+            ),
+            final=True,
+        )
+    )
+    payload.update(
+        {
+            "crossing_closed": summary.crossing_closed,
+            "crossing_configuration_fingerprint": summary.configuration_fingerprint,
         }
     )
     return payload

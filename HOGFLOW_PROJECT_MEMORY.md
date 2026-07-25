@@ -5,11 +5,12 @@
 
 Última reconstrucción integral: 25 de julio de 2026.
 
-Línea base técnica usada para esta reconstrucción:
-`f5cc77336423d5ed6c885d0504628e72232c2bd8` (`Implement Phase 5.3 live multi-object tracking`).
-El commit que incorpora por primera vez este documento es el commit documental
-inmediatamente posterior; su SHA debe consultarse con `git log -1` para evitar
-una referencia autorreferencial imposible de mantener dentro del propio commit.
+Línea base técnica de Phase 5.4:
+`79c0c71da0574226292c81444dcb01ec199bf4b7`
+(`Close Phase 5.3 tracking observations`). Phase 5.4 se publica mediante el
+commit `Implement Phase 5.4 live line crossing events`; su SHA final debe
+consultarse con Git porque un documento no puede incluir de forma
+autorreferencial el SHA del mismo commit que lo contiene.
 
 ## Cómo interpretar esta memoria
 
@@ -60,10 +61,10 @@ direccionales, mantenga conteos por sesión, preserve eventos y permita revisió
 operativa. El resultado final previsto incluye continuidad del proceso manual,
 evidencia de error de conteo y gates explícitos antes de cualquier piloto.
 
-El resultado final no existe todavía. En la línea base actual hay adquisición
-en vivo, integración de detector y tracking temporal; faltan el detector de
-cerdos validado, la integración de conteo en vivo, sesiones, almacenamiento,
-interfaz y evaluación contra ground truth.
+El resultado final no existe todavía. En el estado actual hay adquisición en
+vivo, integración de detector, tracking temporal y eventos geométricos live de
+cruce. Faltan el detector de cerdos validado, conteo acumulado/deduplicado,
+sesiones, almacenamiento, interfaz y evaluación contra ground truth.
 
 ### 1.3 Usuarios previstos
 
@@ -232,8 +233,8 @@ Camera
 | Frame Capture | Adquirir, ordenar, timestamp, convertir a RGB bytes, buffer limitado. | **IMPLEMENTADO** en Phase 5.1. |
 | Detector | Producir cajas y clases sin tracking ni conteo. | Contratos, adapters y pipeline **IMPLEMENTADOS**; detector real de cerdos no disponible/validado. |
 | Tracker | Asociar detecciones con IDs temporales. | Tracking finito y `LiveTracker` **IMPLEMENTADOS**; tracking real de cerdos no validado. |
-| Virtual Line | Definir segmento finito y lado/dirección. | **IMPLEMENTADO** solo en pipeline genérico finito de Phase 1/2; no conectado al pipeline vivo. |
-| Crossing Event | Emitir cruce positivo, reverso o repetido válido. | **IMPLEMENTADO** solo en pipeline genérico finito. |
+| Virtual Line | Definir segmento finito y lado/dirección. | **IMPLEMENTADO** en Phase 1/2 finita y Phase 5.4 live normalizada; no calibrada con cerdos. |
+| Crossing Event | Emitir transiciones geométricas direccionales. | **IMPLEMENTADO** en Phase 1/2 y como evento live sin conteo en Phase 5.4. |
 | Counter | Incrementar una vez por tracker elegible. | **IMPLEMENTADO** por ejecución genérica; no es contador vivo ni por sesión operativa. |
 | Session | Limitar IDs contados a una sección/sesión. | **PLANNED**, Phase 8. |
 | Storage | Persistir sesiones y eventos. | **PLANNED**, Phase 10; paquete placeholder solamente. |
@@ -282,6 +283,8 @@ Reglas:
 | `LiveTracker` | `src/hogflow/tracking/ports.py` | `start(stream_id)`, `update`, `reset`, `close`; una instancia por lifecycle. |
 | `TrackingRequest`, `TrackingResult` | `src/hogflow/tracking/models.py` | Entrada/salida inmutable con IDs temporales y provenance. |
 | `DirectionalLineCounter` | `src/hogflow/counting/line_crossing.py` | Única fuente de verdad para geometría finita, dirección y deduplicación positiva. |
+| `LiveCrossingDetector` | `src/hogflow/counting/live_ports.py` | `start`, `update(TrackingResult)`, `reset`, `close`; eventos sin conteo. |
+| `NormalizedLine`, `LiveCrossingEvent` | `src/hogflow/counting/live_models.py` | Geometría normalizada finita y evento ligado a frame/lifecycle. |
 
 ### 3.4 Pipeline finito frente a pipeline en vivo
 
@@ -301,11 +304,13 @@ por EOF o límite. El CLI compatible está en
 ```text
 CameraSource → LiveStreamRunner → BoundedFrameBuffer → FramePacket
 → LiveDetectionPipeline → FrameDetections
-→ LiveTrackingPipeline → TrackingResult → preview opcional
+→ LiveTrackingPipeline → TrackingResult
+→ LiveCrossingPipeline → LiveCrossingEvent → preview opcional
 ```
 
 Es stream-first, usa secuencias monotónicas por lifecycle, buffer fijo y
-prioriza el frame útil más reciente. No incluye línea virtual ni conteo.
+prioriza el frame útil más reciente. Crossing es opcional y desactivado por
+default; incluye eventos geométricos pero no conteo acumulado.
 
 ### 3.5 `Tracker` finito frente a `LiveTracker`
 
@@ -571,7 +576,27 @@ Resumen de madurez:
 - **Commit de cierre:** `Close Phase 5.3 tracking observations`.
 - **Estado:** cerrada técnicamente; no tracking real de cerdos ni accuracy.
 
-### 5.13 Estado de las fases 6–16
+### 5.13 Phase 5.4 — Live virtual-line crossing event integration
+
+- **Objetivo:** consumir `TrackingResult` y emitir eventos direccionales
+  geométricos sin conteo acumulado.
+- **Entregado:** `LiveCrossingDetector`, puntos/línea normalizados, lados
+  explícitos, anchors bottom-center/center, `VirtualLineCrossingDetector`,
+  eventos ligados a frame y lifecycle, limpieza por ausencia, telemetry,
+  pipeline serial opcional, preview OpenCV y CLI.
+- **Decisiones:** segmento finito para evitar extensiones invisibles; epsilon
+  como distancia perpendicular normalizada; ninguna interpolación de frames o
+  tiempo; crossing desactivado por default; reset alineado con reconnect del
+  tracker; errores de contrato/lifecycle fatales y preview aislada.
+- **Evidencia:** pruebas sintéticas de geometría horizontal/vertical/diagonal,
+  ambos sentidos, `ON_LINE`, gaps, múltiples tracks, expiración, reset,
+  stream isolation, pipeline, preview, CLI y boundaries.
+- **Commit:** `Implement Phase 5.4 live line crossing events` (consultar SHA
+  final en Git por la autorreferencia del documento).
+- **Estado:** implementación event-only completada; sin validación con cerdos,
+  line calibration, event accuracy ni count accuracy.
+
+### 5.14 Estado de las fases 6–16
 
 No iniciadas. Sus nombres normativos son:
 
@@ -648,6 +673,9 @@ tabla preserva su razonamiento operativo.
 | 036 | 5.3 | Cola tracking propia o tracking serial. | Tracking en callback de detección exitosa. | Asociación exacta, no segunda cola. Aceptada. |
 | 037 | 5.3 | API Supervision en dominio o adapter aislado. | Lazy adapter 0.29.1 con API verificada. | Migración por deprecación queda localizada. Aceptada. |
 | 038 | 5.3 | Cámara, inferencia y tracker pueden avanzar a frecuencias distintas. | `frame_rate` representa updates efectivos esperados; gaps no fabrican updates y reconnect hace reset. | Retención depende de configuración por deployment; validación empírica sigue pendiente. Aceptada. |
+| 039 | 5.4 | Reusar contador Phase 1 o separar eventos live. | Detector live event-only; no `counted_tracker_ids` ni total. | Phase 1 permanece compatible y Phase 7 no se adelanta. Aceptada. |
+| 040 | 5.4 | Línea por píxeles/infinita o segmento normalizado. | Segmento finito normalizado, epsilon perpendicular y bottom-center default. | Independiente de resolución; gaps no estiman tiempo/trayectoria. Aceptada. |
+| 041 | 5.4 | Cola propia o crossing serial; state persistente o reset alineado. | Callback serial, sin cola, crossing off por default y reset por reconnect. | Asociación exacta y sin herencia de lados entre lifecycles. Aceptada. |
 
 ---
 
@@ -673,7 +701,7 @@ tabla preserva su razonamiento operativo.
 | Sesiones, SQLite, UI o analytics anticipados. | Pospuesta | Roadmap asigna Fases 8–12. | Implementar solo su fase aprobada. |
 | Afirmar RTSP production readiness por tests USB/sintéticos. | Rechazada | No existe evidencia RTSP representativa. | Validación autorizada por backend/cámara/red. |
 | Afirmar protección de patente desde invention log. | Rechazada | Un registro conceptual no otorga protección. | Solo evidencia jurídica externa documentada. |
-| Definir Phase 5.4 por inferencia. | Pendiente | README/contexto usan la etiqueta, pero `AGENTS.md` no define su alcance. | Product owner debe aprobar especificación y evitar solape con Phase 6/7. |
+| Definir Phase 5.4 por inferencia. | Resuelta | El owner aprobó el alcance event-only y sus exclusiones. | Cualquier ampliación hacia conteo pertenece a una fase posterior autorizada. |
 
 ---
 
@@ -684,13 +712,14 @@ tabla preserva su razonamiento operativo.
 | Elemento | Estado verificado al 25-07-2026 |
 | --- | --- |
 | Branch | `main` |
-| Línea base técnica | `f5cc77336423d5ed6c885d0504628e72232c2bd8` |
+| Línea base técnica de Phase 5.4 | `79c0c71da0574226292c81444dcb01ec199bf4b7` |
 | `origin/main` al iniciar esta memoria | Mismo SHA que la línea base |
 | Working tree al iniciar | Limpio |
 | Remote | `https://github.com/zicario20/hogflow.git` |
 | CI | GitHub Actions `CI`, run `29681085740`, conclusión `success` |
 | Suite Phase 5.3 original | 453 passed; 1 warning de ByteTrack deprecated |
 | Suite de cierre Phase 5.3 | 465 passed; 1 warning de ByteTrack deprecated |
+| Suite Phase 5.4 | 524 passed; 1 warning de ByteTrack deprecated |
 | Python local verificado | 3.12.13; proyecto declara `>=3.10` |
 | Python CI | 3.12 en Ubuntu latest |
 
@@ -719,6 +748,8 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 - buffer acotado, reconnect, health y shutdown;
 - live detection con fakes y adapter local Ultralytics;
 - live tracking con fakes y adapter Supervision ByteTrack;
+- eventos live de cruce sobre segmento finito normalizado, con lifecycle,
+  limpieza acotada y pipeline serial opcional;
 - hardware USB para adquisición, lifecycle detector vacío y tracking de cajas
   sintéticas;
 - CI source-only y boundaries automatizados.
@@ -728,7 +759,7 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 - checkpoint de detector de cerdos entrenado y validado;
 - detección real de cerdos en el pipeline live;
 - tracking de cerdos representativo y métricas de identidad;
-- línea virtual/conteo dentro del pipeline live;
+- conteo acumulado/deduplicado dentro del pipeline live;
 - sesiones de tres secciones;
 - SQLite, UI, dashboard, analytics y review clips;
 - evaluación contra ground truth y error de conteo;
@@ -739,8 +770,9 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 ## 9. Defectos conocidos y deuda técnica
 
 El cierre técnico de Phase 5.3 resolvió HF-D001–HF-D003 y formalizó la decisión
-arquitectónica de HF-D004–HF-D006. La calibración empírica y las demás deudas
-permanecen explícitas.
+arquitectónica de HF-D004–HF-D006. Phase 5.4 mitiga HF-D007 para estado
+geométrico mediante lifecycle/reset, pero no resuelve deduplicación futura.
+La calibración empírica y las demás deudas permanecen explícitas.
 
 | ID | Severidad | Evidencia | Archivo / símbolo | Descripción y riesgo | Solución recomendada | Estado |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -750,15 +782,18 @@ permanecen explícitas.
 | HF-D004 | Media | **HECHO VERIFICADO** | `tracking/config.py::ByteTrackConfiguration.frame_rate`; ADR-038 | ByteTrack recibe FPS estático y la cámara/inferencia pueden operar a frecuencias distintas. | `frame_rate` se define como frecuencia esperada de updates exitosos del tracker; no se adapta automáticamente. | Decisión cerrada; calibración por deployment pendiente. |
 | HF-D005 | Alta para evidencia futura | **HECHO VERIFICADO** | ADR-036/038; `LiveTrackingPipeline` | Frames omitidos por scheduling no generan updates intermedios. | Preservar gaps y no fabricar detecciones/updates; test verifica una llamada por request real. | Política cerrada; efecto empírico pendiente. |
 | HF-D006 | Alta para oclusión | **HECHO VERIFICADO EN API 0.29.1** | `ByteTrackConfiguration.lost_track_buffer`; ADR-038 | Supervision calcula `max_time_lost = int(frame_rate / 30 * lost_track_buffer)` y lo consume en pasos de update. | Tratar `lost_track_buffer` como referencia a 30 FPS y configurar `frame_rate` según updates efectivos esperados. | Semántica cerrada; tuning con oclusión real pendiente. |
-| HF-D007 | Alta para conteo futuro | **HECHO VERIFICADO** | ADR-034/035; reconnect reset | Reset/reconnect puede reutilizar IDs. Un consumidor futuro que ignore lifecycle podría deduplicar mal o contar doble. | Incluir identidad de lifecycle en la integración de conteo y tests de reconnect. | Debe resolverse antes de counting live. |
+| HF-D007 | Alta para conteo futuro | **HECHO VERIFICADO** | ADR-034/035/041; `LiveCrossingEvent.tracker_lifecycle_id` | Reset/reconnect puede reutilizar IDs. Crossing ya limpia lados y califica eventos por lifecycle, pero un contador futuro todavía podría deduplicar mal entre lifecycles. | Phase 7 debe usar lifecycle explícito y evidencia; no inventar identidad biológica. | Mitigada para crossing; abierta para counting. |
 | HF-D008 | Alta de mantenimiento | **HECHO VERIFICADO** | `adapters/supervision_bytetrack.py`; ADR-037 | Supervision 0.29.1 advierte que ByteTrack está deprecated desde 0.28 y se elimina en 0.30. | Migrar/reemplazar solo el adapter, manteniendo contratos. | Pin `<0.30`; warning visible. |
 | HF-D009 | Baja/Media | **HECHO VERIFICADO** | ADR-012/026 | RGB bytes exige BGR↔RGB y reconstrucción/copy. Puede afectar CPU/latencia. | Perfilar con detector real antes de rediseñar contrato. | Aceptada conscientemente. |
 | HF-D010 | Baja | **HECHO empírico** | hardware Phase 5.3 | Un intento de reopen de 15 s terminó sin frames porque el límite incluía apertura/warm-up; una ventana extendida funcionó. | Separar timeout de startup y duración de frame flow si una fase lo exige. | Limitación, no defecto confirmado. |
 | HF-D011 | Media de evidencia | **HECHO VERIFICADO** | `.github/workflows/ci.yml` | CI no prueba webcam, RTSP, GPU, pesos, media real, GUI ni calidad de cerdo. | Mantener CI sintético y añadir validación local autorizada/documentada por gate. | Intencional. |
 | HF-D012 | Bloqueante empírico | **HECHO VERIFICADO** | docs Phase 4/5 | No hay checkpoint pig-specific validado ni dataset/ground truth final en Git. | Completar localmente autorización, anotación, split, training y evaluación. | Abierta. |
 | HF-D013 | Alta para deployment | **HECHO VERIFICADO** | docs Phase 5 | RTSP existe como adapter/config, pero no tiene certificación real de red/cámara. | Test autorizado de disconnect, credentials, latency y reconnect. | Pendiente. |
-| HF-D014 | Media de gobernanza | **HECHO VERIFICADO** | README/contexto vs `AGENTS.md` | “Phase 5.4” se declara no iniciada, pero no tiene alcance normativo; las Fases 6–7 ya gobiernan línea/reversos. | Aprobar especificación o eliminar la etiqueta mediante decisión explícita. | Pendiente de owner. |
+| HF-D014 | Media de gobernanza | **HECHO VERIFICADO** | `AGENTS.md`; ADR-039–041 | Phase 5.4 carecía de alcance normativo. | El owner aprobó integración event-only sin conteo y preservó Phase 6/7. | Resuelta en Phase 5.4. |
 | HF-D015 | Media operativa | **INFERENCIA** | política de datos locales | Git no conserva source maps, media, labels, checkpoints ni reports; su pérdida impide reproducir runs. | Backup local autorizado, cifrado y con control de acceso fuera de Git. | Propuesta pendiente. |
+| HF-D016 | Alta para eventos reales | **INFERENCIA respaldada por diseño** | `VirtualLineCrossingDetector`; ADR-040 | Jitter de cajas puede alternar lados y producir eventos aparentes pese a epsilon. | Calibrar epsilon/línea con tracks representativos y medir falsos eventos. | Pendiente empírica. |
+| HF-D017 | Alta para trazabilidad | **HECHO VERIFICADO** | `LiveCrossingEvent.previous_frame_sequence`; ADR-040 | Con gaps grandes se observa cambio de lado pero no instante ni trayectoria exacta. | Conservar ambos frames, no interpolar y estratificar evaluación por gap. | Incertidumbre explícita. |
+| HF-D018 | Bloqueante para accuracy | **HECHO VERIFICADO** | docs Phase 5.4 / Phase 6 | La línea normalizada es manual y no está calibrada con cerdos representativos. | Phase 6 debe evaluar posiciones con ground truth autorizado. | Abierta. |
 
 ---
 
@@ -871,53 +906,51 @@ de estas métricas de conteo tiene todavía resultado empírico con cerdos.
 
 ### 12.1 Siguiente trabajo confirmado
 
-**HECHO VERIFICADO:** las observaciones técnicas de la auditoría Phase 5.3
-quedaron cerradas sin añadir counting, línea, sesión o storage. HF-D001–HF-D003
-se corrigieron y HF-D004–HF-D006 recibieron una política explícita en ADR-038.
-HF-D007–HF-D008 y la validación empírica permanecen como riesgos conocidos.
+**HECHO VERIFICADO:** el owner definió y autorizó Phase 5.4 como integración
+live event-only. La implementación produce eventos geométricos y no adelanta
+conteo, deduplicación, sesiones o storage.
 
-**PROPUESTA PENDIENTE / recomendación actual:** no iniciar trabajo posterior
-hasta que el owner apruebe por escrito su alcance y confirme su relación con
-las fases normativas 6–7.
+**Recomendación actual:** auditar el commit Phase 5.4 y su CI antes de iniciar
+Phase 6.
 
-### 12.2 Discrepancia “Phase 5.4”
+### 12.2 Siguiente fase normativa
 
-README y contexto dicen “Phase 5.4 not started”, pero `AGENTS.md` no define su
-objetivo. El roadmap normativo pasa de Phase 5 (tracking) a Phase 6 (líneas) y
-Phase 7 (reversos/deduplicación). Por tanto:
+Phase 6 conserva su propósito: implementar y evaluar posiciones de línea
+virtual con datos representativos. Phase 5.4 aporta el mecanismo técnico, no la
+evidencia para elegir una ubicación.
 
-- no existe alcance aprobado que pueda implementarse con seguridad;
-- no se debe inferir que Phase 5.4 significa counting live;
-- el owner debe definir si 5.4 es cierre/integración de Phase 5 o si el siguiente
-  cambio pertenece directamente a Phase 6;
-- cualquier especificación debe evitar implementar reglas de Phase 6/7 de forma
-  anticipada.
+Dentro de Phase 6:
 
-### 12.3 Condiciones de inicio del siguiente cambio
+- protocolo de evaluación y candidate line positions;
+- datos autorizados y ground truth de cruces cuando existan;
+- medición estratificada por línea, gap, densidad y oclusión;
+- documentación honesta de falsos/missed crossing events.
 
-- cierre técnico Phase 5.3 verificado;
-- alcance/numbering aprobados por el owner;
-- criterios de aceptación y exclusiones escritos;
-- preservar las decisiones ya cerradas sobre duplicate IDs, class mapping,
-  gaps y reconnect;
-- datos/pesos solo si se harán afirmaciones empíricas;
-- plan de pruebas sintéticas sin cámara/GPU/internet;
+Fuera de Phase 6 salvo aprobación expresa:
+
+- deduplicación y one-ID-one-count de Phase 7;
+- sesiones, storage, UI y fases posteriores;
+- afirmar count accuracy a partir de eventos sintéticos.
+
+### 12.3 Condiciones de inicio de Phase 6
+
+- auditoría técnica y CI de Phase 5.4 verificados;
+- alcance y criterios de aceptación escritos;
+- datos representativos explícitamente autorizados;
+- política de ground truth para crossing;
+- preservar lifecycle IDs, gaps sin interpolación y segmento finito;
+- plan de pruebas sintéticas más validación empírica separada;
 - actualización de esta memoria incluida en el commit.
 
-### 12.4 Criterios de aceptación del siguiente cierre
+### 12.4 Criterios mínimos del siguiente cierre
 
-El cierre técnico local quedó aceptado cuando:
-
-- la línea base, la rama y el working tree inicial se verificaron;
-- Phase 5.1/5.2 siguen sin regresión;
-- las 453 pruebas base y las 12 regresiones nuevas pasan con quality gates;
-- cada deuda crítica recibe decisión: corregir, aceptar temporalmente o bloquear;
-- no hay counting, línea, sesión o storage live añadido por la auditoría;
-- el owner aprueba por escrito el nombre y alcance del siguiente subpaso;
-- documentación, ADRs y esta memoria coinciden con el commit auditado.
-
-La verificación CI remota de este cierre solo podrá afirmarse después de un
-push autorizado; no forma parte de la evidencia local registrada aquí.
+- ninguna regresión Phase 0–5.4;
+- posiciones evaluadas mediante evidencia, no intuición;
+- evento geométrico separado de conteo;
+- resultados pobres y fallos conservados;
+- no deduplicación/reversos operativos anticipados;
+- documentación, ADRs y memoria sincronizadas;
+- quality gates, push y CI reportados con evidencia real.
 
 ---
 
@@ -926,17 +959,17 @@ push autorizado; no forma parte de la evidencia local registrada aquí.
 ### 13.1 Roadmap normativo Phase 0–16
 
 - **CONFIRMADO / implementado:** Phase 0, Phase 1, Phase 2.1–2.3, tooling Phase
-  3, tooling Phase 4.1–4.3 y Phase 5.1–5.3.
+  3, tooling Phase 4.1–4.3 y Phase 5.1–5.4 según sus alcances.
 - **CONFIRMADO / no iniciado:** Phase 6–16 con nombres y límites definidos en
   `AGENTS.md`.
-- **TENTATIVO:** etiqueta Phase 5.4; carece de alcance normativo.
 
 ### 13.2 Cierre técnico inmediato
 
 1. **COMPLETADO:** cierre de observaciones técnicas de Phase 5.3.
-2. **PENDIENTE:** resolver definición de Phase 5.4 frente a Phase 6.
-3. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
-4. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
+2. **COMPLETADO:** definición e implementación event-only de Phase 5.4.
+3. **PENDIENTE:** auditar Phase 5.4 antes de comenzar Phase 6.
+4. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
+5. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
 
 ### 13.3 Validación técnica
 
@@ -1009,7 +1042,12 @@ implementarse hasta que una necesidad medida justifique su coste.
     cambió, explicar por qué el cambio no alteró el conocimiento del proyecto.
 16. Preservar el historial de invención y separar market research de resultados.
 17. Nunca convertir IDs temporales, detecciones o tracks visibles en conteos.
-18. Detenerse y pedir especificación si “Phase 5.4” sigue sin alcance aprobado.
+18. No ampliar Phase 5.4 más allá de eventos geométricos; Phase 6/7 requieren
+    autorización propia.
+19. Todo cambio aprobado debe terminar con tests, commit descriptivo, push a
+    la rama autorizada y verificación `HEAD == origin/<rama>`, salvo que el
+    usuario retire expresamente autorización de push.
+20. No afirmar CI verde sin recuperar la conclusión remota real.
 
 Checklist mínimo antes de commit:
 
@@ -1021,7 +1059,9 @@ Checklist mínimo antes de commit:
 [ ] no datos/artefactos/secretos
 [ ] documentación coincide con código
 [ ] HOGFLOW_PROJECT_MEMORY.md actualizada si corresponde
-[ ] SHA, push y CI reportables
+[ ] commit descriptivo y push a rama autorizada
+[ ] HEAD coincide con origin/<rama>
+[ ] SHA, push y CI real reportables
 ```
 
 ---
@@ -1039,8 +1079,11 @@ Checklist mínimo antes de commit:
 | `LiveTracker` | Protocol con lifecycle explícito, ligado a un stream, que devuelve `TrackingResult`. |
 | `TrackingResult` | Resultado inmutable de tracks visibles para un frame exacto; no es conteo. |
 | `track_id` | Identidad temporal asignada por un tracker dentro de un lifecycle. |
-| `VirtualLine` | Concepto de frontera de conteo; en código actual es un segmento finito dirigido (`Line`). |
-| `CrossingEvent` | Evento de transición válida al cruzar el segmento, con dirección y flag `counted`. Solo pipeline finito actual. |
+| `VirtualLine` | Segmento finito dirigido; Phase 5.4 usa `NormalizedLine` independiente de resolución. |
+| `CrossingEvent` | Evento Phase 1 con `counted`; no debe confundirse con el evento live event-only. |
+| `LiveCrossingEvent` | Transición geométrica live ligada a frame, línea y lifecycle; no contiene conteo acumulado. |
+| `LineSide` | Lado explícito `NEGATIVE`, `ON_LINE` o `POSITIVE` respecto a línea orientada. |
+| `TrackAnchor` | Política determinista para punto representativo; default live `BOTTOM_CENTER`. |
 | Counter | Regla que incrementa únicamente un cruce positivo elegible por tracker. |
 | Session | Ventana operativa futura por sección con estado y conteo independiente. No implementada. |
 | Stream | Secuencia potencialmente no acotada de una fuente USB/RTSP; file es desarrollo finito. |

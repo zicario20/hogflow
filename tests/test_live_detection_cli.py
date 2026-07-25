@@ -22,6 +22,10 @@ def test_live_detection_cli_help_lists_source_detector_and_scheduling_options() 
         "--lost-track-buffer",
         "--tracker-frame-rate",
         "--show-track-ids",
+        "--enable-crossing",
+        "--crossing-line-start",
+        "--crossing-line-end",
+        "--crossing-anchor",
     ):
         assert option in help_text
 
@@ -82,6 +86,77 @@ def test_synthetic_tracking_cli_emits_structured_temporary_id_summary(capsys) ->
     assert payload["tracks_emitted"] > 0
     assert payload["tracker_closed"] is True
     assert "count" not in payload
+
+
+def test_synthetic_crossing_cli_emits_event_diagnostics_without_animal_total(capsys) -> None:
+    result = main(
+        [
+            "--source-type",
+            "synthetic",
+            "--synthetic-frames",
+            "4",
+            "--tracker",
+            "empty",
+            "--enable-crossing",
+            "--crossing-line-start",
+            "0.1,0.5",
+            "--crossing-line-end",
+            "0.9,0.5",
+            "--statistics-interval",
+            "100",
+        ]
+    )
+
+    payload = json.loads([line for line in capsys.readouterr().out.splitlines() if line][-1])
+    assert result == 0
+    assert payload["crossing_enabled"] is True
+    assert payload["crossing_events_emitted"] == 0
+    assert payload["crossing_closed"] is True
+    assert "total_pigs" not in payload
+    assert "animal_count" not in payload
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ["--source-type", "synthetic", "--enable-crossing"],
+        [
+            "--source-type",
+            "synthetic",
+            "--tracker",
+            "empty",
+            "--enable-crossing",
+            "--crossing-line-start",
+            "0.1,0.5",
+        ],
+        [
+            "--source-type",
+            "synthetic",
+            "--tracker",
+            "empty",
+            "--crossing-line-start",
+            "0.1,0.5",
+        ],
+        [
+            "--source-type",
+            "synthetic",
+            "--tracker",
+            "empty",
+            "--enable-crossing",
+            "--crossing-line-start",
+            "2,0.5",
+            "--crossing-line-end",
+            "0.9,0.5",
+        ],
+    ),
+)
+def test_cli_rejects_incomplete_or_invalid_crossing_configuration(
+    arguments: list[str],
+) -> None:
+    with pytest.raises(SystemExit) as captured:
+        main(arguments)
+
+    assert captured.value.code == 2
 
 
 @pytest.mark.parametrize(

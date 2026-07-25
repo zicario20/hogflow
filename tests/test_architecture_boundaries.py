@@ -26,7 +26,6 @@ INTERNAL_PACKAGES = {
 FORBIDDEN_IMPORTS = {
     "adapters": {
         "annotation",
-        "counting",
         "data",
         "domain",
         "evaluation",
@@ -75,8 +74,6 @@ FORBIDDEN_IMPORTS = {
         "data",
         "video",
         "detection",
-        "tracking",
-        "models",
         "pipeline",
         "sessions",
         "storage",
@@ -247,6 +244,11 @@ FORBIDDEN_CONTRACT_IMPORTS = {
 FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "models.py",
     SOURCE_ROOT / "counting" / "line_crossing.py",
+    SOURCE_ROOT / "counting" / "live_crossing.py",
+    SOURCE_ROOT / "counting" / "live_errors.py",
+    SOURCE_ROOT / "counting" / "live_models.py",
+    SOURCE_ROOT / "counting" / "live_ports.py",
+    SOURCE_ROOT / "counting" / "live_telemetry.py",
     SOURCE_ROOT / "detection" / "contracts.py",
     SOURCE_ROOT / "tracking" / "contracts.py",
     SOURCE_ROOT / "video" / "contracts.py",
@@ -292,6 +294,7 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "tracking" / "ports.py",
     SOURCE_ROOT / "tracking" / "telemetry.py",
     SOURCE_ROOT / "pipeline" / "live_tracking_pipeline.py",
+    SOURCE_ROOT / "pipeline" / "live_crossing_pipeline.py",
 )
 
 
@@ -470,6 +473,11 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.core",
         "hogflow.config",
         "hogflow.counting",
+        "hogflow.counting.live_crossing",
+        "hogflow.counting.live_errors",
+        "hogflow.counting.live_models",
+        "hogflow.counting.live_ports",
+        "hogflow.counting.live_telemetry",
         "hogflow.models",
         "hogflow.data",
         "hogflow.data.models",
@@ -533,12 +541,14 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.adapters.ultralytics_live_detector",
         "hogflow.adapters.opencv_detection_preview",
         "hogflow.adapters.opencv_tracking_preview",
+        "hogflow.adapters.opencv_crossing_preview",
         "hogflow.adapters.supervision_bytetrack",
         "hogflow.pipeline",
         "hogflow.pipeline.models",
         "hogflow.pipeline.generic_counting_pipeline",
         "hogflow.pipeline.live_detection_pipeline",
         "hogflow.pipeline.live_tracking_pipeline",
+        "hogflow.pipeline.live_crossing_pipeline",
         "hogflow.video.live_detection_cli",
         "hogflow.sessions",
         "hogflow.storage",
@@ -592,6 +602,37 @@ def test_phase_5_3_tracking_core_has_no_counting_or_framework_implementation() -
         for source_file in files
         for token in forbidden_tokens
         if token in source_file.read_text(encoding="utf-8")
+    ]
+
+    assert not violations
+
+
+def test_phase_5_4_crossing_core_has_no_framework_or_accumulated_counting_logic() -> None:
+    files = (
+        SOURCE_ROOT / "counting" / "live_crossing.py",
+        SOURCE_ROOT / "counting" / "live_errors.py",
+        SOURCE_ROOT / "counting" / "live_models.py",
+        SOURCE_ROOT / "counting" / "live_ports.py",
+        SOURCE_ROOT / "counting" / "live_telemetry.py",
+        SOURCE_ROOT / "pipeline" / "live_crossing_pipeline.py",
+    )
+    forbidden_tokens = (
+        "counted_tracker_ids",
+        "positive_count",
+        "total_count",
+        "session_id",
+        "sqlite",
+        "cv2",
+        "numpy",
+        "supervision",
+        "ultralytics",
+    )
+
+    violations = [
+        f"{source_file.name}: {token}"
+        for source_file in files
+        for token in forbidden_tokens
+        if token in source_file.read_text(encoding="utf-8").lower()
     ]
 
     assert not violations
