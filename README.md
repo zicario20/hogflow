@@ -18,6 +18,12 @@ This is a research hypothesis, not a validated result.
 
 Current roadmap status: Phase 5 in progress — Phase 5.1 live-camera acquisition, Phase 5.2 live detector integration, and Phase 5.3 live multi-object tracking integration implemented; real pig detection and tracking validation are blocked by missing validated local pig-detector weights; counting is not implemented; Phase 5.4 not started.
 
+## Official project memory
+
+The living technical and operational memory for HogFlow is maintained in
+[HOGFLOW_PROJECT_MEMORY.md](HOGFLOW_PROJECT_MEMORY.md). Future
+architecture-relevant changes must update that memory in the same commit.
+
 The repository contains Phase 0 documentation, an approved Phase 1 generic
 people/vehicle finite-segment proof of concept, and the completed Phase 2
 software architecture. Phase 2.3 preserves the Phase 1 CLI while routing generic
