@@ -7,12 +7,13 @@ protocol typing, deterministic fake trackers, temporary identity retention,
 two-object isolation, brief misses, expiry, frame gaps, reset, close,
 multi-stream rejection, telemetry, adapter conversion, malformed framework
 output, preview behavior, CLI composition, pipeline failures, reconnect reset,
-bounded source buffering, and architecture boundaries.
+bounded source buffering, architecture boundaries, unique IDs per result,
+class-map consistency, backend recovery, and tracker-update timing policy.
 
-The full local suite after implementation reports 453 passing tests. The
-64-test focused Phase 5.3 and architecture run also passes. Supervision emits
-one documented `FutureWarning`: its bundled ByteTrack class is deprecated and
-scheduled for removal in Supervision 0.30.
+The Phase 5.3 closure suite reports 465 passing tests locally. The 52-test
+focused tracking-model, adapter, pipeline, telemetry, and architecture run
+also passes. Supervision emits one documented `FutureWarning`: its bundled
+ByteTrack class is deprecated and scheduled for removal in Supervision 0.30.
 
 Required commands:
 
@@ -40,7 +41,16 @@ uses no webcam, GPU, internet, pig weights, or real data.
 - Separate stream-bound tracker instances do not share state.
 - Reset clears prior lifecycle state and may reuse IDs.
 - Skipped source frame numbers retain exact frame association.
+- Source-sequence gaps produce one backend update per submitted detection
+  result; no intermediate updates are fabricated.
 - Detector failure does not fabricate tracker input.
+- Duplicate IDs in one `TrackingResult` are rejected.
+- Conflicting `class_id` to `class_name` mappings are rejected before backend
+  mutation.
+- A recoverable backend update exception resets private tracker state, records
+  a temporary telemetry failure, and permits the next newer frame to continue.
+- Lifecycle misuse, invalid input, stale requests, failed recovery reset, and
+  malformed framework output retain their fatal or specific error categories.
 - Slow detector/tracker operation leaves the Phase 5.1 source buffer bounded.
 - Synthetic detections pass through the installed Supervision ByteTrack API.
 
@@ -83,6 +93,7 @@ prerequisite. No model was downloaded.
 
 ## Acceptance boundary
 
-Phase 5.3 acceptance establishes replaceable live temporary-ID integration.
+Phase 5.3 is technically closed after the documented observations were
+resolved. Acceptance establishes replaceable live temporary-ID integration.
 It does not implement or validate virtual-line crossing, unique-animal
 counting, reverse movement, sessions, persistence, or Phase 5.4.

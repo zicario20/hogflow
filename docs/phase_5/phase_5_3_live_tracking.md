@@ -35,7 +35,8 @@ The tracking domain introduces immutable, slotted models:
 - `TrackedObject` wraps the canonical `Track`; optional age, hit, and miss
   values remain absent when an adapter cannot expose them truthfully.
 - `TrackingResult` retains the exact source/frame identity and sanitized
-  tracker provenance.
+  tracker provenance. It rejects duplicate temporary tracker IDs because one
+  identity may appear at most once in a frame.
 - `LiveTrackingStats`, `LiveTrackingSnapshot`, and
   `LiveTrackingRunSummary` expose bounded aggregate lifecycle telemetry.
 
@@ -58,10 +59,30 @@ camera. This avoids global ByteTrack state and permits independent cleanup.
 
 Requests must have strictly increasing source frame sequences. Gaps are valid:
 they may result from camera-buffer drops or Phase 5.2 inference scheduling.
-The configured tracker frame-rate remains an engineering timing assumption for
-ByteTrack lifecycle behavior; Phase 5.3 does not fabricate intermediate
-detections. A stream reconnect causes an explicit tracker reset before the
-next update. A new pipeline lifecycle uses a new tracker instance.
+Phase 5.3 does not fabricate intermediate detections or tracker updates.
+
+For HogFlow, `ByteTrackConfiguration.frame_rate` means the expected frequency
+of successful calls to the tracker, not automatically the nominal camera FPS.
+It should normally approximate the effective inference/tracking update rate
+after `inference_every`, target-FPS pacing, latest-frame draining, and expected
+processing cost are considered. Supervision 0.29.1 converts its configured
+`lost_track_buffer` from a 30-FPS reference into an internal update-step budget:
+
+```text
+max_time_lost = int(frame_rate / 30 * lost_track_buffer)
+```
+
+That internal budget advances once per actual tracker update. A source sequence
+gap therefore records omitted acquisition/inference work but does not simulate
+elapsed ByteTrack updates. If the configured update rate differs materially
+from the deployed effective rate, track retention in wall-clock time will be
+shorter or longer than intended. Deployment tuning must measure the effective
+successful tracker update rate and validate retention with representative
+misses and occlusions; Phase 5.3 performs no dynamic FPS estimation.
+
+A stream reconnect causes an explicit tracker reset before the next update.
+The reset clears prior timing and identity state, so IDs may be reused. A new
+pipeline lifecycle uses a new tracker instance.
 
 `reset` clears temporary identities while retaining the stream binding.
 `close` releases private state and is idempotent. The pipeline closes preview,
@@ -84,7 +105,9 @@ The adapter converts canonical HogFlow detections to private Supervision and
 NumPy values, then converts current associations back to canonical `Detection`
 and `Track` models. It preserves class, confidence, box, temporary tracker ID,
 and a source-detection index when returned by the framework. Framework objects
-never cross the adapter boundary.
+never cross the adapter boundary. Before backend mutation, the adapter validates
+that every submitted `class_id` maps to exactly one `class_name`; conflicting
+names are invalid input and are never silently overwritten.
 
 Supervision marks this bundled `ByteTrack` API deprecated since 0.28 and plans
 removal in 0.30. HogFlow currently pins Supervision below 0.30. Replacing this
@@ -96,9 +119,9 @@ Defaults are test-oriented engineering defaults, not pig-validated tuning:
 | Setting | Default |
 | --- | ---: |
 | Track activation threshold | 0.25 |
-| Lost-track buffer | 30 frames |
+| Lost-track buffer | 30 frames at Supervision's 30-FPS reference |
 | Minimum matching threshold | 0.8 |
-| Assumed tracker frame rate | 30 FPS |
+| Expected tracker update rate | 30 updates/second |
 | Minimum consecutive frames | 1 |
 
 ## Pipeline and failure behavior
@@ -110,10 +133,20 @@ to the newest useful frame. Slow tracking therefore cannot create an
 additional unbounded backlog.
 
 Detector failures never cause fabricated empty tracker requests. A temporary
-tracking failure is recorded and allows a later frame to continue. Stale
-input, malformed output, lifecycle corruption, and fatal adapter errors stop
-the run. A preview failure is recorded, closes the preview, and allows
-headless tracking to continue.
+tracking failure is recorded and allows a later frame to continue. In the
+Supervision adapter, only an ordinary exception raised by
+`update_with_detections` enters this recovery path. The adapter immediately
+resets ByteTrack, records the failed source sequence as consumed, and raises
+`TemporaryTrackingError`. This prevents continued use of possibly partial
+backend state, but it clears temporary identities and may cause fragmentation.
+If that recovery reset fails, the error is fatal.
+
+Invalid input and lifecycle misuse are rejected before the backend update.
+Stale input retains its dedicated error. Conversion failures and malformed
+framework output remain fatal and stop the run; they are never converted into
+empty successful results. Initialization, explicit reset, and close failures
+also remain fatal. A preview failure is recorded, closes the preview, and
+allows headless tracking to continue.
 
 Tracking telemetry includes request/success/failure counts, zero-detection
 updates, tracks emitted, current/peak visible tracks, reset/restart/close

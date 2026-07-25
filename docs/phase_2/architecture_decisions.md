@@ -767,3 +767,32 @@ debt.
 Phase 5.3 has a usable real tracker adapter without coupling the domain or
 pipeline to Supervision. A future dependency upgrade may replace this one
 adapter while preserving contracts, tests, and orchestration.
+
+## ADR-038 — Interpret ByteTrack timing in successful tracker updates
+
+Status: Accepted
+
+### Context
+
+The Phase 5.2 latest-frame policy may omit camera frames before detection, so
+source sequence numbers can contain gaps. Supervision 0.29.1 increments its
+internal frame counter once per tracker update and derives
+`max_time_lost = int(frame_rate / 30 * lost_track_buffer)`. Treating camera FPS
+as tracker FPS or fabricating updates for sequence gaps would misrepresent the
+actual adapter calls.
+
+### Decision
+
+Keep the current contracts and serial pipeline. Define
+`ByteTrackConfiguration.frame_rate` as the expected frequency of successful
+tracker update calls. Treat `lost_track_buffer` as Supervision's 30-FPS
+reference value, converted by that expected update rate into internal update
+steps. Preserve source sequence gaps exactly and never synthesize intermediate
+detections or tracker updates. Reset timing and identity state after reconnect.
+
+### Consequences
+
+The adapter remains simple, deterministic, and truthful about work performed.
+Deployments must configure the expected update rate from measured inference and
+tracking throughput; a mismatch changes wall-clock retention. Representative
+occlusion and gap behavior remains an empirical validation requirement.

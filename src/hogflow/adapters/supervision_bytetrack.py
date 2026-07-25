@@ -18,6 +18,7 @@ from hogflow.tracking.config import (
 from hogflow.tracking.errors import (
     MalformedTrackerOutputError,
     StaleTrackingRequestError,
+    TemporaryTrackingError,
     TrackerCloseError,
     TrackerInitializationError,
     TrackerLifecycleError,
@@ -135,14 +136,28 @@ class SupervisionByteTrackAdapter:
         self._validate_request(request)
         if self._np is None or self._detections_type is None or self._backend is None:
             raise TrackerLifecycleError("Tracker runtime is unavailable after startup.")
+        class_names = self._class_name_map(request)
         started_monotonic = float(self._monotonic())
         started_at = self._wall_clock()
         private_detections = self._to_framework_detections(request)
         try:
             tracked = self._backend.update_with_detections(private_detections)
         except Exception as exc:
-            raise TrackerLifecycleError("Supervision ByteTrack update failed.") from exc
-        tracked_objects = self._from_framework_detections(tracked, request)
+            # This broad catch is intentionally limited to the third-party
+            # update call. Recovery is allowed only after its mutable state is
+            # reset successfully; every other adapter failure keeps its
+            # specific input, lifecycle, conversion, reset, or close category.
+            try:
+                self._backend.reset()
+            except Exception as reset_exc:
+                raise TrackerResetError(
+                    "Supervision ByteTrack could not recover after an update failure."
+                ) from reset_exc
+            self._last_sequence = request.frame_sequence
+            raise TemporaryTrackingError(
+                "Supervision ByteTrack update failed temporarily; tracker state was reset."
+            ) from exc
+        tracked_objects = self._from_framework_detections(tracked, request, class_names)
         completed_monotonic = float(self._monotonic())
         completed_at = self._wall_clock()
         self._last_sequence = request.frame_sequence
@@ -233,10 +248,23 @@ class SupervisionByteTrackAdapter:
                 "HogFlow detections could not be converted for Supervision ByteTrack."
             ) from exc
 
+    @staticmethod
+    def _class_name_map(request: TrackingRequest) -> dict[int, str]:
+        class_names: dict[int, str] = {}
+        for detection in request.detections:
+            existing = class_names.get(detection.class_id)
+            if existing is not None and existing != detection.class_name:
+                raise InputDataError(
+                    "Tracking detections must use one class name for each class ID."
+                )
+            class_names[detection.class_id] = detection.class_name
+        return class_names
+
     def _from_framework_detections(
         self,
         tracked: Any,
         request: TrackingRequest,
+        class_names: dict[int, str],
     ) -> tuple[TrackedObject, ...]:
         try:
             length = len(tracked)
@@ -263,7 +291,6 @@ class SupervisionByteTrackAdapter:
         if source_indices is not None and len(source_indices) != length:
             raise MalformedTrackerOutputError("ByteTrack source references are inconsistent.")
 
-        class_names = {item.class_id: item.class_name for item in request.detections}
         objects: list[TrackedObject] = []
         for index in range(length):
             try:

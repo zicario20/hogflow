@@ -9,11 +9,14 @@ from _phase5_3_helpers import pig_detection, tracking_request
 
 import hogflow.adapters.supervision_bytetrack as adapter_module
 from hogflow.adapters.supervision_bytetrack import SupervisionByteTrackAdapter
+from hogflow.core import InputDataError
 from hogflow.tracking import (
     ByteTrackConfiguration,
     MalformedTrackerOutputError,
     StaleTrackingRequestError,
+    TemporaryTrackingError,
     TrackerLifecycleError,
+    TrackerResetError,
 )
 
 
@@ -33,8 +36,10 @@ class FakeDetections:
 class FakeBackend:
     settings: dict[str, object]
     reset_calls: int = 0
+    update_calls: int = 0
 
     def update_with_detections(self, detections: FakeDetections) -> FakeDetections:
+        self.update_calls += 1
         detections.tracker_id = np.arange(len(detections), dtype=int) + 10
         return detections
 
@@ -95,6 +100,67 @@ def test_adapter_uses_verified_supervision_configuration_and_converts_results(mo
     assert result.tracker_version == "0.29.1"
 
 
+def test_adapter_accepts_repeated_consistent_class_mapping(monkeypatch) -> None:
+    _runtime(monkeypatch)
+    tracker = SupervisionByteTrackAdapter()
+    tracker.start("camera")
+
+    result = tracker.update(
+        tracking_request(
+            0,
+            (
+                pig_detection(1, 1, 4, 4, class_id=0, class_name="pig"),
+                pig_detection(5, 1, 8, 4, class_id=0, class_name="pig"),
+            ),
+        )
+    )
+
+    assert [item.track.detection.class_name for item in result.tracked_objects] == [
+        "pig",
+        "pig",
+    ]
+
+
+def test_adapter_preserves_distinct_valid_class_mappings(monkeypatch) -> None:
+    _runtime(monkeypatch)
+    tracker = SupervisionByteTrackAdapter()
+    tracker.start("camera")
+
+    result = tracker.update(
+        tracking_request(
+            0,
+            (
+                pig_detection(1, 1, 4, 4, class_id=0, class_name="pig"),
+                pig_detection(5, 1, 8, 4, class_id=1, class_name="person"),
+            ),
+        )
+    )
+
+    assert [
+        (item.track.detection.class_id, item.track.detection.class_name)
+        for item in result.tracked_objects
+    ] == [(0, "pig"), (1, "person")]
+
+
+def test_adapter_rejects_conflicting_class_mapping_before_backend_update(monkeypatch) -> None:
+    _runtime(monkeypatch)
+    tracker = SupervisionByteTrackAdapter()
+    tracker.start("camera")
+
+    with pytest.raises(InputDataError, match="one class name for each class ID"):
+        tracker.update(
+            tracking_request(
+                0,
+                (
+                    pig_detection(1, 1, 4, 4, class_id=0, class_name="pig"),
+                    pig_detection(5, 1, 8, 4, class_id=0, class_name="swine"),
+                ),
+            )
+        )
+
+    assert FakeBackendFactory.instances[0].update_calls == 0
+
+
 def test_adapter_handles_zero_detections_reset_and_idempotent_close(monkeypatch) -> None:
     _runtime(monkeypatch)
     tracker = SupervisionByteTrackAdapter()
@@ -119,6 +185,76 @@ def test_adapter_rejects_stale_and_cross_stream_requests(monkeypatch) -> None:
         tracker.update(tracking_request(1))
     with pytest.raises(TrackerLifecycleError, match="mix"):
         tracker.update(tracking_request(2, source_id="other"))
+
+
+def test_adapter_update_requires_started_lifecycle(monkeypatch) -> None:
+    _runtime(monkeypatch)
+
+    with pytest.raises(TrackerLifecycleError, match="started"):
+        SupervisionByteTrackAdapter().update(tracking_request(0))
+
+
+def test_backend_update_failure_resets_state_and_is_temporary(monkeypatch) -> None:
+    reset_calls: list[int] = []
+
+    class FailOnceBackend(FakeBackend):
+        def __init__(self, **settings) -> None:
+            super().__init__(settings)
+            self.failed = False
+
+        def update_with_detections(self, detections):
+            self.update_calls += 1
+            if not self.failed:
+                self.failed = True
+                raise RuntimeError("private backend detail")
+            detections.tracker_id = np.arange(len(detections), dtype=int) + 10
+            return detections
+
+        def reset(self) -> None:
+            super().reset()
+            reset_calls.append(self.reset_calls)
+
+    _runtime(monkeypatch, FailOnceBackend)
+    tracker = SupervisionByteTrackAdapter()
+    tracker.start("camera")
+
+    with pytest.raises(TemporaryTrackingError, match="temporarily") as error:
+        tracker.update(tracking_request(0, (pig_detection(),)))
+
+    assert "private backend detail" not in str(error.value)
+    assert reset_calls == [1]
+    assert tracker.update(tracking_request(1, (pig_detection(),))).frame_sequence == 1
+
+
+def test_backend_update_failure_is_fatal_when_recovery_reset_fails(monkeypatch) -> None:
+    class UnrecoverableBackend(FakeBackend):
+        def __init__(self, **settings) -> None:
+            super().__init__(settings)
+
+        def update_with_detections(self, _detections):
+            raise RuntimeError("private backend detail")
+
+        def reset(self) -> None:
+            raise RuntimeError("private reset detail")
+
+    _runtime(monkeypatch, UnrecoverableBackend)
+    tracker = SupervisionByteTrackAdapter()
+    tracker.start("camera")
+
+    with pytest.raises(TrackerResetError, match="could not recover"):
+        tracker.update(tracking_request(0, (pig_detection(),)))
+
+
+def test_adapter_processes_sequence_gaps_without_fabricated_updates(monkeypatch) -> None:
+    _runtime(monkeypatch)
+    tracker = SupervisionByteTrackAdapter(ByteTrackConfiguration(frame_rate=10))
+    tracker.start("camera")
+
+    tracker.update(tracking_request(1, (pig_detection(),)))
+    result = tracker.update(tracking_request(8, (pig_detection(),)))
+
+    assert result.frame_sequence == 8
+    assert FakeBackendFactory.instances[0].update_calls == 2
 
 
 @pytest.mark.parametrize(

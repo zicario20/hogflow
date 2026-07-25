@@ -27,6 +27,11 @@ class ByteTrackConfiguration:
 
     Defaults mirror the installed framework's engineering defaults. They have
     not been validated for pigs or a production camera environment.
+
+    ``frame_rate`` is the expected frequency of successful tracker update
+    calls, not necessarily the camera acquisition FPS. Supervision converts
+    ``lost_track_buffer`` from its 30-FPS reference into tracker-update steps
+    using this value. Source sequence gaps do not create synthetic updates.
     """
 
     track_activation_threshold: float = 0.25

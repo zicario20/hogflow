@@ -11,6 +11,7 @@ from re import fullmatch
 from hogflow.core import InputDataError
 from hogflow.detection.inference import LiveDetectionRunSummary, LiveDetectionStats
 from hogflow.models import Detection, Track
+from hogflow.tracking.errors import MalformedTrackerOutputError
 
 _OPAQUE_ID = r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
 _SOURCE_ID = r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
@@ -163,7 +164,10 @@ class TrackerMetadata:
 
 @dataclass(frozen=True, slots=True)
 class TrackingResult:
-    """Tracked objects associated with exactly one detection frame."""
+    """Tracked objects associated with exactly one detection frame.
+
+    Each temporary tracker identity may appear at most once in one frame.
+    """
 
     source_id: str
     frame_sequence: int
@@ -189,6 +193,11 @@ class TrackingResult:
             isinstance(item, TrackedObject) for item in self.tracked_objects
         ):
             raise InputDataError("Tracking result objects must be an immutable tuple.")
+        tracker_ids = [item.track.tracker_id for item in self.tracked_objects]
+        if len(tracker_ids) != len(set(tracker_ids)):
+            raise MalformedTrackerOutputError(
+                "Tracking result cannot contain duplicate tracker IDs for one frame."
+            )
         for tracked_object in self.tracked_objects:
             box = tracked_object.track.detection.bounding_box
             if (

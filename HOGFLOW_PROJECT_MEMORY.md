@@ -398,7 +398,7 @@ Resumen de madurez:
 | Phase 4 | 4.1–4.3 tooling completado. | Sin training ni checkpoint real de cerdo. | Infraestructura completa; validación empírica pendiente. |
 | Phase 5.1 | Adquisición live completada. | Webcam USB real en un equipo. | Completa con observaciones; no RTSP production proof. |
 | Phase 5.2 | Live detector integration completada. | Detector vacío en webcam; no pesos de cerdo. | Completa como integración; evidencia pig-specific bloqueada. |
-| Phase 5.3 | Live tracking integration completada. | ByteTrack real con boxes sintéticos en webcam. | Completa como integración; accuracy real no validada. |
+| Phase 5.3 | Live tracking integration completada y observaciones técnicas cerradas. | ByteTrack real con boxes sintéticos en webcam. | Cerrada técnicamente; accuracy real no validada. |
 
 ### 5.1 Phase 0 — Define problem and map process
 
@@ -552,7 +552,8 @@ Resumen de madurez:
 - **Entregado:** `LiveTracker`, modelos, ByteTrack config, adapter Supervision,
   fakes, pipeline, telemetry, preview y CLI con tracking desactivado por defecto.
 - **Decisiones:** una instancia por stream lifecycle, reset tras reconnect,
-  tracking serial sin segunda cola y API 0.29.1 aislada.
+  tracking serial sin segunda cola, API 0.29.1 aislada y `frame_rate` definido
+  como frecuencia esperada de updates efectivos del tracker.
 - **Evidencia sintética:** trayectorias uno/dos objetos, misses, expiración,
   gaps, resets, stream isolation y fallos.
 - **Evidencia hardware:** webcam + detecciones sintéticas + ByteTrack real. Run
@@ -560,10 +561,15 @@ Resumen de madurez:
   drops/failures, 2.89 ms promedio. Reopen: 1,146 frames a 30.02 FPS, 1,145
   updates, 1,088 tracks, cero drops/failures, 2.91 ms promedio. CPU promedio
   26.3%, peak 73.9%; RSS aproximada 52–180 MB. Preview no probado.
-- **Pruebas/CI:** 453 passed, un `FutureWarning` de deprecación ByteTrack;
-  GitHub Actions run `29681085740` exitoso.
+- **Cierre técnico:** IDs únicos por resultado, mapping `class_id → class_name`
+  uno-a-uno, recuperación temporal con reset seguro del backend y política
+  explícita para FPS, gaps y `lost_track_buffer`.
+- **Pruebas/CI:** implementación original con 453 passed y GitHub Actions run
+  `29681085740` exitoso; cierre local con 465 passed y un `FutureWarning` de
+  deprecación ByteTrack. El CI remoto del cierre no se afirma antes de push.
 - **Commit:** `f5cc77336423d5ed6c885d0504628e72232c2bd8`.
-- **Estado:** integración completada; no tracking real de cerdos ni accuracy.
+- **Commit de cierre:** `Close Phase 5.3 tracking observations`.
+- **Estado:** cerrada técnicamente; no tracking real de cerdos ni accuracy.
 
 ### 5.13 Estado de las fases 6–16
 
@@ -641,6 +647,7 @@ tabla preserva su razonamiento operativo.
 | 035 | 5.3 | Backend global multi-stream o uno por stream. | Una instancia por stream lifecycle. | Sin mezcla ni registry ilimitado. Aceptada. |
 | 036 | 5.3 | Cola tracking propia o tracking serial. | Tracking en callback de detección exitosa. | Asociación exacta, no segunda cola. Aceptada. |
 | 037 | 5.3 | API Supervision en dominio o adapter aislado. | Lazy adapter 0.29.1 con API verificada. | Migración por deprecación queda localizada. Aceptada. |
+| 038 | 5.3 | Cámara, inferencia y tracker pueden avanzar a frecuencias distintas. | `frame_rate` representa updates efectivos esperados; gaps no fabrican updates y reconnect hace reset. | Retención depende de configuración por deployment; validación empírica sigue pendiente. Aceptada. |
 
 ---
 
@@ -682,7 +689,8 @@ tabla preserva su razonamiento operativo.
 | Working tree al iniciar | Limpio |
 | Remote | `https://github.com/zicario20/hogflow.git` |
 | CI | GitHub Actions `CI`, run `29681085740`, conclusión `success` |
-| Suite Phase 5.3 | 453 passed; 1 warning de ByteTrack deprecated |
+| Suite Phase 5.3 original | 453 passed; 1 warning de ByteTrack deprecated |
+| Suite de cierre Phase 5.3 | 465 passed; 1 warning de ByteTrack deprecated |
 | Python local verificado | 3.12.13; proyecto declara `>=3.10` |
 | Python CI | 3.12 en Ubuntu latest |
 
@@ -730,16 +738,18 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 
 ## 9. Defectos conocidos y deuda técnica
 
-Ninguno de estos puntos se corrige en este commit documental.
+El cierre técnico de Phase 5.3 resolvió HF-D001–HF-D003 y formalizó la decisión
+arquitectónica de HF-D004–HF-D006. La calibración empírica y las demás deudas
+permanecen explícitas.
 
 | ID | Severidad | Evidencia | Archivo / símbolo | Descripción y riesgo | Solución recomendada | Estado |
 | --- | --- | --- | --- | --- | --- | --- |
-| HF-D001 | Media | **INFERENCIA de código** | `tracking/models.py::TrackingResult.__post_init__`; `adapters/supervision_bytetrack.py::_from_framework_detections` | No se valida unicidad de `track_id` dentro de un resultado. Un output tercero con IDs duplicados podría representar dos cajas con la misma identidad visible. | Rechazar IDs duplicados en boundary/modelo y añadir test, tras auditoría. | Abierta. No se observó en hardware. |
-| HF-D002 | Media | **INFERENCIA de código** | `SupervisionByteTrackAdapter::_from_framework_detections` | `class_names = {class_id: class_name}` acepta nombres inconsistentes para un mismo ID y conserva el último. Riesgo de etiqueta incorrecta. | Validar mapping uno-a-uno antes de llamar backend. | Abierta. |
-| HF-D003 | Media | **HECHO VERIFICADO** | `tracking/errors.py`; `SupervisionByteTrackAdapter.update` | Existen errores temporales/fatales, pero cualquier excepción de `update_with_detections` se convierte en `TrackerLifecycleError`; el adapter real no clasifica recuperación temporal. | Mapear solo fallos conocidos tras estudiar API; unknown debe seguir fatal. | Deuda de resiliencia. |
-| HF-D004 | Media | **HECHO VERIFICADO** | `tracking/config.py::ByteTrackConfiguration.frame_rate` | ByteTrack usa FPS configurado estático (default 30), no FPS observado dinámico. Afecta lifecycle si fuente difiere. | Derivar/configurar explícitamente por stream y evaluar sensibilidad. | No validado con cerdos. |
-| HF-D005 | Alta para evidencia futura | **HECHO VERIFICADO** | ADR-036; `LiveTrackingPipeline` | Frames omitidos por scheduling no generan updates intermedios. El backend ve calls, no necesariamente cada `frame_sequence`. | Definir y probar política temporal antes de accuracy; no fabricar detecciones. | Riesgo conocido. |
-| HF-D006 | Alta para oclusión | **INFERENCIA respaldada por API** | `ByteTrackConfiguration.lost_track_buffer` | El buffer de tracks perdidos puede contar updates del tracker, no frames reales transcurridos; gaps y variable FPS alteran la duración efectiva. | Medir semántica instalada y calibrar con tiempo/frame gaps representativos. | No validado. |
+| HF-D001 | Media | **HECHO VERIFICADO** | `tracking/models.py::TrackingResult.__post_init__` | Un resultado con IDs duplicados representaría dos cajas con la misma identidad visible. | El modelo rechaza IDs repetidos con `MalformedTrackerOutputError`; regresiones cubren vacío, uno, distintos y duplicados. | Resuelta en el cierre Phase 5.3. |
+| HF-D002 | Media | **HECHO VERIFICADO** | `SupervisionByteTrackAdapter::_class_name_map` | Un mismo ID de clase no puede conservar dos nombres sin ambigüedad. | Validación uno-a-uno antes de mutar backend; conflicto produce `InputDataError` sin sobrescritura. | Resuelta en el cierre Phase 5.3. |
+| HF-D003 | Media | **HECHO VERIFICADO** | `SupervisionByteTrackAdapter.update`; `LiveTrackingPipeline` | Un fallo ordinario de update puede ser recuperable, pero no debe continuar sobre estado parcial. | Reset inmediato; si funciona, `TemporaryTrackingError` y siguiente frame continúa. Fallo de reset, lifecycle, input y output malformado permanecen fatales/específicos. | Resuelta con posible fragmentación explícita tras recovery. |
+| HF-D004 | Media | **HECHO VERIFICADO** | `tracking/config.py::ByteTrackConfiguration.frame_rate`; ADR-038 | ByteTrack recibe FPS estático y la cámara/inferencia pueden operar a frecuencias distintas. | `frame_rate` se define como frecuencia esperada de updates exitosos del tracker; no se adapta automáticamente. | Decisión cerrada; calibración por deployment pendiente. |
+| HF-D005 | Alta para evidencia futura | **HECHO VERIFICADO** | ADR-036/038; `LiveTrackingPipeline` | Frames omitidos por scheduling no generan updates intermedios. | Preservar gaps y no fabricar detecciones/updates; test verifica una llamada por request real. | Política cerrada; efecto empírico pendiente. |
+| HF-D006 | Alta para oclusión | **HECHO VERIFICADO EN API 0.29.1** | `ByteTrackConfiguration.lost_track_buffer`; ADR-038 | Supervision calcula `max_time_lost = int(frame_rate / 30 * lost_track_buffer)` y lo consume en pasos de update. | Tratar `lost_track_buffer` como referencia a 30 FPS y configurar `frame_rate` según updates efectivos esperados. | Semántica cerrada; tuning con oclusión real pendiente. |
 | HF-D007 | Alta para conteo futuro | **HECHO VERIFICADO** | ADR-034/035; reconnect reset | Reset/reconnect puede reutilizar IDs. Un consumidor futuro que ignore lifecycle podría deduplicar mal o contar doble. | Incluir identidad de lifecycle en la integración de conteo y tests de reconnect. | Debe resolverse antes de counting live. |
 | HF-D008 | Alta de mantenimiento | **HECHO VERIFICADO** | `adapters/supervision_bytetrack.py`; ADR-037 | Supervision 0.29.1 advierte que ByteTrack está deprecated desde 0.28 y se elimina en 0.30. | Migrar/reemplazar solo el adapter, manteniendo contratos. | Pin `<0.30`; warning visible. |
 | HF-D009 | Baja/Media | **HECHO VERIFICADO** | ADR-012/026 | RGB bytes exige BGR↔RGB y reconstrucción/copy. Puede afectar CPU/latencia. | Perfilar con detector real antes de rediseñar contrato. | Aceptada conscientemente. |
@@ -861,18 +871,14 @@ de estas métricas de conteo tiene todavía resultado empírico con cerdos.
 
 ### 12.1 Siguiente trabajo confirmado
 
-**PROPUESTA PENDIENTE / recomendación actual:** auditar Phase 5.3 antes de
-comenzar cualquier implementación posterior.
+**HECHO VERIFICADO:** las observaciones técnicas de la auditoría Phase 5.3
+quedaron cerradas sin añadir counting, línea, sesión o storage. HF-D001–HF-D003
+se corrigieron y HF-D004–HF-D006 recibieron una política explícita en ADR-038.
+HF-D007–HF-D008 y la validación empírica permanecen como riesgos conocidos.
 
-La auditoría debe:
-
-- verificar commit, CI, contratos, API Supervision y no leakage;
-- confirmar que no existe counting/session/storage oculto;
-- clasificar HF-D001–HF-D008 como bloqueantes o deuda aceptada;
-- revisar límites de lifecycle/reconnect y frame gaps;
-- confirmar la falta de pesos y evidencia pig-specific.
-
-No debe implementar funcionalidad.
+**PROPUESTA PENDIENTE / recomendación actual:** no iniciar trabajo posterior
+hasta que el owner apruebe por escrito su alcance y confirme su relación con
+las fases normativas 6–7.
 
 ### 12.2 Discrepancia “Phase 5.4”
 
@@ -889,26 +895,29 @@ Phase 7 (reversos/deduplicación). Por tanto:
 
 ### 12.3 Condiciones de inicio del siguiente cambio
 
-- auditoría Phase 5.3 aprobada;
+- cierre técnico Phase 5.3 verificado;
 - alcance/numbering aprobados por el owner;
 - criterios de aceptación y exclusiones escritos;
-- decisión sobre duplicate IDs, class mapping, gaps y reconnect;
+- preservar las decisiones ya cerradas sobre duplicate IDs, class mapping,
+  gaps y reconnect;
 - datos/pesos solo si se harán afirmaciones empíricas;
 - plan de pruebas sintéticas sin cámara/GPU/internet;
 - actualización de esta memoria incluida en el commit.
 
 ### 12.4 Criterios de aceptación del siguiente cierre
 
-La auditoría/cierre inmediato se acepta cuando:
+El cierre técnico local quedó aceptado cuando:
 
-- `HEAD`, `origin/main` y CI se verifican;
+- la línea base, la rama y el working tree inicial se verificaron;
 - Phase 5.1/5.2 siguen sin regresión;
-- las 453 pruebas base y quality gates pasan o cualquier cambio de conteo se
-  explica con evidencia;
+- las 453 pruebas base y las 12 regresiones nuevas pasan con quality gates;
 - cada deuda crítica recibe decisión: corregir, aceptar temporalmente o bloquear;
 - no hay counting, línea, sesión o storage live añadido por la auditoría;
 - el owner aprueba por escrito el nombre y alcance del siguiente subpaso;
 - documentación, ADRs y esta memoria coinciden con el commit auditado.
+
+La verificación CI remota de este cierre solo podrá afirmarse después de un
+push autorizado; no forma parte de la evidencia local registrada aquí.
 
 ---
 
@@ -924,7 +933,7 @@ La auditoría/cierre inmediato se acepta cuando:
 
 ### 13.2 Cierre técnico inmediato
 
-1. **CONFIRMADO:** auditoría independiente de Phase 5.3.
+1. **COMPLETADO:** cierre de observaciones técnicas de Phase 5.3.
 2. **PENDIENTE:** resolver definición de Phase 5.4 frente a Phase 6.
 3. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
 4. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.

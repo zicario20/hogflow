@@ -9,6 +9,7 @@ from hogflow.models import Track
 from hogflow.tracking import (
     ByteTrackConfiguration,
     LiveTrackingStats,
+    MalformedTrackerOutputError,
     TrackedObject,
     TrackerMetadata,
     TrackingErrorCategory,
@@ -17,6 +18,25 @@ from hogflow.tracking import (
     TrackState,
     byte_track_configuration_fingerprint,
 )
+
+
+def _tracking_result(tracked_objects: tuple[TrackedObject, ...]) -> TrackingResult:
+    request = tracking_request(1)
+    metadata = TrackerMetadata("tracker", "synthetic", "1", "a" * 64)
+    return TrackingResult(
+        request.source_id,
+        request.frame_sequence,
+        request.captured_at,
+        request.frame_width,
+        request.frame_height,
+        tracked_objects,
+        metadata.tracker_id,
+        metadata.framework_version,
+        metadata.configuration_fingerprint,
+        TIMESTAMP,
+        TIMESTAMP,
+        0,
+    )
 
 
 def test_tracking_request_is_immutable_and_preserves_frame_identity() -> None:
@@ -83,6 +103,36 @@ def test_tracking_result_rejects_non_finite_latency_and_bad_time_order() -> None
             datetime(2026, 7, 18, tzinfo=TIMESTAMP.tzinfo),
             0,
         )
+
+
+def test_tracking_result_accepts_empty_object_tuple() -> None:
+    assert _tracking_result(()).tracked_objects == ()
+
+
+def test_tracking_result_accepts_one_temporary_identity() -> None:
+    tracked = TrackedObject(Track(4, pig_detection()))
+
+    assert _tracking_result((tracked,)).tracked_objects == (tracked,)
+
+
+def test_tracking_result_accepts_distinct_temporary_identities() -> None:
+    first = TrackedObject(Track(4, pig_detection()))
+    second = TrackedObject(Track(7, pig_detection(5, 1, 8, 4)))
+
+    result = _tracking_result((first, second))
+
+    assert [item.track.tracker_id for item in result.tracked_objects] == [4, 7]
+
+
+def test_tracking_result_rejects_duplicate_temporary_identities() -> None:
+    first = TrackedObject(Track(4, pig_detection()))
+    duplicate = TrackedObject(Track(4, pig_detection(5, 1, 8, 4)))
+
+    with pytest.raises(
+        MalformedTrackerOutputError,
+        match="duplicate tracker IDs",
+    ):
+        _tracking_result((first, duplicate))
 
 
 @pytest.mark.parametrize(

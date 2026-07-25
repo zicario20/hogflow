@@ -31,6 +31,7 @@ from hogflow.tracking import (
     EmptyTracker,
     FailingTracker,
     FatalTrackingError,
+    MalformedTrackerOutputError,
     TrackingPreviewError,
 )
 
@@ -65,6 +66,12 @@ class TrackingPreviewDouble:
 
     def close(self) -> None:
         self.closed = True
+
+
+class MalformedOutputTracker(EmptyTracker):
+    def update(self, request):
+        super().update(request)
+        return object()
 
 
 def test_pipeline_preserves_detection_frame_and_stream_association() -> None:
@@ -125,6 +132,7 @@ def test_temporary_tracker_failure_continues_but_fatal_failure_stops() -> None:
     ).run()
     assert temporary_summary.tracking_statistics.tracking_failures == 1
     assert temporary_summary.tracking_statistics.tracking_successes == 1
+    assert temporary_summary.tracking_statistics.tracking_requests == 2
     assert temporary_summary.tracker_closed
 
     fatal = FailingTracker(fatal_sequences=(0,))
@@ -137,6 +145,21 @@ def test_temporary_tracker_failure_continues_but_fatal_failure_stops() -> None:
         ).run()
     assert fatal_runner.stopped
     assert not fatal.is_started
+
+
+def test_malformed_tracker_output_stops_pipeline_and_closes_resources() -> None:
+    runner = _runner_for_batches((0,))
+    tracker = MalformedOutputTracker()
+
+    with pytest.raises(MalformedTrackerOutputError, match="unsupported result"):
+        LiveTrackingPipeline(
+            runner,  # type: ignore[arg-type]
+            EmptyDetector(),
+            tracker,
+        ).run()
+
+    assert runner.stopped
+    assert not tracker.is_started
 
 
 def test_detector_failure_does_not_fabricate_tracker_update() -> None:
