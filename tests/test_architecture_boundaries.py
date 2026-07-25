@@ -259,6 +259,12 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "evaluation" / "detection_models.py",
     SOURCE_ROOT / "evaluation" / "detection_metrics.py",
     SOURCE_ROOT / "evaluation" / "dataset_selection.py",
+    SOURCE_ROOT / "evaluation" / "line_errors.py",
+    SOURCE_ROOT / "evaluation" / "line_models.py",
+    SOURCE_ROOT / "evaluation" / "line_matching.py",
+    SOURCE_ROOT / "evaluation" / "line_evaluator.py",
+    SOURCE_ROOT / "evaluation" / "line_io.py",
+    SOURCE_ROOT / "evaluation" / "line_positions.py",
     SOURCE_ROOT / "annotation" / "models.py",
     SOURCE_ROOT / "annotation" / "policy.py",
     SOURCE_ROOT / "annotation" / "yolo.py",
@@ -373,6 +379,8 @@ def test_internal_package_dependencies_follow_declared_boundaries() -> None:
         source_module = _module_parts(source_file)
         source_package = source_module[1] if len(source_module) >= 2 else None
         forbidden_targets = FORBIDDEN_IMPORTS.get(source_package, set())
+        if source_package == "evaluation" and source_file.stem.startswith("line_"):
+            forbidden_targets = forbidden_targets - {"counting", "tracking"}
         tree = ast.parse(source_file.read_text(encoding="utf-8"), filename=str(source_file))
         for line_number, target_package in _internal_imports(
             tree,
@@ -495,6 +503,12 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.evaluation.detection_models",
         "hogflow.evaluation.detection_metrics",
         "hogflow.evaluation.dataset_selection",
+        "hogflow.evaluation.line_errors",
+        "hogflow.evaluation.line_models",
+        "hogflow.evaluation.line_matching",
+        "hogflow.evaluation.line_evaluator",
+        "hogflow.evaluation.line_io",
+        "hogflow.evaluation.line_positions",
         "hogflow.training",
         "hogflow.training.configuration",
         "hogflow.training.contracts",
@@ -626,6 +640,37 @@ def test_phase_5_4_crossing_core_has_no_framework_or_accumulated_counting_logic(
         "numpy",
         "supervision",
         "ultralytics",
+    )
+
+    violations = [
+        f"{source_file.name}: {token}"
+        for source_file in files
+        for token in forbidden_tokens
+        if token in source_file.read_text(encoding="utf-8").lower()
+    ]
+
+    assert not violations
+
+
+def test_phase_6_evaluation_has_no_framework_or_phase_7_logic() -> None:
+    files = (
+        SOURCE_ROOT / "evaluation" / "line_errors.py",
+        SOURCE_ROOT / "evaluation" / "line_models.py",
+        SOURCE_ROOT / "evaluation" / "line_matching.py",
+        SOURCE_ROOT / "evaluation" / "line_evaluator.py",
+        SOURCE_ROOT / "evaluation" / "line_io.py",
+        SOURCE_ROOT / "evaluation" / "line_positions.py",
+    )
+    forbidden_tokens = (
+        "counted_tracker_ids",
+        "session_id",
+        "sqlite",
+        "cv2",
+        "numpy",
+        "supervision",
+        "ultralytics",
+        "auto_select_line",
+        "adapt_line_during_run",
     )
 
     violations = [

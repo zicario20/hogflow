@@ -16,10 +16,11 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 5 implemented through the authorized Phase 5.4
-scope — live acquisition, detector integration, temporary-ID tracking, and
-event-only virtual-line crossing are implemented; no accumulated pig count or
-representative pig validation exists; Phase 6 and Phase 7 have not started.
+Current roadmap status: Phase 6 evaluation infrastructure implemented —
+candidate line plans, deterministic tracking replay, optional crossing-event
+ground-truth metrics, explicit ranking, and sanitized offline reports are
+implemented; representative pig line-position evaluation remains pending;
+Phase 7 has not started.
 
 ## Official project memory
 
@@ -91,6 +92,15 @@ events, bounded side-state cleanup, reconnect reset alignment, and serial
 integration after successful tracking. Crossing is disabled by default. It
 emits geometric events only: there is no accumulated pig total, one-ID-one-count
 rule, operational direction, session, persistence, or accuracy claim.
+
+Phase 6 adds a serial offline evaluator that replays the same immutable
+`TrackingResult` sequence through one isolated Phase 5.4 crossing lifecycle per
+line candidate. It provides deterministic candidate plans and fingerprints,
+descriptive gap/endpoint diagnostics, optional one-to-one crossing-event
+ground-truth matching, explicit ranking policies, strict path-free JSON, and a
+technical CLI. Synthetic fixtures validate the infrastructure; no
+representative pig ground truth was evaluated and no production line placement
+is recommended.
 
 ## Phase 0 documentation
 
@@ -226,7 +236,7 @@ counting performance. No mAP implementation is claimed.
 
 ## Phase 5
 
-Phase 5 is in progress through the Phase 5.3 live tracking integration:
+Phase 5 is implemented through the authorized Phase 5.4 live crossing scope:
 
 * stream-first USB and RTSP production-input architecture
 * explicit live, development-file, and synthetic source types
@@ -269,6 +279,18 @@ accumulated counting.
 * [Phase 5.4 validation](docs/phase_5/phase_5_4_validation.md)
 * [Phase 5.4 summary](docs/phase_5/phase_5_4_summary.md)
 
+## Phase 6
+
+Phase 6 provides an offline, framework-neutral line-position evaluation
+workflow. Candidate order cannot alter results, each candidate receives an
+isolated crossing lifecycle, gaps remain observable, and finite-segment
+geometry is reused from Phase 5.4. Without crossing-event ground truth, the
+default report makes no automatic recommendation.
+
+* [Phase 6 line-position evaluation](docs/phase_6/phase_6_line_position_evaluation.md)
+* [Phase 6 validation](docs/phase_6/phase_6_validation.md)
+* [Phase 6 summary](docs/phase_6/phase_6_summary.md)
+
 ## High-level pipeline
 
 Production input through event-only crossing implemented through Phase 5.4:
@@ -302,6 +324,16 @@ VIDEO SOURCE
 Planned later-roadmap flow adds pig-specific validation, session management,
 storage, operator UI, and evaluation only in their approved phases.
 
+Implemented Phase 6 offline evaluation flow:
+
+TRACKING REPLAY
+→ VALIDATED LINE CANDIDATES
+→ ISOLATED PHASE 5.4 CROSSING LIFECYCLES
+→ PER-CANDIDATE CROSSING EVENTS
+→ DESCRIPTIVE / OPTIONAL GROUND-TRUTH METRICS
+→ EXPLICIT RANKING
+→ SANITIZED REPORT
+
 ## Roadmap status
 
 * Phase 0: documented
@@ -310,7 +342,8 @@ storage, operator UI, and evaluation only in their approved phases.
 * Phase 3: inventory infrastructure implemented; real authorized collection and review in progress
 * Phase 4: implementation completed through Phase 4.3; real annotation and empirical detector validation may still be incomplete
 * Phase 5: implemented through authorized Phase 5.4 event-only live crossing; empirical pig validation remains absent
-* Phase 6 through Phase 16: not started
+* Phase 6: evaluation infrastructure implemented; representative pig line-position evaluation remains pending
+* Phase 7 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
 The source-controlled repository contains no real pig video and makes no claim
@@ -335,7 +368,10 @@ with deterministic synthetic detections and the installed Supervision adapter,
 but not with representative pig detections; ID-switch, fragmentation, and
 occlusion behavior remain unmeasured. Phase 5.4 crossing logic is validated
 only with synthetic tracks; line placement, event accuracy, and count accuracy
-have not been measured on pigs. Real pig annotation may be
+have not been measured on pigs. Phase 6 compares candidate lines reproducibly,
+but its evidence remains synthetic: representative tracking replay and
+human-verified crossing-event ground truth are absent, so it establishes
+neither an optimal line nor pig-count accuracy. Real pig annotation may be
 incomplete, and no real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific

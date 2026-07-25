@@ -5,10 +5,10 @@
 
 Última reconstrucción integral: 25 de julio de 2026.
 
-Línea base técnica de Phase 5.4:
-`79c0c71da0574226292c81444dcb01ec199bf4b7`
-(`Close Phase 5.3 tracking observations`). Phase 5.4 se publica mediante el
-commit `Implement Phase 5.4 live line crossing events`; su SHA final debe
+Línea base técnica de Phase 6:
+`86ef52f92c92a0ca72007eab286c1f82698a43ce`
+(`Implement Phase 5.4 live line crossing events`). Phase 6 se publica mediante
+el commit `Implement Phase 6 line position evaluation`; su SHA final debe
 consultarse con Git porque un documento no puede incluir de forma
 autorreferencial el SHA del mismo commit que lo contiene.
 
@@ -596,13 +596,32 @@ Resumen de madurez:
 - **Estado:** implementación event-only completada; sin validación con cerdos,
   line calibration, event accuracy ni count accuracy.
 
-### 5.14 Estado de las fases 6–16
+### 5.14 Phase 6 — Virtual-line position evaluation
+
+- **Objetivo:** comparar posiciones/configuraciones de línea sobre exactamente
+  el mismo replay de tracking, sin convertir eventos en conteo operacional.
+- **Entregado:** `LineCandidate`, `LineEvaluationPlan`, `TrackingReplay`,
+  ground truth de eventos independiente de tracker IDs, matching greedy
+  uno-a-uno, métricas descriptivas y con ground truth, ranking explícito,
+  `VirtualLinePositionEvaluator`, JSON estricto path-free y CLI offline.
+- **Decisiones:** replay serial; un lifecycle de Phase 5.4 por candidato;
+  geometría reutilizada, no duplicada; gaps preservados sin interpolación;
+  proximidad a extremos solo diagnóstica; sin ground truth, default
+  `NO_AUTOMATIC_RECOMMENDATION`.
+- **Evidencia:** fixtures sintéticos de paso limpio, extensión fuera del
+  segmento y jitter/gaps, más pruebas de modelos, matching, ranking,
+  serialización, privacidad, CLI, determinismo, lifecycle y boundaries.
+- **Commit:** `Implement Phase 6 line position evaluation` (consultar SHA final
+  en Git por la autorreferencia del documento).
+- **Estado:** infraestructura de evaluación implementada; evaluación
+  representativa con cerdos, ground truth humano y línea calibrada pendientes.
+
+### 5.15 Estado de las fases 7–16
 
 No iniciadas. Sus nombres normativos son:
 
 | Fase | Alcance normativo | Estado |
 | --- | --- | --- |
-| 6 | Evaluar posiciones de línea virtual. | NOT STARTED |
 | 7 | Movimiento reverso y duplicate counting. | NOT STARTED |
 | 8 | Session manager de tres secciones. | NOT STARTED |
 | 9 | Operator MVP UI. | NOT STARTED |
@@ -676,6 +695,10 @@ tabla preserva su razonamiento operativo.
 | 039 | 5.4 | Reusar contador Phase 1 o separar eventos live. | Detector live event-only; no `counted_tracker_ids` ni total. | Phase 1 permanece compatible y Phase 7 no se adelanta. Aceptada. |
 | 040 | 5.4 | Línea por píxeles/infinita o segmento normalizado. | Segmento finito normalizado, epsilon perpendicular y bottom-center default. | Independiente de resolución; gaps no estiman tiempo/trayectoria. Aceptada. |
 | 041 | 5.4 | Cola propia o crossing serial; state persistente o reset alineado. | Callback serial, sin cola, crossing off por default y reset por reconnect. | Asociación exacta y sin herencia de lados entre lifecycles. Aceptada. |
+| 042 | 6 | Evaluación paralela/compartida o replay serial aislado. | Una instancia Phase 5.4 por candidato y el mismo replay inmutable, en serie. | Orden de candidatos no contamina resultados; auditoría simple. Aceptada. |
+| 043 | 6 | Pickle/manifests con paths o JSON estricto sanitizado. | Esquema JSON versionado y path-free, con IO atómico. | Replays/reports son inspeccionables sin media ni rutas privadas. Aceptada. |
+| 044 | 6 | Elegir más eventos o condicionar recomendación a evidencia. | Sin ground truth no hay recomendación automática; con ground truth ranking explícito. | Evita presentar señal descriptiva como accuracy. Aceptada. |
+| 045 | 6 | Cambiar emisión cerca de extremos o solo diagnosticar. | Reusar intersección finita y medir proximidad sin alterar eventos. | Permite comparar segmentos cortos/largos sin nueva regla de negocio. Aceptada. |
 
 ---
 
@@ -712,7 +735,7 @@ tabla preserva su razonamiento operativo.
 | Elemento | Estado verificado al 25-07-2026 |
 | --- | --- |
 | Branch | `main` |
-| Línea base técnica de Phase 5.4 | `79c0c71da0574226292c81444dcb01ec199bf4b7` |
+| Línea base técnica de Phase 6 | `86ef52f92c92a0ca72007eab286c1f82698a43ce` |
 | `origin/main` al iniciar esta memoria | Mismo SHA que la línea base |
 | Working tree al iniciar | Limpio |
 | Remote | `https://github.com/zicario20/hogflow.git` |
@@ -720,6 +743,7 @@ tabla preserva su razonamiento operativo.
 | Suite Phase 5.3 original | 453 passed; 1 warning de ByteTrack deprecated |
 | Suite de cierre Phase 5.3 | 465 passed; 1 warning de ByteTrack deprecated |
 | Suite Phase 5.4 | 524 passed; 1 warning de ByteTrack deprecated |
+| Suite local Phase 6 | 570 passed; 1 warning de ByteTrack deprecated |
 | Python local verificado | 3.12.13; proyecto declara `>=3.10` |
 | Python CI | 3.12 en Ubuntu latest |
 
@@ -750,6 +774,9 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 - live tracking con fakes y adapter Supervision ByteTrack;
 - eventos live de cruce sobre segmento finito normalizado, con lifecycle,
   limpieza acotada y pipeline serial opcional;
+- evaluación offline determinista de candidatos de línea con replay idéntico,
+  lifecycles aislados, métricas descriptivas/ground truth opcional, ranking
+  explícito y reportes sanitizados;
 - hardware USB para adquisición, lifecycle detector vacío y tracking de cajas
   sintéticas;
 - CI source-only y boundaries automatizados.
@@ -759,6 +786,7 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 - checkpoint de detector de cerdos entrenado y validado;
 - detección real de cerdos en el pipeline live;
 - tracking de cerdos representativo y métricas de identidad;
+- evaluación representativa de posiciones con ground truth humano;
 - conteo acumulado/deduplicado dentro del pipeline live;
 - sesiones de tres secciones;
 - SQLite, UI, dashboard, analytics y review clips;
@@ -772,7 +800,9 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 El cierre técnico de Phase 5.3 resolvió HF-D001–HF-D003 y formalizó la decisión
 arquitectónica de HF-D004–HF-D006. Phase 5.4 mitiga HF-D007 para estado
 geométrico mediante lifecycle/reset, pero no resuelve deduplicación futura.
-La calibración empírica y las demás deudas permanecen explícitas.
+Phase 6 mitiga HF-D018 con tooling reproducible, no con evidencia
+representativa. La calibración empírica y las demás deudas permanecen
+explícitas.
 
 | ID | Severidad | Evidencia | Archivo / símbolo | Descripción y riesgo | Solución recomendada | Estado |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -793,7 +823,10 @@ La calibración empírica y las demás deudas permanecen explícitas.
 | HF-D015 | Media operativa | **INFERENCIA** | política de datos locales | Git no conserva source maps, media, labels, checkpoints ni reports; su pérdida impide reproducir runs. | Backup local autorizado, cifrado y con control de acceso fuera de Git. | Propuesta pendiente. |
 | HF-D016 | Alta para eventos reales | **INFERENCIA respaldada por diseño** | `VirtualLineCrossingDetector`; ADR-040 | Jitter de cajas puede alternar lados y producir eventos aparentes pese a epsilon. | Calibrar epsilon/línea con tracks representativos y medir falsos eventos. | Pendiente empírica. |
 | HF-D017 | Alta para trazabilidad | **HECHO VERIFICADO** | `LiveCrossingEvent.previous_frame_sequence`; ADR-040 | Con gaps grandes se observa cambio de lado pero no instante ni trayectoria exacta. | Conservar ambos frames, no interpolar y estratificar evaluación por gap. | Incertidumbre explícita. |
-| HF-D018 | Bloqueante para accuracy | **HECHO VERIFICADO** | docs Phase 5.4 / Phase 6 | La línea normalizada es manual y no está calibrada con cerdos representativos. | Phase 6 debe evaluar posiciones con ground truth autorizado. | Abierta. |
+| HF-D018 | Bloqueante para accuracy | **HECHO VERIFICADO** | docs Phase 5.4 / Phase 6 | La línea normalizada es manual y no está calibrada con cerdos representativos. | Usar el evaluador Phase 6 con replay representativo y ground truth autorizado. | Tooling implementado; evidencia pendiente. |
+| HF-D019 | Bloqueante empírico | **HECHO VERIFICADO** | `evaluation/line_models.py::EvidenceLevel`; docs Phase 6 | No existe replay representativo con ground truth humano de crossing en Git. | Crear evidencia local autorizada y preservar provenance; no inferir accuracy desde fixtures sintéticos. | Abierta. |
+| HF-D020 | Media metodológica | **HECHO VERIFICADO** | `evaluation/line_matching.py` | El matching greedy uno-a-uno es determinista, pero puede no maximizar globalmente matches en casos ambiguos. | Auditar ventanas/ambigüedad con ground truth representativo antes de cambiar algoritmo. | Limitación explícita. |
+| HF-D021 | Alta para calibración | **INFERENCIA respaldada por diseño** | `LineCandidate`; métricas near-endpoint | Anchor, epsilon y longitud/posición de segmento pueden sesgar eventos, especialmente con jitter, gaps y oclusión. | Comparar candidatos estratificados y revisar eventos near-endpoint/gap con datos representativos. | Pendiente empírica. |
 
 ---
 
@@ -906,49 +939,51 @@ de estas métricas de conteo tiene todavía resultado empírico con cerdos.
 
 ### 12.1 Siguiente trabajo confirmado
 
-**HECHO VERIFICADO:** el owner definió y autorizó Phase 5.4 como integración
-live event-only. La implementación produce eventos geométricos y no adelanta
-conteo, deduplicación, sesiones o storage.
+**HECHO VERIFICADO:** el owner autorizó Phase 6 como infraestructura offline de
+evaluación de posiciones. La implementación compara eventos geométricos y no
+adelanta conteo, deduplicación, sesiones o storage.
 
-**Recomendación actual:** auditar el commit Phase 5.4 y su CI antes de iniciar
-Phase 6.
+**Recomendación actual:** auditar el commit Phase 6 y su CI; después ejecutar
+una evaluación Phase 6 local, autorizada y representativa con ground truth
+humano antes de considerar Phase 7.
 
 ### 12.2 Siguiente fase normativa
 
-Phase 6 conserva su propósito: implementar y evaluar posiciones de línea
-virtual con datos representativos. Phase 5.4 aporta el mecanismo técnico, no la
-evidencia para elegir una ubicación.
+Phase 7 conserva su propósito: manejar movimiento reverso y duplicate counting.
+No está iniciada ni autorizada por este cambio. El tooling Phase 6 no demuestra
+todavía qué línea debe usarse ni suministra accuracy de conteo.
 
-Dentro de Phase 6:
+Trabajo pendiente dentro de la validación empírica Phase 6:
 
-- protocolo de evaluación y candidate line positions;
-- datos autorizados y ground truth de cruces cuando existan;
-- medición estratificada por línea, gap, densidad y oclusión;
-- documentación honesta de falsos/missed crossing events.
+- generar replay desde tracking representativo autorizado;
+- producir ground truth humano de crossing events separado de tracker IDs;
+- ejecutar múltiples candidatos con el mismo replay;
+- revisar falsos/missed events, gaps, endpoints, densidad y oclusión;
+- documentar resultados sin elevar event metrics a count accuracy.
 
-Fuera de Phase 6 salvo aprobación expresa:
+Fuera del siguiente trabajo salvo aprobación expresa:
 
 - deduplicación y one-ID-one-count de Phase 7;
 - sesiones, storage, UI y fases posteriores;
 - afirmar count accuracy a partir de eventos sintéticos.
 
-### 12.3 Condiciones de inicio de Phase 6
+### 12.3 Condiciones de inicio de Phase 7
 
-- auditoría técnica y CI de Phase 5.4 verificados;
-- alcance y criterios de aceptación escritos;
-- datos representativos explícitamente autorizados;
-- política de ground truth para crossing;
-- preservar lifecycle IDs, gaps sin interpolación y segmento finito;
-- plan de pruebas sintéticas más validación empírica separada;
-- actualización de esta memoria incluida en el commit.
+- auditoría técnica y CI de Phase 6 verificados;
+- resultados representativos Phase 6 revisados o limitación explícitamente
+  aceptada por el owner;
+- especificación escrita para reversos/deduplicación;
+- lifecycle IDs, gaps y tracker failure risks incorporados al diseño;
+- no convertir event totals sintéticos en regla de negocio;
+- actualización de esta memoria incluida en el commit autorizado.
 
 ### 12.4 Criterios mínimos del siguiente cierre
 
-- ninguna regresión Phase 0–5.4;
-- posiciones evaluadas mediante evidencia, no intuición;
-- evento geométrico separado de conteo;
+- ninguna regresión Phase 0–6;
+- reglas de Phase 7 basadas en evidencia y alcance aprobado;
+- evento geométrico separado de conteo operacional;
+- ID switches, fragmentación y reconnect tratados como riesgos observables;
 - resultados pobres y fallos conservados;
-- no deduplicación/reversos operativos anticipados;
 - documentación, ADRs y memoria sincronizadas;
 - quality gates, push y CI reportados con evidencia real.
 
@@ -959,24 +994,25 @@ Fuera de Phase 6 salvo aprobación expresa:
 ### 13.1 Roadmap normativo Phase 0–16
 
 - **CONFIRMADO / implementado:** Phase 0, Phase 1, Phase 2.1–2.3, tooling Phase
-  3, tooling Phase 4.1–4.3 y Phase 5.1–5.4 según sus alcances.
-- **CONFIRMADO / no iniciado:** Phase 6–16 con nombres y límites definidos en
+  3, tooling Phase 4.1–4.3, Phase 5.1–5.4 y tooling Phase 6 según sus alcances.
+- **CONFIRMADO / no iniciado:** Phase 7–16 con nombres y límites definidos en
   `AGENTS.md`.
 
 ### 13.2 Cierre técnico inmediato
 
 1. **COMPLETADO:** cierre de observaciones técnicas de Phase 5.3.
 2. **COMPLETADO:** definición e implementación event-only de Phase 5.4.
-3. **PENDIENTE:** auditar Phase 5.4 antes de comenzar Phase 6.
-4. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
-5. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
+3. **COMPLETADO:** infraestructura offline de evaluación Phase 6.
+4. **PENDIENTE:** auditar Phase 6 y ejecutar evaluación representativa.
+5. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
+6. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
 
 ### 13.3 Validación técnica
 
 1. Completar dataset autorizado, anotación y split por source.
 2. Entrenar/evaluar un detector pig-specific con provenance.
 3. Medir tracking real: ID switches, fragmentación, oclusión y gaps.
-4. Phase 6: evaluar posiciones de línea con datos representativos.
+4. Phase 6: aplicar el evaluador a posiciones con datos representativos.
 5. Phase 7: reversos y deduplicación de conteo.
 6. Phase 11–12: ground truth, error y failure analytics.
 
@@ -1042,8 +1078,8 @@ implementarse hasta que una necesidad medida justifique su coste.
     cambió, explicar por qué el cambio no alteró el conocimiento del proyecto.
 16. Preservar el historial de invención y separar market research de resultados.
 17. Nunca convertir IDs temporales, detecciones o tracks visibles en conteos.
-18. No ampliar Phase 5.4 más allá de eventos geométricos; Phase 6/7 requieren
-    autorización propia.
+18. No convertir la evaluación Phase 6 en deduplicación, reversos o conteo;
+    Phase 7 requiere autorización propia.
 19. Todo cambio aprobado debe terminar con tests, commit descriptivo, push a
     la rama autorizada y verificación `HEAD == origin/<rama>`, salvo que el
     usuario retire expresamente autorización de push.
@@ -1084,6 +1120,10 @@ Checklist mínimo antes de commit:
 | `LiveCrossingEvent` | Transición geométrica live ligada a frame, línea y lifecycle; no contiene conteo acumulado. |
 | `LineSide` | Lado explícito `NEGATIVE`, `ON_LINE` o `POSITIVE` respecto a línea orientada. |
 | `TrackAnchor` | Política determinista para punto representativo; default live `BOTTOM_CENTER`. |
+| `LineCandidate` | Configuración inmutable y fingerprinted de línea, anchor, epsilon y retención para evaluación offline. |
+| `TrackingReplay` | Secuencia inmutable y ordenada de `TrackingResult` usada idénticamente por cada candidato. |
+| `LineEvaluationReport` | Reporte sanitizado con resultados, evidencia, ranking explícito, warnings y limitaciones; no es count report. |
+| Evidence level | Clasificación `SYNTHETIC`, `CONTROLLED_REPLAY`, `REPRESENTATIVE_WITHOUT_GROUND_TRUTH` o `REPRESENTATIVE_WITH_GROUND_TRUTH` que limita afirmaciones. |
 | Counter | Regla que incrementa únicamente un cruce positivo elegible por tracker. |
 | Session | Ventana operativa futura por sección con estado y conteo independiente. No implementada. |
 | Stream | Secuencia potencialmente no acotada de una fuente USB/RTSP; file es desarrollo finito. |

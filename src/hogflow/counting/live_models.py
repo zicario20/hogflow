@@ -148,6 +148,21 @@ class NormalizedLine:
         point.
         """
 
+        return self.movement_intersection_parameter(previous, current) is not None
+
+    def movement_intersection_parameter(
+        self,
+        previous: NormalizedPoint,
+        current: NormalizedPoint,
+    ) -> float | None:
+        """Return the finite intersection position along this line, if any.
+
+        Zero identifies ``start`` and one identifies ``end``. This geometric
+        diagnostic does not estimate a frame, timestamp, or physical path.
+        """
+
+        if not isinstance(previous, NormalizedPoint) or not isinstance(current, NormalizedPoint):
+            raise InputDataError("Movement intersection requires normalized points.")
         movement_x = current.x - previous.x
         movement_y = current.y - previous.y
         line_x = self.end.x - self.start.x
@@ -155,16 +170,18 @@ class NormalizedLine:
         denominator = movement_x * line_y - movement_y * line_x
         scale = max(hypot(movement_x, movement_y) * hypot(line_x, line_y), 1.0)
         if abs(denominator) <= _SEGMENT_INTERSECTION_TOLERANCE * scale:
-            return False
+            return None
         offset_x = self.start.x - previous.x
         offset_y = self.start.y - previous.y
         movement_parameter = (offset_x * line_y - offset_y * line_x) / denominator
         line_parameter = (offset_x * movement_y - offset_y * movement_x) / denominator
         tolerance = _SEGMENT_INTERSECTION_TOLERANCE
-        return (
+        if (
             -tolerance <= movement_parameter <= 1.0 + tolerance
             and -tolerance <= line_parameter <= 1.0 + tolerance
-        )
+        ):
+            return min(1.0, max(0.0, line_parameter))
+        return None
 
 
 @dataclass(frozen=True, slots=True)

@@ -17,6 +17,9 @@ Supervision ByteTrack and OpenCV tracking preview code in adapters.
 Phase 5.4 adds framework-neutral normalized finite-line geometry and event-only
 crossing state, composed serially after live tracking; OpenCV crossing preview
 remains an optional adapter.
+Phase 6 adds a serial offline evaluation layer that consumes immutable
+tracking replays and isolated Phase 5.4 crossing detectors; it has no live
+pipeline, framework, media, or storage dependency.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -30,8 +33,9 @@ Implemented direction:
 * `data models/validation → core`
 * `video metadata infrastructure → data models/validation/core`
 * `data inventory CLI → data models/validation/video metadata/core`
-* `evaluation models/metrics → models/core`
+* `evaluation detection models/metrics → models/core`
 * `evaluation dataset selection CLI → core`
+* `evaluation line positions → counting/tracking models/core`
 * `annotation models/policy/YOLO/manifest → evaluation models/models/core`
 * `data splitting/frame planning → annotation models/core/data`
 * `frame extraction → data planning/annotation models/core/OpenCV`
@@ -68,7 +72,7 @@ modules may consume immutable tracking-domain models but never tracker adapters.
 | `models` | Canonical immutable communication data. | `core` | `adapters`, `config`, `counting`, `data`, `video`, `detection`, `tracking`, `pipeline`, `sessions`, `storage`, `domain` |
 | `counting` | Detector-independent Phase 1 counting plus Phase 5.4 event-only live geometry and lifecycle state. | `tracking.models` for immutable live results; `core`/`config` with concrete need. | `adapters`, concrete trackers, `data`, `video`, `detection`, `pipeline`, `sessions`, `storage`, UI code, CV frameworks |
 | `data` | Inventory models/discovery, source-level splitting, frame planning, local extraction, sidecar parsing, suitability, and reporting. | Framework-neutral planning: `annotation`, `core`, `data`; inventory: `core`, `video`; extraction: OpenCV | Adapters, counting, detector/tracker contracts, pipeline, sessions, storage, domain business logic; CV frameworks outside explicit metadata/extraction infrastructure |
-| `evaluation` | Immutable detection-evaluation models, deterministic geometry/matching/metrics, and metadata-only local dataset selection. | `models`, `core` | Adapters, video decoding, detector/tracker implementations, pipeline, counting, sessions, storage, UI code, CV frameworks |
+| `evaluation` | Immutable detection evaluation plus offline virtual-line candidate replay, matching, ranking, reporting, and metadata-only local dataset selection. | `models`, `core`; Phase 6 line evaluation may consume `counting` and immutable `tracking.models` | Adapters, video decoding, detector/tracker implementations, live pipeline, sessions, storage, UI code, CV frameworks |
 | `annotation` | Immutable pig annotation/manifest models, policy geometry, YOLO text serialization, sanitized manifests, and local structural validation. | Domain modules: `evaluation` models, `models`, `core`; validation infrastructure: OpenCV | Detector frameworks, adapters, tracking, counting, pipeline, sessions, storage, UI logic; CV frameworks in models, policy, YOLO, or manifest modules |
 | `detection` | Framework-independent finite-video and live detector contracts, immutable live results, bounded telemetry, errors, and deterministic doubles. | `models`, `streaming`, `core` | Adapters, frameworks, video, tracking, counting, pipeline, storage, UI code |
 | `tracking` | Framework-independent finite-video `Tracker` plus live tracker contracts, immutable requests/results, configuration, bounded telemetry, errors, and deterministic doubles. | `models`, `detection`, `streaming`, `core` | Adapters, frameworks, video, counting, pipeline, sessions, storage, UI code |
@@ -147,6 +151,14 @@ successful tracking callback, mirrors tracker reconnect resets, and adds no
 queue. The optional OpenCV crossing preview consumes immutable results but owns
 no crossing decision. Event totals are diagnostics and are not accumulated
 animal counts.
+
+Phase 6 allows `evaluation` to depend inward on the Phase 5.4 crossing detector
+and immutable tracking results. Each candidate owns an isolated serial
+crossing lifecycle over the same replay. The evaluator does not import live
+pipelines, adapters, camera/detector implementations, CV frameworks, sessions,
+storage, or UI. `counting` and `tracking` never depend back on evaluation, so
+the new direction introduces no cycle. Reports cannot configure the live line
+without an explicit external action.
 
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on

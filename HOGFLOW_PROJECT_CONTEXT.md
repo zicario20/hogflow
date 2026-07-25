@@ -10,10 +10,11 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 5 implemented through the authorized Phase
-5.4 scope — live acquisition, detector integration, temporary-ID tracking, and
-event-only virtual-line crossing are implemented; no accumulated pig count or
-representative pig validation exists; Phase 6 and Phase 7 have not started.
+Current repository status: Phase 6 evaluation infrastructure implemented —
+candidate line plans, deterministic tracking replay, optional crossing-event
+ground-truth metrics, explicit ranking, and sanitized offline reports are
+implemented; representative pig line-position evaluation remains pending;
+Phase 7 has not started.
 
 ## Project identity
 
@@ -289,7 +290,36 @@ NOT EMPIRICALLY COMPLETED in Phase 5.4:
 * representative pig crossing validation or calibrated line placement
 * event accuracy, count accuracy, ID-switch, fragmentation, or occlusion claims
 * accumulated counting, unique-ID deduplication, operational direction,
-  sessions, storage, Phase 6, or Phase 7
+  sessions, storage, or Phase 7
+
+IMPLEMENTED Phase 6 virtual-line position evaluation infrastructure:
+
+* Immutable, fingerprinted line candidates and non-empty canonical evaluation
+  plans with explicit ranking policy.
+* Immutable tracking replays that preserve source, aware timestamps, strict
+  sequence order, real gaps, lifecycle provenance, and optional independent
+  crossing-event ground truth.
+* Serial deterministic replay through one isolated
+  `VirtualLineCrossingDetector` lifecycle per candidate, reusing Phase 5.4
+  finite-segment geometry without OpenCV, Supervision, camera, or model
+  dependencies.
+* Descriptive event, direction, track, gap, endpoint-proximity, duration, and
+  latency metrics that are not labeled as pig counts.
+* Optional deterministic one-to-one crossing-event matching with frame-window
+  and direction policy, plus TP/FP/FN, precision, recall, F1, frame offsets,
+  direction errors, and event-total error.
+* Explicit ranking methods. The default without ground truth is
+  `NO_AUTOMATIC_RECOMMENDATION` and yields no recommended candidate.
+* Strict versioned path-free JSON replay/plan/report serialization, atomic
+  report output, an offline CLI, bounded evaluation telemetry, and synthetic
+  clean-pass, finite-extension, and jitter/gap fixtures.
+
+NOT EMPIRICALLY COMPLETED in Phase 6:
+
+* evaluation using representative authorized pig video and valid pig tracking
+* human-verified representative crossing-event ground truth
+* a validated or optimal virtual-line position for pigs
+* pig-count accuracy, operational counting, deduplication, or Phase 7
 
 ## Unique tracker counting concept
 
@@ -519,7 +549,10 @@ Live temporary-ID tracking has deterministic synthetic and installed-adapter
 evidence, but no representative pig-detection input or real pig-tracking
 accuracy evidence. Event-only virtual-line crossing has deterministic synthetic
 evidence but no representative line calibration or event-accuracy result.
-RTSP production validation and Phase 6 have not started.
+Phase 6 offline evaluation infrastructure has deterministic synthetic evidence,
+but representative pig replay, human crossing-event ground truth, and line
+calibration remain pending. RTSP production validation and Phase 7 have not
+started.
 
 ## Pilot readiness phase
 
@@ -624,10 +657,17 @@ IMPLEMENTED at repository level:
 * normalized finite-line models and lifecycle-qualified live crossing events
 * bounded crossing state, reset/reconnect alignment, telemetry, preview, and CLI
 * synthetic Phase 5.4 geometry, lifecycle, pipeline, privacy, and architecture tests
+* immutable Phase 6 line candidates, evaluation plans, tracking replays, and reports
+* serial isolated reuse of Phase 5.4 crossing geometry for each candidate
+* descriptive gap/endpoint metrics and optional deterministic event-ground-truth matching
+* explicit evidence-aware ranking with no default recommendation without ground truth
+* strict sanitized JSON replay/report IO and offline technical CLI
+* synthetic Phase 6 clean-pass, finite-extension, jitter/gap, matching, ranking, privacy, and architecture tests
 
 Not yet implemented:
 
-* Phase 6 through Phase 16
+* representative pig line-position evaluation and calibrated line selection
+* Phase 7 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
@@ -639,7 +679,8 @@ Not yet implemented:
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 5 implemented through the authorized Phase 5.4
-scope — live acquisition, detector integration, temporary-ID tracking, and
-event-only virtual-line crossing are implemented; no accumulated pig count or
-representative pig validation exists; Phase 6 and Phase 7 have not started.
+Current roadmap status: Phase 6 evaluation infrastructure implemented —
+candidate line plans, deterministic tracking replay, optional crossing-event
+ground-truth metrics, explicit ranking, and sanitized offline reports are
+implemented; representative pig line-position evaluation remains pending;
+Phase 7 has not started.

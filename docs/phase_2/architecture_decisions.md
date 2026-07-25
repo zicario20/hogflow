@@ -871,3 +871,106 @@ and geometry failures as fatal for that run; isolate preview failures.
 There is still one bounded source buffer and no crossing queue or frame
 history. A reconnect cannot leak remembered sides, but no cross-lifecycle
 biological re-identification or deduplication exists.
+
+## ADR-042 — Evaluate line candidates offline with isolated crossing lifecycles
+
+Status: Accepted
+
+### Context
+
+Phase 6 must compare several line configurations against exactly the same
+tracking observations. Evaluating candidates inside the live pipeline would
+couple evidence collection to camera scheduling and could allow one
+candidate's side state to contaminate another.
+
+### Decision
+
+Add a serial offline evaluator under `hogflow.evaluation`. It depends inward
+on immutable tracking results and the Phase 5.4 crossing detector. Every
+candidate receives a fresh `VirtualLineCrossingDetector`, processes the same
+canonical replay, and closes in a `finally` block. No candidate state is
+shared, and candidate input order is canonicalized by opaque ID.
+
+### Consequences
+
+Results are deterministic and auditable without camera, detector, tracking
+framework, media, or internet. `evaluation` may now depend on
+framework-neutral `counting` and `tracking` models; neither package depends
+back on evaluation. The live line is never selected or changed automatically.
+
+## ADR-043 — Use strict path-free JSON replays and reports
+
+Status: Accepted
+
+### Context
+
+Offline evaluation needs reproducible tracking input, but Python pickle,
+framework objects, image payloads, source paths, and private filenames are
+unsafe or unnecessary. Existing Phase 4 serializers do not represent live
+`TrackingResult` sequences and crossing-event ground truth.
+
+### Decision
+
+Define schema-versioned JSON for candidate plans and tracking replays. Replays
+contain only opaque source/lifecycle IDs, aware timestamps, frame dimensions,
+canonical tracked boxes, temporary tracker IDs, sanitized provenance, and
+optional independent ground-truth crossing events. Reports contain aggregate
+results, bounded matches, fingerprints, warnings, and limitations. Loading is
+strict; writing is atomic and deterministic for identical values.
+
+### Consequences
+
+Phase 6 inputs can be inspected and tested without executing content or
+decoding media. Absolute paths, frames, images, credentials, and private source
+references are excluded. Real replay/report files remain local under existing
+Git protections.
+
+## ADR-044 — Gate recommendations on crossing-event ground truth
+
+Status: Accepted
+
+### Context
+
+Event volume alone cannot identify the correct virtual-line position. Synthetic
+or representative tracking without independent crossing labels can describe
+behavior but cannot establish accuracy. Ground-truth matching must remain
+simple, deterministic, and dependency-free.
+
+### Decision
+
+Default to `NO_AUTOMATIC_RECOMMENDATION`. With ground truth, match predicted and
+reference events one-to-one using deterministic greedy minimum frame distance,
+optional direction agreement, and stable identity tie-breaks. Support explicit
+ranking by event F1, absolute event-count error, or mean frame offset. Without
+ground truth, return no recommended candidate.
+
+### Consequences
+
+Reports cannot silently select the line with the most events. Synthetic
+ground-truth ranking is labeled as specific to that replay. The greedy matcher
+is auditable but not globally optimal, so that limitation is preserved in
+every report.
+
+## ADR-045 — Diagnose endpoint proximity without changing event emission
+
+Status: Accepted
+
+### Context
+
+Phase 5.4 uses finite segments, so short or poorly placed candidates may emit
+events near an endpoint. Comparing only total events would hide that
+sensitivity.
+
+### Decision
+
+Expose the existing finite movement intersection's normalized line parameter
+through `NormalizedLine`. Phase 6 converts that parameter to normalized
+distance from the nearest endpoint and records an aggregate diagnostic. It
+does not change the Phase 5.4 event decision or estimate an intermediate frame,
+timestamp, or trajectory.
+
+### Consequences
+
+Short and long lines can be compared with explicit endpoint evidence while
+geometry remains centralized in Phase 5.4. Endpoint proximity remains a
+diagnostic, not a business rule or automatic line adjustment.
