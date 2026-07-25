@@ -243,6 +243,10 @@ FORBIDDEN_CONTRACT_IMPORTS = {
 }
 FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "models.py",
+    SOURCE_ROOT / "domain" / "dock_registry.py",
+    SOURCE_ROOT / "domain" / "truck_operation.py",
+    SOURCE_ROOT / "domain" / "unloading_errors.py",
+    SOURCE_ROOT / "domain" / "unloading_models.py",
     SOURCE_ROOT / "counting" / "line_crossing.py",
     SOURCE_ROOT / "counting" / "live_crossing.py",
     SOURCE_ROOT / "counting" / "live_counting.py",
@@ -580,6 +584,10 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.sessions",
         "hogflow.storage",
         "hogflow.domain",
+        "hogflow.domain.dock_registry",
+        "hogflow.domain.truck_operation",
+        "hogflow.domain.unloading_errors",
+        "hogflow.domain.unloading_models",
     )
 
     for package_name in package_names:
@@ -716,6 +724,39 @@ def test_phase_7_counting_core_has_no_framework_or_phase_8_implementation() -> N
         "storage",
         "net_count",
         "reidentification",
+    )
+
+    violations = [
+        f"{source_file.name}: {token}"
+        for source_file in files
+        for token in forbidden_tokens
+        if token in source_file.read_text(encoding="utf-8").lower()
+    ]
+
+    assert not violations
+
+
+def test_phase_8_1_domain_has_no_phase_7_or_infrastructure_dependency() -> None:
+    files = (
+        SOURCE_ROOT / "domain" / "dock_registry.py",
+        SOURCE_ROOT / "domain" / "truck_operation.py",
+        SOURCE_ROOT / "domain" / "unloading_errors.py",
+        SOURCE_ROOT / "domain" / "unloading_models.py",
+    )
+    forbidden_tokens = (
+        "hogflow.adapters",
+        "hogflow.counting",
+        "hogflow.detection",
+        "hogflow.pipeline",
+        "hogflow.sessions",
+        "hogflow.storage",
+        "hogflow.streaming",
+        "hogflow.tracking",
+        "cv2",
+        "numpy",
+        "supervision",
+        "ultralytics",
+        "sqlite",
     )
 
     violations = [

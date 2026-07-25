@@ -10,11 +10,11 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 7 lifecycle-aware directional counting
-infrastructure implemented - explicit positive direction, reverse and duplicate
-decisions, atomic frame updates, and reconnect-isolated lifecycle totals are
-implemented; representative pig duplicate-counting and reverse-movement
-validation remains pending; Phase 8 has not started.
+Current repository status: Phase 8.1 multi-dock unloading domain infrastructure
+implemented - exactly four independent docks, variable ordered sessions, mixed
+pig types, copy-on-write transitions, occupancy rules, and deterministic
+completed-session totals are implemented; Phase 7 lifecycle integration remains
+pending for Phase 8.2.
 
 ## Project identity
 
@@ -349,6 +349,30 @@ NOT EMPIRICALLY COMPLETED in Phase 7:
 * representative ID-switch, fragmentation, dense-group, or occlusion analysis
 * session totals, persistence, UI, ground-truth count accuracy, or Phase 8
 
+IMPLEMENTED Phase 8.1 multi-dock unloading domain infrastructure:
+
+* Stable `DockId` values for exactly four physical docks and stable
+  `REGULAR`, `OPG`, `P12`, and `NAE` pig types.
+* Immutable ordered `UnloadingSession` values and a copy-on-write
+  `TruckOperation` aggregate with explicit planned, active, completed, and
+  cancelled transitions.
+* Variable session quantities, mixed-type trucks, one active session per
+  operation, strict sequence order, and terminal-state protection.
+* Completed-session truck totals and deterministic totals for all four pig
+  types, including zero values.
+* An immutable four-dock registry enforcing one non-terminal truck operation
+  per dock while preserving independent simultaneous dock state.
+* Explicit domain errors and atomic failure semantics independent from camera,
+  Phase 7 counting, persistence, networking, and UI.
+
+NOT IMPLEMENTED in Phase 8.1:
+
+* mapping an unloading session to a Phase 7 counting lifecycle
+* automatic transfer or finalization of live counts
+* persistence, SQLite, API, UI, networking, concurrency, or hardware control
+* automatic creation of three sessions or splitting around 60 pigs
+* Phase 8.2 or broader multi-dock orchestration
+
 ## Unique tracker counting concept
 
 IMPLEMENTED per-lifecycle policy and PLANNED session extension:
@@ -376,11 +400,14 @@ Tracking uncertainty remains a measured risk rather than something to hide. Rele
 
 When uncertainty cannot be resolved by a validated rule, the project preference is to create a review event instead of applying undocumented heuristics.
 
-## Three-section workflow and session model
+## Multi-dock unloading workflow and session model
 
-PLANNED prototype workflow:
+IMPLEMENTED Phase 8.1 pure domain and PLANNED live integration:
 
-The MVP models three sequential sections.
+The operational reference commonly uses three gate sections and approximately
+60 pigs per section, but neither value is a domain rule. Phase 8.1 models
+exactly four docks, each with one independent truck operation containing a
+variable number of ordered sessions.
 
 Conceptual session flow:
 
@@ -395,18 +422,23 @@ IDLE
 
 Session constraints:
 
-* Only one session may be active at a time in the MVP.
-* The operator manually starts and ends section sessions.
-* Session-scoped counted tracker IDs must reset between sessions.
-* Automatic gate, door, or section detection is out of scope unless explicitly approved in a future phase.
+* Only one session may be active within one truck operation.
+* Different docks may operate independently at the same time.
+* Each session has one explicit pig type; one truck may contain several types.
+* Sessions are added only while an operation is planned.
+* The operator will eventually start and end sessions through later layers.
+* Phase 8.2 must explicitly map each session to an isolated Phase 7 lifecycle.
+* Automatic gate, door, or section detection remains out of scope.
 
-Each session should support at least:
+Each implemented Phase 8.1 session supports:
 
-* section number
+* session ID
+* positive sequence number
+* pig type
 * start time
 * end time
-* AI count
-* optional ground-truth count
+* optional expected count
+* domain-assigned actual count
 * status
 
 ## Operator MVP User Interface
@@ -586,7 +618,9 @@ Phase 6 offline evaluation infrastructure has deterministic synthetic evidence,
 but representative pig replay, human crossing-event ground truth, and line
 calibration remain pending. Phase 7 lifecycle counting has deterministic
 synthetic evidence only; representative reverse/duplicate validation and RTSP
-production validation remain pending. Phase 8 has not started.
+production validation remain pending. Phase 8.1 pure unloading-domain
+infrastructure is implemented; Phase 8.2 live counting integration has not
+started.
 
 ## Pilot readiness phase
 
@@ -702,23 +736,28 @@ IMPLEMENTED at repository level:
 * bounded counted-identity capacity and reconnect-isolated counting lifecycle
 * serial Phase 7 live composition, optional preview, telemetry, and technical CLI
 * synthetic Phase 7 policy, atomicity, reconnect, privacy, architecture, and regression tests
+* immutable Phase 8.1 dock, pig-type, session, total, and operation models
+* copy-on-write truck-operation transitions with variable ordered sessions
+* one-active-session, terminal-state, timestamp, and completed-total rules
+* immutable four-dock occupancy registry with independent current operations
+* synthetic Phase 8.1 lifecycle, mixed-truck, atomicity, isolation, and architecture tests
 
 Not yet implemented:
 
 * representative pig line-position evaluation and calibrated line selection
 * representative pig reverse-movement and duplicate-counting validation
-* Phase 8 through Phase 16
+* Phase 8.2 and Phase 9 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
 * pig-specific tracking evaluation
-* operational session management
+* Phase 7 lifecycle integration with unloading sessions
 * receiving batches or groups
 * exception-event management
 * SQLite event storage
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 7 lifecycle-aware directional counting
-infrastructure implemented - representative pig duplicate-counting and
-reverse-movement validation remains pending; Phase 8 has not started.
+Current roadmap status: Phase 8.1 multi-dock unloading domain infrastructure
+implemented - representative pig validation and integration with Phase 7
+remain pending; Phase 8.2 has not started.

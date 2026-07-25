@@ -16,11 +16,10 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 7 lifecycle-aware directional counting
-infrastructure implemented - explicit positive direction, reverse and duplicate
-decisions, atomic frame updates, and reconnect-isolated lifecycle totals are
-implemented; representative pig duplicate-counting and reverse-movement
-validation remains pending; Phase 8 has not started.
+Current roadmap status: Phase 8.1 multi-dock unloading domain infrastructure
+implemented - four isolated docks, variable ordered sessions, mixed pig types,
+copy-on-write transitions, occupancy rules, and deterministic completed-session
+totals are implemented; Phase 7 integration remains pending for Phase 8.2.
 
 ## Official project memory
 
@@ -108,6 +107,14 @@ increments once; repeated positives and reverse events remain explicit
 zero-increment decisions. Reconnect creates a fresh total and counted-identity
 set. This is a lifecycle diagnostic, not a session result or validated
 biological pig count.
+
+Phase 8.1 introduces a separate pure operational domain for four unloading
+docks. Each `TruckOperation` contains a variable number of ordered
+single-pig-type sessions, supports mixed-type trucks, enforces one active
+session per operation, and derives totals from completed sessions. The
+approximately 60-pig and commonly three-section observations are references,
+not hardcoded rules. Phase 8.1 does not connect sessions to Phase 7, persist
+operations, or provide UI/network integration.
 
 ## Phase 0 documentation
 
@@ -310,6 +317,21 @@ disabled by default.
 * [Phase 7 validation](docs/phase_7/phase_7_validation.md)
 * [Phase 7 summary](docs/phase_7/phase_7_summary.md)
 
+## Phase 8
+
+Phase 8.1 supplies the immutable unloading domain only:
+
+* exactly four typed docks with independent occupancy;
+* stable `REGULAR`, `OPG`, `P12`, and `NAE` pig types;
+* variable ordered sessions and mixed-type truck operations;
+* atomic copy-on-write lifecycle transitions;
+* deterministic completed-session totals by truck and pig type;
+* no camera, Phase 7 integration, persistence, networking, API, or UI.
+
+* [Phase 8.1 unloading domain](docs/phase_8/phase_8_1_unloading_domain.md)
+* [Phase 8.1 validation](docs/phase_8/phase_8_1_validation.md)
+* [Phase 8.1 summary](docs/phase_8/phase_8_1_summary.md)
+
 ## High-level pipeline
 
 Production input through lifecycle directional decisions implemented through
@@ -365,7 +387,8 @@ TRACKING REPLAY
 * Phase 5: implemented through authorized Phase 5.4 event-only live crossing; empirical pig validation remains absent
 * Phase 6: evaluation infrastructure implemented; representative pig line-position evaluation remains pending
 * Phase 7: lifecycle-aware directional counting infrastructure implemented; representative duplicate/reverse validation remains pending
-* Phase 8 through Phase 16: not started
+* Phase 8.1: multi-dock unloading domain infrastructure implemented; Phase 7 lifecycle integration remains pending
+* Phase 8.2 and Phase 9 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
 The source-controlled repository contains no real pig video and makes no claim
@@ -401,8 +424,9 @@ and reverses do not decrement it. Real pig annotation may be incomplete, and no
 real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific
-tracking evaluation, sessions, SQLite persistence, operator UI, live counting
-ground-truth comparison, analytics, or pilot workflow. Tracker ID switches and
-fragmentation remain count risks. OpenCV backend support, timeouts, and camera
+tracking evaluation, live-to-session counting integration, SQLite persistence,
+operator UI, live counting ground-truth comparison, analytics, or pilot
+workflow. The Phase 8.1 unloading domain is synthetic and in-memory only.
+Tracker ID switches and fragmentation remain count risks. OpenCV backend support, timeouts, and camera
 setting compliance vary by platform. Synthetic CI, training, and streaming
 tests do not prove real pig-video, model, camera, tracking, or counting quality.

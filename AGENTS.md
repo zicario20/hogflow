@@ -162,6 +162,17 @@ Phase 8 remains responsible for session scope.
 
 Build three-section session manager.
 
+Authorized Phase 8 subphase:
+
+* Phase 8.1 — Multi-Dock Unloading Domain Model and Rules.
+
+Phase 8.1 models exactly four independently occupied docks and a variable
+number of ordered single-pig-type unloading sessions per truck operation. The
+commonly observed three gate sections and approximately 60 pigs per section
+are operational references, not aggregate limits or automatic defaults.
+Phase 8.1 is pure domain logic and does not integrate the Phase 7 counting
+lifecycle; that application boundary belongs to Phase 8.2.
+
 ### Phase 9
 
 Build Operator MVP User Interface.
@@ -379,7 +390,10 @@ When uncertainty cannot be resolved by a validated rule, prefer creating a revie
 
 ## 11. Session rules
 
-The prototype models three sequential sections.
+The original prototype concept models three sequential physical sections. The
+authorized Phase 8.1 domain generalizes this into a variable number of ordered
+sessions because a small or future unloading group must not require three empty
+records.
 
 Conceptual flow:
 
@@ -392,11 +406,14 @@ IDLE
 → CONFIRM OR FLAG FOR REVIEW
 → COMPLETED
 
-Only one session may be active at a time in the MVP.
+Only one session may be active at a time within one truck operation. Different
+docks may each have one active truck operation and session independently.
 
 A session should support:
 
-* section number
+* sequence number
+* dock ID
+* pig type
 * start time
 * end time
 * AI count
@@ -410,6 +427,10 @@ The operator manually starts and ends section sessions.
 Do not implement automatic gate, door, or section detection unless explicitly requested by a future approved phase.
 
 Session-scoped counted tracker IDs must not leak into a new session.
+
+Phase 8.1 does not connect these sessions to Phase 7. Phase 8.2 must define
+that lifecycle integration explicitly rather than importing live counting into
+the pure operational domain.
 
 ---
 

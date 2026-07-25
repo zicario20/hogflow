@@ -1052,3 +1052,77 @@ Frame updates are all-or-nothing, duplicate suppression survives temporary
 misses, memory has a hard limit, and the Phase 5.1 buffer remains the only
 queue. Deployments must size capacity for a lifecycle; reaching it stops the
 run safely rather than returning a misleading partial count.
+
+## ADR-049 - Keep Phase 8.1 unloading operations in the pure domain
+
+Status: Accepted
+
+### Context
+
+Phase 8.1 needs operational docks, truck operations, and unloading sessions,
+but Phase 7 integration, persistence, networking, and UI are later concerns.
+Putting these entities in `counting`, `pipeline`, or a concrete service would
+couple operational rules to live computer vision before the integration
+contract is approved.
+
+### Decision
+
+Implement Phase 8.1 in `hogflow.domain` using frozen, slotted dataclasses and
+explicit domain errors. The package may depend only on `hogflow.core` and the
+standard library. Phase 8.1 imports no Phase 7, camera, pipeline, persistence,
+network, or UI type.
+
+### Consequences
+
+Truck and session rules remain deterministic and testable without models,
+camera, database, or live counts. Phase 8.2 must introduce an explicit
+application boundary rather than making the domain depend on Phase 7.
+
+## ADR-050 - Use variable ordered sessions and copy-on-write transitions
+
+Status: Accepted
+
+### Context
+
+The physical workflow commonly has three gate sections and roughly 60 pigs per
+section, but small and mixed trucks require different session quantities.
+Mutable entities would also make partial failure and caller-owned collection
+leaks harder to audit.
+
+### Decision
+
+Model a variable tuple of single-pig-type sessions with positive unique
+sequence numbers and no maximum. Additions are allowed only while the
+operation is planned. One session may be active per operation; lower-sequence
+sessions must be terminal before a later one starts. Every transition returns
+a new aggregate after full validation.
+
+### Consequences
+
+One, two, three, and more-than-three-session operations are valid. Neither 60
+pigs nor three sessions is enforced. Failed additions and transitions preserve
+the prior value without rollback machinery.
+
+## ADR-051 - Model four independent current dock occupancies without history
+
+Status: Accepted
+
+### Context
+
+Four physical docks may unload different trucks simultaneously. Phase 8.1
+requires occupancy isolation but does not authorize persistence, concurrent
+command handling, or broader orchestration.
+
+### Decision
+
+Use one immutable `DockOperationRegistry` holding at most one current
+`TruckOperation` record per `DockId`. A non-terminal operation occupies its
+dock. Completion or cancellation makes the dock available, and registering a
+new planned operation replaces the prior terminal current record.
+
+### Consequences
+
+Dock state cannot leak and occupancy failures are atomic. The registry is not
+an audit log; replacing terminal records loses in-memory history by design.
+Phase 10 remains responsible for persistence, and concurrency remains outside
+Phase 8.1.
