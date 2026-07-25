@@ -68,6 +68,19 @@ def test_update_and_reset_require_started_lifecycle_and_close_is_idempotent() ->
     assert counter.statistics().closes == 1
 
 
+def test_fresh_start_after_close_resets_current_lifecycle_gauges() -> None:
+    counter = _started_counter()
+    _update(counter, 1, crossing_event(1, 1, POSITIVE))
+    counter.close()
+
+    counter.start("camera", "crossing-lifecycle-2")
+
+    statistics = counter.statistics()
+    assert statistics.lifecycle_directional_count == 0
+    assert statistics.counted_identities_current == 0
+    assert statistics.last_frame_sequence is None
+
+
 def test_positive_simple_and_repeated_positive_count_once() -> None:
     counter = _started_counter()
     first = _update(counter, 1, crossing_event(1, 1, POSITIVE))

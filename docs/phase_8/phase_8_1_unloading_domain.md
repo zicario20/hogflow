@@ -3,7 +3,8 @@
 ## Status
 
 Phase 8.1 pure unloading-domain infrastructure is implemented. Integration
-with the Phase 7 counting lifecycle remains explicitly deferred to Phase 8.2.
+with the Phase 7 counting lifecycle is explicitly outside this phase and is
+implemented separately by Phase 8.2.
 
 This is deterministic domain infrastructure backed by synthetic tests. It is
 not an operational plant deployment and does not validate pig-count accuracy.
@@ -231,5 +232,5 @@ Phase 8.1 does not implement:
 - gate, hardware, ERP, scheduling, authentication, or pig-type recognition;
 - automatic three-session creation or 60-pig splitting.
 
-Phase 8.2 is responsible for defining the explicit adapter/application boundary
-between one unloading session and one Phase 7 counting lifecycle.
+Phase 8.2 defines the separate application boundary between one unloading
+session and one Phase 7 counting lifecycle without changing this domain.

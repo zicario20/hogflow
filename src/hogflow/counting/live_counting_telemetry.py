@@ -43,6 +43,9 @@ class LiveCountingTelemetry:
 
     def record_started(self) -> None:
         with self._lock:
+            self._current_total = 0
+            self._current_identities = 0
+            self._last_frame = None
             self._health = LiveCountingHealthState.RUNNING
             self._last_error = LiveCountingErrorCategory.NONE
 

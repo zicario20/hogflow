@@ -2,8 +2,9 @@
 
 ## Status
 
-Phase 8.1 multi-dock unloading domain infrastructure implemented; Phase 7
-counting lifecycle integration remains pending for Phase 8.2.
+Phase 8.1 multi-dock unloading domain infrastructure implemented. Phase 7
+counting lifecycle integration was deferred from this phase and was
+subsequently implemented by Phase 8.2.
 
 ## Delivered
 
@@ -47,5 +48,6 @@ mapping remain pending.
 
 ## Next boundary
 
-Phase 8.2 may integrate one active unloading session with an explicitly owned
-Phase 7 counting lifecycle. Phase 8.2 has not started.
+Phase 8.2 subsequently integrated one active unloading session with one
+explicitly owned Phase 7 counting lifecycle. That later service does not alter
+the Phase 8.1 domain boundary documented here.

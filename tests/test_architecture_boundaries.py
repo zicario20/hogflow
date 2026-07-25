@@ -207,6 +207,21 @@ FORBIDDEN_IMPORTS = {
         "training",
         "video",
     },
+    "sessions": {
+        "adapters",
+        "annotation",
+        "config",
+        "data",
+        "detection",
+        "evaluation",
+        "models",
+        "pipeline",
+        "storage",
+        "streaming",
+        "tracking",
+        "training",
+        "video",
+    },
     "tracking": {
         "adapters",
         "annotation",
@@ -247,6 +262,9 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "domain" / "truck_operation.py",
     SOURCE_ROOT / "domain" / "unloading_errors.py",
     SOURCE_ROOT / "domain" / "unloading_models.py",
+    SOURCE_ROOT / "sessions" / "counting_service.py",
+    SOURCE_ROOT / "sessions" / "errors.py",
+    SOURCE_ROOT / "sessions" / "models.py",
     SOURCE_ROOT / "counting" / "line_crossing.py",
     SOURCE_ROOT / "counting" / "live_crossing.py",
     SOURCE_ROOT / "counting" / "live_counting.py",
@@ -582,6 +600,9 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.pipeline.live_counting_pipeline",
         "hogflow.video.live_detection_cli",
         "hogflow.sessions",
+        "hogflow.sessions.counting_service",
+        "hogflow.sessions.errors",
+        "hogflow.sessions.models",
         "hogflow.storage",
         "hogflow.domain",
         "hogflow.domain.dock_registry",
@@ -764,6 +785,56 @@ def test_phase_8_1_domain_has_no_phase_7_or_infrastructure_dependency() -> None:
         for source_file in files
         for token in forbidden_tokens
         if token in source_file.read_text(encoding="utf-8").lower()
+    ]
+
+    assert not violations
+
+
+def test_phase_8_2_sessions_layer_uses_only_domain_and_counting_boundaries() -> None:
+    files = (
+        SOURCE_ROOT / "sessions" / "counting_service.py",
+        SOURCE_ROOT / "sessions" / "errors.py",
+        SOURCE_ROOT / "sessions" / "models.py",
+    )
+    forbidden_tokens = (
+        "hogflow.adapters",
+        "hogflow.detection",
+        "hogflow.pipeline",
+        "hogflow.storage",
+        "hogflow.streaming",
+        "hogflow.tracking",
+        "cv2",
+        "numpy",
+        "supervision",
+        "ultralytics",
+        "sqlite",
+        "threading",
+        "asyncio",
+    )
+
+    violations = [
+        f"{source_file.name}: {token}"
+        for source_file in files
+        for token in forbidden_tokens
+        if token in source_file.read_text(encoding="utf-8").lower()
+    ]
+
+    assert not violations
+
+
+def test_phase_7_and_phase_8_1_do_not_depend_back_on_sessions() -> None:
+    files = (
+        SOURCE_ROOT / "counting" / "live_counting.py",
+        SOURCE_ROOT / "counting" / "live_counting_models.py",
+        SOURCE_ROOT / "counting" / "live_counting_ports.py",
+        SOURCE_ROOT / "domain" / "truck_operation.py",
+        SOURCE_ROOT / "domain" / "unloading_models.py",
+    )
+
+    violations = [
+        source_file.name
+        for source_file in files
+        if "hogflow.sessions" in source_file.read_text(encoding="utf-8").lower()
     ]
 
     assert not violations

@@ -10,11 +10,11 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 8.1 multi-dock unloading domain infrastructure
-implemented - exactly four independent docks, variable ordered sessions, mixed
-pig types, copy-on-write transitions, occupancy rules, and deterministic
-completed-session totals are implemented; Phase 7 lifecycle integration remains
-pending for Phase 8.2.
+Current repository status: Phase 8.2 unloading-session/counting integration
+implemented - one active unloading session owns one isolated Phase 7 lifecycle,
+completion transfers its final positive total exactly once, cancellation
+discards unfinished counting, and domain/counting dependencies remain
+one-directional. Runtime multi-dock orchestration remains pending.
 
 ## Project identity
 
@@ -373,16 +373,44 @@ NOT IMPLEMENTED in Phase 8.1:
 * automatic creation of three sessions or splitting around 60 pigs
 * Phase 8.2 or broader multi-dock orchestration
 
+IMPLEMENTED Phase 8.2 unloading-session/counting integration:
+
+* A pure `hogflow.sessions` application service consumes immutable Phase 8.1
+  operations and the public Phase 7 `LiveDirectionalCounter` protocol.
+* One active unloading session owns one source, crossing lifecycle, and
+  counting lifecycle binding with immutable provenance.
+* Sequential sessions receive fresh Phase 7 lifecycle generations; counted
+  identities, current totals, and frame-order state do not leak.
+* Phase 7 remains solely responsible for positive direction, duplicate
+  suppression, reverse decisions, counted identities, capacity, and stale
+  requests.
+* Completion closes Phase 7 and transfers the last validated lifecycle total
+  exactly once into the immutable completed session.
+* Cancellation closes Phase 7, discards unfinished counting, and preserves
+  previously completed sessions.
+* Prospective domain transitions are committed only after lifecycle start or
+  close succeeds.
+* Reused lifecycle IDs and crossing results outside the active source,
+  lifecycle, or timestamp boundary are rejected.
+
+NOT IMPLEMENTED in Phase 8.2:
+
+* simultaneous coordination across docks
+* camera or live-pipeline orchestration
+* aggregation across reconnect lifecycles inside one physical session
+* persistence, SQLite, API, UI, networking, threading, or async execution
+* automatic session creation, scheduling, or Phase 8.3
+
 ## Unique tracker counting concept
 
-IMPLEMENTED per-lifecycle policy and PLANNED session extension:
+IMPLEMENTED per-lifecycle policy and session transfer:
 
 * HogFlow counts unique tracked individuals, not per-frame detections.
 * A pig seen across many frames must not increment the count once per frame.
 * Phase 7 maintains lifecycle-qualified counted identities for one crossing
   lifecycle.
-* Phase 8 remains responsible for session scope; Phase 7 totals are not session
-  totals.
+* Phase 8.2 may finalize one Phase 7 total as one unloading-session
+  `actual_count`; that transfer does not make it a validated biological count.
 
 ## Directional crossing and reverse movement rules
 
@@ -402,7 +430,7 @@ When uncertainty cannot be resolved by a validated rule, the project preference 
 
 ## Multi-dock unloading workflow and session model
 
-IMPLEMENTED Phase 8.1 pure domain and PLANNED live integration:
+IMPLEMENTED Phase 8.1 pure domain and Phase 8.2 application integration:
 
 The operational reference commonly uses three gate sections and approximately
 60 pigs per section, but neither value is a domain rule. Phase 8.1 models
@@ -427,7 +455,7 @@ Session constraints:
 * Each session has one explicit pig type; one truck may contain several types.
 * Sessions are added only while an operation is planned.
 * The operator will eventually start and end sessions through later layers.
-* Phase 8.2 must explicitly map each session to an isolated Phase 7 lifecycle.
+* Phase 8.2 maps each started session to one isolated Phase 7 lifecycle.
 * Automatic gate, door, or section detection remains out of scope.
 
 Each implemented Phase 8.1 session supports:
@@ -440,6 +468,11 @@ Each implemented Phase 8.1 session supports:
 * optional expected count
 * domain-assigned actual count
 * status
+
+Phase 8.2 starts that session and its counter lifecycle together, delegates
+crossing results to Phase 7, and transfers the final positive-direction total
+only when completion closes the lifecycle successfully. Cancellation closes
+the lifecycle without transferring its unfinished total.
 
 ## Operator MVP User Interface
 
@@ -619,7 +652,8 @@ but representative pig replay, human crossing-event ground truth, and line
 calibration remain pending. Phase 7 lifecycle counting has deterministic
 synthetic evidence only; representative reverse/duplicate validation and RTSP
 production validation remain pending. Phase 8.1 pure unloading-domain
-infrastructure is implemented; Phase 8.2 live counting integration has not
+infrastructure and Phase 8.2 sequential session/counting integration are
+implemented with synthetic evidence; runtime multi-dock orchestration has not
 started.
 
 ## Pilot readiness phase
@@ -741,23 +775,29 @@ IMPLEMENTED at repository level:
 * one-active-session, terminal-state, timestamp, and completed-total rules
 * immutable four-dock occupancy registry with independent current operations
 * synthetic Phase 8.1 lifecycle, mixed-truck, atomicity, isolation, and architecture tests
+* immutable Phase 8.2 session/counting lifecycle and finalization provenance
+* one-operation sequential `UnloadingSessionCountingService`
+* exactly-once final count transfer and cancellation discard behavior
+* fresh Phase 7 current gauges and identity state for sequential sessions
+* synthetic Phase 8.2 lifecycle, transfer, reuse, cancellation, failure, and architecture tests
 
 Not yet implemented:
 
 * representative pig line-position evaluation and calibrated line selection
 * representative pig reverse-movement and duplicate-counting validation
-* Phase 8.2 and Phase 9 through Phase 16
+* Phase 8.3 and Phase 9 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
 * pig-specific tracking evaluation
-* Phase 7 lifecycle integration with unloading sessions
+* simultaneous runtime coordination of several dock/session counters
 * receiving batches or groups
 * exception-event management
 * SQLite event storage
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 8.1 multi-dock unloading domain infrastructure
-implemented - representative pig validation and integration with Phase 7
-remain pending; Phase 8.2 has not started.
+Current roadmap status: Phase 8.2 unloading-session/Phase 7 integration
+implemented with synthetic evidence. Representative pig validation,
+cross-reconnect session policy, and multi-dock runtime coordination remain
+pending; Phase 8.3 has not started.

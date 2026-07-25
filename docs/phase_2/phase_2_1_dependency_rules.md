@@ -24,6 +24,9 @@ Phase 7 adds lifecycle directional decisions in `counting`.
 Phase 8.1 adds pure multi-dock unloading aggregates in `domain`; those
 aggregates deliberately do not import Phase 7 or the future session
 integration layer.
+Phase 8.2 adds one sequential application coordinator in `sessions`; it may
+consume the Phase 8.1 domain and Phase 7 public counting interfaces, while
+neither dependency imports back from `sessions`.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -41,6 +44,7 @@ Implemented direction:
 * `evaluation dataset selection CLI → core`
 * `evaluation line positions → counting/tracking models/core`
 * `domain unloading models/aggregates → core`
+* `sessions application coordination → domain/counting public interfaces/core`
 * `annotation models/policy/YOLO/manifest → evaluation models/models/core`
 * `data splitting/frame planning → annotation models/core/data`
 * `frame extraction → data planning/annotation models/core/OpenCV`
@@ -86,7 +90,7 @@ modules may consume immutable tracking-domain models but never tracker adapters.
 | `streaming` | Framework-neutral live-frame contracts, immutable packets, source configuration, bounded buffering, health, lifecycle, reconnect policy, and synthetic source. | `core` and Python standard library | `adapters`, OpenCV, NumPy, Torch, Ultralytics, Supervision, detection, tracking, counting, pipeline, sessions, storage, UI logic |
 | `pipeline` | Synchronous generic counting and serial live detector/tracker/crossing orchestration with immutable results. | `video`, `detection`, `tracking`, `streaming`, `models`, `counting`; `core/config` when needed | Data inventory, concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated crossing geometry |
 | `video` | Framework-neutral source contract plus CLI/output and OpenCV metadata infrastructure. | `models` for contract; `adapters`, `pipeline`, `counting`, `core`, `config` for generic entrypoint/output; `data` models/validation for metadata inspection | Sessions, storage, UI business logic, duplicated counting rules |
-| `sessions` | Future Phase 8.2 boundary between unloading sessions and counting lifecycles. | `core`, `domain`; Phase 8.2 may consume counting through approved orchestration | Video, detection/tracking implementations, direct UI code, persistence |
+| `sessions` | Phase 8.2 application boundary between one unloading session and one Phase 7 counting lifecycle. | `core`, `domain`, public `counting` interfaces/models | Adapters, video, detection/tracking implementations, pipeline, streaming, UI, persistence, networking |
 | `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | Video, detection, tracking, pipeline, direct UI code |
 | `domain` | Phase 8.1 immutable docks, pig types, unloading sessions, truck aggregate, and dock occupancy rules. | `core` only when necessary | Adapters, CV frameworks, video, detection, tracking, counting, pipeline, sessions, storage, networking, UI |
 
@@ -178,9 +182,17 @@ owns no counting policy.
 Phase 8.1 keeps operational unloading state inside `domain`. The copy-on-write
 `TruckOperation` aggregate and four-dock registry may depend only on shared
 expected-error types and the Python standard library. They do not import
-Phase 7 counting contracts or any pipeline. Phase 8.2 must introduce an
-explicit outward orchestration/application boundary rather than making the
-pure domain depend on live counting.
+Phase 7 counting contracts or any pipeline. Phase 8.2 introduces the explicit
+outward orchestration/application boundary rather than making the pure domain
+depend on live counting.
+
+Phase 8.2 implements that outward boundary in `sessions`.
+`UnloadingSessionCountingService` owns one operation and one sequential
+`LiveDirectionalCounter`, validates lifecycle provenance, and commits a
+prospective immutable session transition only after Phase 7 starts or closes
+successfully. Completion transfers the last validated lifecycle total once;
+cancellation transfers none. No live pipeline, camera, framework, queue,
+thread, persistence, network, or UI dependency is introduced.
 
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on
@@ -190,7 +202,7 @@ contracts and HogFlow models.
 
 Future roadmap work remains governed by lower-level dependencies:
 
-* `sessions → core/domain`
+* `sessions → core/domain/counting public interfaces`
 * `storage → core/domain/sessions`
 * `future UI → pipeline/sessions/storage`
 

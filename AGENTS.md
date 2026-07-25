@@ -165,6 +165,7 @@ Build three-section session manager.
 Authorized Phase 8 subphase:
 
 * Phase 8.1 — Multi-Dock Unloading Domain Model and Rules.
+* Phase 8.2 — Unloading Session ↔ Phase 7 Counting Lifecycle Integration.
 
 Phase 8.1 models exactly four independently occupied docks and a variable
 number of ordered single-pig-type unloading sessions per truck operation. The
@@ -172,6 +173,13 @@ commonly observed three gate sections and approximately 60 pigs per section
 are operational references, not aggregate limits or automatic defaults.
 Phase 8.1 is pure domain logic and does not integrate the Phase 7 counting
 lifecycle; that application boundary belongs to Phase 8.2.
+
+Phase 8.2 implements that boundary in `hogflow.sessions`: one active unloading
+session owns one isolated Phase 7 lifecycle, completion transfers its final
+positive-direction total exactly once, and cancellation discards unfinished
+counting. Phase 8.2 does not add multi-dock runtime orchestration, persistence,
+networking, API, UI, camera orchestration, concurrency, automatic session
+generation, or Phase 8.3.
 
 ### Phase 9
 
@@ -428,9 +436,11 @@ Do not implement automatic gate, door, or section detection unless explicitly re
 
 Session-scoped counted tracker IDs must not leak into a new session.
 
-Phase 8.1 does not connect these sessions to Phase 7. Phase 8.2 must define
-that lifecycle integration explicitly rather than importing live counting into
-the pure operational domain.
+Phase 8.1 does not import Phase 7. Phase 8.2 connects them through the
+application-oriented `sessions` package: every started unloading session owns
+one fresh Phase 7 lifecycle, completed lifecycle totals transfer exactly once,
+and cancelled lifecycle totals are discarded. Domain and counting packages
+must not depend back on this integration layer.
 
 ---
 

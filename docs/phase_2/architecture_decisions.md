@@ -1126,3 +1126,40 @@ Dock state cannot leak and occupancy failures are atomic. The registry is not
 an audit log; replacing terminal records loses in-memory history by design.
 Phase 10 remains responsible for persistence, and concurrency remains outside
 Phase 8.1.
+
+## ADR-052 - Coordinate one session and one Phase 7 lifecycle in the application layer
+
+Status: Accepted
+
+### Context
+
+Phase 8.1 owns immutable unloading rules while Phase 7 owns temporary identity,
+positive direction, reverse handling, duplicate suppression, capacity, and
+counting lifecycle state. Importing Phase 7 into the aggregate would make
+domain transitions depend on live processing. Importing sessions into counting
+would reverse the established dependency direction. A runtime manager for all
+four docks would also introduce Phase 8.3 concerns.
+
+### Decision
+
+Implement `UnloadingSessionCountingService` under `hogflow.sessions` for one
+`TruckOperation`. The service consumes only immutable Phase 8.1 values and the
+public `LiveDirectionalCounter` protocol. It binds one active session to one
+crossing/counting lifecycle, tracks only the latest validated Phase 7 total,
+closes the counter before committing terminal domain state, and retains one
+bounded immutable finalization record per coordinated session.
+
+Reuse one owned counter sequentially so Phase 7 lifecycle generations remain
+distinct. Reset current lifecycle telemetry gauges on every fresh Phase 7
+start; preserve aggregate diagnostics. Reject prior crossing or counting
+lifecycle IDs, and reject a reconnect lifecycle change inside an active session
+rather than silently combine totals.
+
+### Consequences
+
+Domain and counting remain independent, sequential sessions cannot share
+temporary identity state, and completion transfers one finalized total exactly
+once. Cancellation discards unfinished counting. A failed counter close leaves
+the immutable domain unchanged. The service deliberately does not coordinate
+simultaneous docks, persist results, run cameras, or aggregate reconnect
+lifecycles; those require later explicit phases.

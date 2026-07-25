@@ -1,5 +1,27 @@
-"""Future application integration for unloading-session lifecycles.
+"""Application coordination between unloading sessions and live counting."""
 
-Current status: PLANNED - Phase 8.2. Phase 8.1 domain entities live in
-``hogflow.domain`` and do not import this package.
-"""
+from hogflow.sessions.counting_service import UnloadingSessionCountingService
+from hogflow.sessions.errors import (
+    SessionCountingConfigurationError,
+    SessionCountingIntegrationError,
+    SessionCountingLifecycleError,
+    SessionCountingLifecycleReuseError,
+    SessionCountingTransferError,
+)
+from hogflow.sessions.models import (
+    FinalizedSessionCountingLifecycle,
+    SessionCountingLifecycle,
+    SessionCountingOutcome,
+)
+
+__all__ = [
+    "FinalizedSessionCountingLifecycle",
+    "SessionCountingConfigurationError",
+    "SessionCountingIntegrationError",
+    "SessionCountingLifecycle",
+    "SessionCountingLifecycleError",
+    "SessionCountingLifecycleReuseError",
+    "SessionCountingOutcome",
+    "SessionCountingTransferError",
+    "UnloadingSessionCountingService",
+]

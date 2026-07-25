@@ -16,10 +16,11 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 8.1 multi-dock unloading domain infrastructure
-implemented - four isolated docks, variable ordered sessions, mixed pig types,
-copy-on-write transitions, occupancy rules, and deterministic completed-session
-totals are implemented; Phase 7 integration remains pending for Phase 8.2.
+Current roadmap status: Phase 8.2 unloading-session/counting integration
+implemented - every started unloading session owns one isolated Phase 7
+lifecycle, completion transfers its final positive-direction total exactly
+once, and cancellation discards unfinished counting. Runtime multi-dock
+orchestration remains outside this phase.
 
 ## Official project memory
 
@@ -115,6 +116,12 @@ session per operation, and derives totals from completed sessions. The
 approximately 60-pig and commonly three-section observations are references,
 not hardcoded rules. Phase 8.1 does not connect sessions to Phase 7, persist
 operations, or provide UI/network integration.
+
+Phase 8.2 adds a pure application service under `hogflow.sessions`. It binds
+one active unloading session to one public Phase 7 counter lifecycle, prevents
+lifecycle reuse, resets temporary identity state between sessions, transfers
+the latest validated positive total exactly once on completion, and discards an
+unfinished total on cancellation. Domain and counting remain independent.
 
 ## Phase 0 documentation
 
@@ -319,7 +326,7 @@ disabled by default.
 
 ## Phase 8
 
-Phase 8.1 supplies the immutable unloading domain only:
+Phase 8.1 supplies the immutable unloading domain:
 
 * exactly four typed docks with independent occupancy;
 * stable `REGULAR`, `OPG`, `P12`, and `NAE` pig types;
@@ -331,6 +338,19 @@ Phase 8.1 supplies the immutable unloading domain only:
 * [Phase 8.1 unloading domain](docs/phase_8/phase_8_1_unloading_domain.md)
 * [Phase 8.1 validation](docs/phase_8/phase_8_1_validation.md)
 * [Phase 8.1 summary](docs/phase_8/phase_8_1_summary.md)
+
+Phase 8.2 supplies the sequential application integration:
+
+* one active unloading session owns one crossing/counting lifecycle;
+* Phase 7 alone owns positive, reverse, duplicate, and tracker-identity rules;
+* completed totals transfer exactly once into immutable session state;
+* cancelled sessions discard unfinished counting;
+* no simultaneous multi-dock runtime, persistence, API, UI, camera
+  orchestration, threading, or automatic session generation.
+
+* [Phase 8.2 session/counting integration](docs/phase_8/phase_8_2_session_counting_integration.md)
+* [Phase 8.2 validation](docs/phase_8/phase_8_2_validation.md)
+* [Phase 8.2 summary](docs/phase_8/phase_8_2_summary.md)
 
 ## High-level pipeline
 
@@ -351,7 +371,9 @@ LIVE CAMERA
 → LIFECYCLE DIRECTIONAL DECISIONS / LOCAL TELEMETRY
 
 Session totals, biological re-identification, persistence, and operator UI are
-not implemented in the live pipeline.
+not implemented in the live camera pipeline. Phase 8.2 can transfer a
+controlled Phase 7 lifecycle total into one unloading session, but it does not
+orchestrate that camera pipeline.
 
 Implemented generic Phase 2.3 development/video flow:
 
@@ -387,8 +409,9 @@ TRACKING REPLAY
 * Phase 5: implemented through authorized Phase 5.4 event-only live crossing; empirical pig validation remains absent
 * Phase 6: evaluation infrastructure implemented; representative pig line-position evaluation remains pending
 * Phase 7: lifecycle-aware directional counting infrastructure implemented; representative duplicate/reverse validation remains pending
-* Phase 8.1: multi-dock unloading domain infrastructure implemented; Phase 7 lifecycle integration remains pending
-* Phase 8.2 and Phase 9 through Phase 16: not started
+* Phase 8.1: multi-dock unloading domain infrastructure implemented
+* Phase 8.2: sequential unloading-session/Phase 7 lifecycle integration implemented; multi-dock runtime orchestration remains pending
+* Phase 8.3 and Phase 9 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
 The source-controlled repository contains no real pig video and makes no claim
@@ -426,7 +449,9 @@ implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific
 tracking evaluation, live-to-session counting integration, SQLite persistence,
 operator UI, live counting ground-truth comparison, analytics, or pilot
-workflow. The Phase 8.1 unloading domain is synthetic and in-memory only.
+workflow. The Phase 8.1 domain and Phase 8.2 lifecycle integration are
+synthetic and in-memory only. A reconnect changing the crossing lifecycle
+during one unloading session is rejected rather than merged.
 Tracker ID switches and fragmentation remain count risks. OpenCV backend support, timeouts, and camera
 setting compliance vary by platform. Synthetic CI, training, and streaming
 tests do not prove real pig-video, model, camera, tracking, or counting quality.

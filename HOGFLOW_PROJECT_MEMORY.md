@@ -4,12 +4,12 @@
 > `AGENTS.md`, no en sustitución de sus reglas normativas.
 
 Última reconstrucción integral: 25 de julio de 2026.
-Última actualización incremental: Phase 8.1, 25 de julio de 2026.
+Última actualización incremental: Phase 8.2, 25 de julio de 2026.
 
-Línea base técnica de Phase 8.1:
-`cc7e1304105a35c0a3a2d8421ffa172cf9c73153`
-(`Implement Phase 7 reverse and duplicate counting`). Phase 8.1 se publica
-mediante el commit `Implement Phase 8.1 unloading domain model`; su SHA final
+Línea base técnica de Phase 8.2:
+`8e8ddda23ab8360848fa3b639284e61087ce3fb6`
+(`Implement Phase 8.1 unloading domain model`). Phase 8.2 se publica mediante
+el commit `Implement Phase 8.2 session counting integration`; su SHA final
 debe consultarse con Git porque un documento no puede incluir de forma
 autorreferencial el SHA del mismo commit que lo contiene.
 
@@ -65,9 +65,10 @@ evidencia de error de conteo y gates explícitos antes de cualquier piloto.
 El resultado final no existe todavía. En el estado actual hay adquisición en
 vivo, integración de detector, tracking temporal, eventos geométricos live,
 conteo direccional por lifecycle y un dominio puro de cuatro docks y
-operaciones/sesiones de descarga. Faltan el detector de cerdos validado, la
-integración Phase 7-a-sesión de Phase 8.2, almacenamiento, interfaz y
-evaluación contra ground truth.
+operaciones/sesiones de descarga. Phase 8.2 conecta secuencialmente una sesión
+activa con un lifecycle Phase 7 y transfiere su total final. Faltan el detector
+de cerdos validado, la orquestación runtime multi-dock, almacenamiento,
+interfaz y evaluación contra ground truth.
 
 ### 1.3 Usuarios previstos
 
@@ -239,7 +240,7 @@ Camera
 | Virtual Line | Definir segmento finito y lado/dirección. | **IMPLEMENTADO** en Phase 1/2 finita y Phase 5.4 live normalizada; no calibrada con cerdos. |
 | Crossing Event | Emitir transiciones geométricas direccionales. | **IMPLEMENTADO** en Phase 1/2 y como evento live sin conteo en Phase 5.4. |
 | Counter | Incrementar una vez por identidad temporal elegible. | **IMPLEMENTADO** en Phase 1 finita y Phase 7 live por lifecycle; no es identidad biológica ni total de sesión. |
-| Session | Modelar una operación de descarga y sus grupos ordenados; luego vincularlos a counting. | Dominio puro **IMPLEMENTADO** en Phase 8.1; integración Phase 8.2 pendiente. |
+| Session | Modelar una operación de descarga y vincular cada grupo activo con un lifecycle counting aislado. | Dominio **IMPLEMENTADO** en Phase 8.1 e integración secuencial **IMPLEMENTADA** en Phase 8.2. |
 | Storage | Persistir sesiones y eventos. | **PLANNED**, Phase 10; paquete placeholder solamente. |
 | Dashboard | Interfaz del operador y revisión. | **PLANNED**, Phase 9; no existe UI operativa. |
 
@@ -265,9 +266,12 @@ Reglas:
 - detección no cuenta; tracking no detecta ni cuenta; preview no decide negocio.
 - el pipeline compone, pero no duplica geometría ni incrementa conteos por su
   cuenta.
-- `sessions` y `storage` son fronteras futuras y no deben contaminar visión.
+- `sessions` es el boundary de aplicación Phase 8.2 y puede consumir
+  `domain` y contratos públicos de `counting`; `storage` sigue futuro.
 - `domain` contiene Phase 8.1 y depende solo de `core`; no importa Phase 7,
   pipelines, frameworks, storage, networking ni UI.
+- `counting` no importa `sessions`; el coordinador de Phase 8.2 mantiene la
+  dirección sin ciclo.
 - modelos públicos son inmutables cuando es práctico: dataclasses `frozen` y
   `slots`, tuples y bytes empaquetados.
 - imports no deben abrir cámara, descargar modelos, crear bases de datos,
@@ -293,6 +297,8 @@ Reglas:
 | `LifecycleDirectionalCounter`, `LiveCountingResult` | `src/hogflow/counting/live_counting.py`, `live_counting_models.py` | Decisiones y total temporal Phase 7; no son una sesión. |
 | `UnloadingSession`, `TruckOperation` | `src/hogflow/domain/` | Entidad y aggregate copy-on-write Phase 8.1, independientes de live counting. |
 | `DockOperationRegistry` | `src/hogflow/domain/dock_registry.py` | Ocupación pura de cuatro docks; no es persistencia ni orquestación concurrente. |
+| `UnloadingSessionCountingService` | `src/hogflow/sessions/counting_service.py` | Boundary Phase 8.2 para un operation y un lifecycle de sesión a la vez. |
+| `SessionCountingLifecycle`, `FinalizedSessionCountingLifecycle` | `src/hogflow/sessions/models.py` | Provenance inmutable de binding y transferencia/cancelación terminal. |
 
 ### 3.4 Pipeline finito frente a pipeline en vivo
 
@@ -320,6 +326,8 @@ CameraSource → LiveStreamRunner → BoundedFrameBuffer → FramePacket
 Es stream-first, usa secuencias monotónicas por lifecycle, buffer fijo y
 prioriza el frame útil más reciente. Crossing y counting son opcionales y
 desactivados por default. Phase 8.1 no se conecta a este pipeline.
+Phase 8.2 tampoco orquesta este pipeline: consume resultados crossing
+controlados mediante el contrato público Phase 7 y finaliza una sesión.
 
 ### 3.5 `Tracker` finito frente a `LiveTracker`
 
@@ -380,7 +388,7 @@ desactivados por default. Phase 8.1 no se conecta a este pipeline.
 | `src/hogflow/counting/` | Geometría/eventos Phase 5.4 y política lifecycle Phase 7, además del contador genérico. |
 | `src/hogflow/pipeline/` | Orquestación genérica y composición serial live detection/tracking/crossing/counting. |
 | `src/hogflow/domain/` | Docks, tipos, sesiones de descarga, aggregate de truck y registry puro Phase 8.1. |
-| `src/hogflow/sessions/` | Placeholder de integración; Phase 8.2 no implementada. |
+| `src/hogflow/sessions/` | Coordinación Phase 8.2 entre una sesión activa y un lifecycle Phase 7. |
 | `src/hogflow/storage/` | Placeholder; Phase 10 no implementada. |
 | `tests/` | Suite sintética/unitaria/arquitectónica; ningún medio real. |
 | `data/` | Workspace local protegido; Git conserva README, ejemplos seguros y `.gitkeep` aprobados. |
@@ -396,8 +404,9 @@ CLIs relevantes:
 - `python -m hogflow.video.live_detection_cli`: detección, tracking, crossing y
   counting lifecycle opcionales; sin sesión ni persistencia.
 
-No hay aplicación de operador, dashboard, integración live-to-session ni base
-de datos. El dominio Phase 8.1 es solo memoria in-process copy-on-write.
+No hay aplicación de operador, dashboard, orquestación de cámara a sesión ni
+base de datos. Phase 8.2 es coordinación in-process secuencial y no un runtime
+multi-dock.
 
 ---
 
@@ -418,7 +427,8 @@ Resumen de madurez:
 | Phase 5.4 | Eventos live de cruce implementados. | Tracks sintéticos solamente. | Implementación completa; eventos reales no validados. |
 | Phase 6 | Evaluador offline de líneas implementado. | Replays/ground truth sintéticos. | Infraestructura completa; calibración representativa pendiente. |
 | Phase 7 | Política lifecycle de reversos y duplicates implementada. | Fixtures sintéticos solamente. | Infraestructura completa; deduplicación real no validada. |
-| Phase 8.1 | Dominio multi-dock de operaciones/sesiones implementado. | Escenarios sintéticos solamente. | Infraestructura pura completa; integración Phase 8.2 pendiente. |
+| Phase 8.1 | Dominio multi-dock de operaciones/sesiones implementado. | Escenarios sintéticos solamente. | Infraestructura pura completa. |
+| Phase 8.2 | Integración secuencial sesión/lifecycle implementada. | Eventos crossing y counts sintéticos solamente. | Infraestructura completa; runtime multi-dock y validación real pendientes. |
 
 ### 5.1 Phase 0 — Define problem and map process
 
@@ -675,16 +685,37 @@ Resumen de madurez:
   atomicidad y boundaries.
 - **Commit:** `Implement Phase 8.1 unloading domain model` (consultar SHA final
   en Git por la autorreferencia del documento).
-- **Estado:** infraestructura pura implementada; Phase 8.2 live counting
-  integration, concurrencia, persistencia y validación operacional pendientes.
+- **Estado:** infraestructura pura implementada; Phase 8.2 se implementó
+  posteriormente sin alterar el aggregate. Concurrencia, persistencia y
+  validación operacional siguen pendientes.
 
-### 5.17 Estado de las fases posteriores
+### 5.17 Phase 8.2 — Unloading Session ↔ Phase 7 Counting Lifecycle Integration
 
-Phase 8.2 y Phase 9–16 no están iniciadas. Sus límites normativos permanecen:
+- **Objetivo:** vincular exactamente una sesión activa con un lifecycle Phase 7
+  aislado y transferir su total final una sola vez.
+- **Entregado:** `UnloadingSessionCountingService`, provenance inmutable de
+  lifecycle/finalización, errores explícitos, start/update/complete/cancel
+  coordinados y reset de gauges actuales de Phase 7 al comenzar un lifecycle.
+- **Decisiones:** boundary en `hogflow.sessions`; domain y counting no importan
+  de vuelta; un counter se reutiliza solo secuencialmente; lifecycle IDs no se
+  reutilizan; completion/cancellation construyen transición prospectiva,
+  cierran counting y solo entonces hacen commit; reconnect lifecycle distinto
+  se rechaza en vez de combinar totales.
+- **Evidencia:** fixtures sintéticos de sesión única, secuenciales, mixed
+  OPG/regular, mismo tracker ID en lifecycles distintos, reversos, duplicates,
+  cancelación, reuse, timestamps, close failure, atomicidad y boundaries.
+- **Commit:** `Implement Phase 8.2 session counting integration` (consultar SHA
+  final en Git por la autorreferencia del documento).
+- **Estado:** integración técnica implementada; cámara-to-session, runtime
+  multi-dock, reconnect dentro de una sesión y validación real pendientes.
+
+### 5.18 Estado de las fases posteriores
+
+Phase 8.3 y Phase 9–16 no están iniciadas. Sus límites normativos permanecen:
 
 | Fase | Alcance normativo | Estado |
 | --- | --- | --- |
-| 8.2 | Integrar una sesión de descarga con un lifecycle Phase 7. | NOT STARTED |
+| 8.3 | Orquestación runtime multi-dock, solo tras especificación expresa. | NOT STARTED |
 | 9 | Operator MVP UI. | NOT STARTED |
 | 10 | SQLite para sesiones/eventos. | NOT STARTED |
 | 11 | Evaluación contra ground truth humano. | NOT STARTED |
@@ -766,6 +797,7 @@ tabla preserva su razonamiento operativo.
 | 049 | 8.1 | Entidades operativas en counting/pipeline o dominio puro. | Docks, sessions y truck aggregate en `hogflow.domain`, dependiente solo de `core`. | Phase 7/8.2, frameworks y persistencia quedan fuera. Aceptada. |
 | 050 | 8.1 | Tres sesiones/60 pigs hardcoded o grupos variables. | Tupla variable ordenada, additions solo en planned y transiciones copy-on-write. | Soporta grupos pequeños, mixed trucks y más de tres sesiones sin mutación parcial. Aceptada. |
 | 051 | 8.1 | Registry con historia/concurrencia o current record puro. | Un current record por cada uno de cuatro docks; terminal se puede reemplazar. | Aislamiento determinista sin fingir persistencia o seguridad concurrente. Aceptada. |
+| 052 | 8.2 | Importar counting en domain, importar sessions en counting o coordinar externamente. | `hogflow.sessions` consume aggregate inmutable y `LiveDirectionalCounter`; un operation/counter secuencial, close-before-commit y lifecycle IDs no reutilizables. | Transferencia exactamente una vez sin ciclo; runtime multi-dock/reconnect aggregation quedan fuera. Aceptada. |
 
 ---
 
@@ -796,8 +828,10 @@ tabla preserva su razonamiento operativo.
 | Expulsar IDs contados para liberar capacidad. | Rechazada en Phase 7 | Permitiría que un positivo repetido vuelva a incrementar silenciosamente. | Rediseño aprobado con semántica equivalente y evidencia; el default actual falla seguro. |
 | Combinar totales de reconnect/lifecycles. | Pospuesta | No existe sesión ni re-identificación biológica. | Phase 8+ con reglas explícitas y riesgos medidos. |
 | Crear siempre tres sesiones o usar 60 pigs como límite. | Rechazada en Phase 8.1 | Son referencias operativas, no invariantes; fallan para grupos pequeños y cambios futuros. | No reconsiderar como default automático; cualquier planificación futura requiere una regla aprobada. |
-| Importar Phase 7 directamente desde el aggregate. | Rechazada en Phase 8.1 | Acoplaría dominio operativo puro al pipeline live y adelantaría Phase 8.2. | Introducir un boundary de aplicación explícito en Phase 8.2. |
+| Importar Phase 7 directamente desde el aggregate. | Rechazada en Phase 8.1 | Acoplaría dominio operativo puro al pipeline live. | Resuelta en Phase 8.2 mediante boundary de aplicación; no reconsiderar en domain. |
 | Guardar historia completa en el dock registry. | Pospuesta | Phase 8.1 no autoriza persistencia y el registry representa solo ocupación actual. | Phase 10 con repositorio SQLite y modelo histórico aprobado. |
+| Coordinar cuatro counters/docks dentro del servicio Phase 8.2. | Pospuesta | Introduciría concurrencia y ownership multi-dock de Phase 8.3. | Solo con especificación explícita de Phase 8.3. |
+| Combinar automáticamente lifecycles tras reconnect dentro de una sesión. | Rechazada en Phase 8.2 | Puede sumar dos veces el mismo animal físico sin re-ID ni regla validada. | Política futura explícita con evidencia representativa. |
 
 ---
 
@@ -810,15 +844,19 @@ tabla preserva su razonamiento operativo.
 | Branch | `main` |
 | Línea base técnica de Phase 8.1 | `cc7e1304105a35c0a3a2d8421ffa172cf9c73153` |
 | `origin/main` al iniciar Phase 8.1 | Mismo SHA que la línea base |
+| Línea base técnica de Phase 8.2 | `8e8ddda23ab8360848fa3b639284e61087ce3fb6` |
+| `origin/main` al iniciar Phase 8.2 | Mismo SHA que la línea base |
 | Working tree al iniciar | Limpio |
 | Remote | `https://github.com/zicario20/hogflow.git` |
 | CI baseline Phase 8.1 | GitHub Actions `CI`, run `30167025451`, conclusión `success` para `cc7e1304105a35c0a3a2d8421ffa172cf9c73153` |
+| CI baseline Phase 8.2 | GitHub Actions `CI`, run `30170287436`, conclusión `success` para `8e8ddda23ab8360848fa3b639284e61087ce3fb6` |
 | Suite Phase 5.3 original | 453 passed; 1 warning de ByteTrack deprecated |
 | Suite de cierre Phase 5.3 | 465 passed; 1 warning de ByteTrack deprecated |
 | Suite Phase 5.4 | 524 passed; 1 warning de ByteTrack deprecated |
 | Suite local Phase 6 | 570 passed; 1 warning de ByteTrack deprecated |
 | Suite local Phase 7 | 625 passed; 1 warning de ByteTrack deprecated |
 | Suite local Phase 8.1 | 686 passed; 1 warning de ByteTrack deprecated |
+| Suite local Phase 8.2 | 707 passed; 1 warning de ByteTrack deprecated |
 | Python local verificado | 3.12.13; proyecto declara `>=3.10` |
 | Python CI | 3.12 en Ubuntu latest |
 
@@ -867,7 +905,8 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 - tracking de cerdos representativo y métricas de identidad;
 - evaluación representativa de posiciones con ground truth humano;
 - validación representativa del conteo lifecycle-aware, reversos y duplicados;
-- integración de sesiones Phase 8.1 con lifecycles Phase 7;
+- orquestación runtime simultánea de varias sesiones/docks;
+- agregación segura de reconnect lifecycles dentro de una sesión física;
 - SQLite, UI, dashboard, analytics y review clips;
 - evaluación contra ground truth y error de conteo;
 - RTSP production validation, multi-camera orchestration y piloto.
@@ -910,9 +949,11 @@ demás deudas permanecen explícitas.
 | HF-D023 | Alta para undercount | **INFERENCIA respaldada por diseño** | counted identity set Phase 7 | Reutilizar indebidamente un tracker ID dentro del mismo lifecycle puede bloquear un animal distinto. | Medir ID reuse y limitar lifecycles con reglas futuras explícitas. | Abierta empírica. |
 | HF-D024 | Alta entre reconnects | **HECHO VERIFICADO EN DISEÑO** | ADR-046; `LiveCountingPipeline` | Reset evita state leakage pero permite que el mismo animal físico contribuya en otro lifecycle; los totales no se combinan. | Phase 8/11 deben definir y evaluar límites operativos sin re-ID inventada. | Abierta; fuera de Phase 7. |
 | HF-D025 | Media de capacidad | **HECHO VERIFICADO** | `maximum_counted_identities` | Alcanzar el límite detiene el run para evitar eviction; una configuración insuficiente afecta disponibilidad. | Dimensionar por deployment y observar capacity errors; no expulsar IDs silenciosamente. | Riesgo explícito/fail-safe. |
-| HF-D026 | Alta para integración | **HECHO VERIFICADO** | `domain::TruckOperation`; `counting::LifecycleDirectionalCounter` | Phase 8.1 no define aún cómo un session lifecycle posee, inicia, finaliza o acepta un total Phase 7. | Phase 8.2 debe introducir un boundary explícito y pruebas de reset/finalización sin importar counting desde domain. | Abierta; Phase 8.2. |
+| HF-D026 | Alta para integración | **HECHO VERIFICADO** | `sessions::UnloadingSessionCountingService`; ADR-052 | Phase 8.1 no definía cómo una sesión posee, inicia, finaliza o acepta un total Phase 7. | Boundary Phase 8.2 implementado con lifecycle único, close-before-commit y transferencia exacta sin imports desde domain/counting. | Resuelta técnicamente en Phase 8.2; evidencia real pendiente. |
 | HF-D027 | Media operativa | **DECISIÓN DE DOMINIO, evidencia de planta pendiente** | `DockId`; `DockOperationRegistry` | Exactamente cuatro docks refleja el proceso autorizado actual, pero no ha sido validado como configuración portable ni concurrente. | Validar workflow autorizado; cualquier generalización requiere cambio de dominio aprobado. | Abierta empírica. |
 | HF-D028 | Media de historial | **HECHO VERIFICADO** | `DockOperationRegistry.register_operation` | Un nuevo truck reemplaza el current terminal record; no existe historial ni persistencia. | Phase 10 debe persistir operaciones/eventos antes de depender del registry para auditoría histórica. | Intencional en Phase 8.1. |
+| HF-D029 | Alta para continuidad operativa | **HECHO VERIFICADO EN DISEÑO** | `UnloadingSessionCountingService.update_counting` | Un reconnect que cambia crossing lifecycle durante una sesión activa no puede agregarse sin riesgo de doble conteo físico. | Rechazar el lifecycle distinto; definir política explícita y validarla antes de combinar lifecycles. | Abierta; no se inventa re-ID. |
+| HF-D030 | Media de runtime | **HECHO VERIFICADO** | `UnloadingSessionCountingService` | Phase 8.2 coordina un solo operation/counter secuencial y no ejecuta cuatro docks simultáneos. | Especificar Phase 8.3 con ownership, fallos y aislamiento sin adelantar concurrencia. | Fuera de Phase 8.2. |
 
 ---
 
@@ -1025,20 +1066,22 @@ de estas métricas de conteo tiene todavía resultado empírico con cerdos.
 
 ### 12.1 Siguiente trabajo confirmado
 
-**HECHO VERIFICADO:** el owner autorizó Phase 8.1 como dominio puro para cuatro
-docks y operaciones con sesiones variables. La implementación no importa
-Phase 7 y no añade storage, networking o UI.
+**HECHO VERIFICADO:** Phase 8.2 conecta secuencialmente una sesión activa de
+Phase 8.1 con un lifecycle Phase 7 aislado, transfiere exactamente una vez el
+total final al completar y descarta el total parcial al cancelar. El aggregate
+de dominio y el contador no dependen del nuevo boundary de aplicación.
 
-**Recomendación actual:** auditar Phase 8.1 y su CI antes de especificar Phase
-8.2. La evaluación representativa pendiente de Phase 6/7 debe permanecer
-explícita y no confundirse con las pruebas sintéticas del aggregate.
+**Recomendación actual:** auditar Phase 8.2 y verificar su CI antes de comenzar
+Phase 8.3. La evaluación representativa pendiente de Phase 6/7/8 debe
+permanecer explícita y no confundirse con los tests sintéticos.
 
 ### 12.2 Siguiente fase normativa
 
-Phase 8.2 debe integrar una sesión activa de Phase 8.1 con un lifecycle Phase 7
-sin copiar reglas del contador. Debe definir ownership, start, finalización,
-reset/reconnect, transferencia del total final y errores atómicos sin convertir
-IDs temporales en identidad biológica.
+Phase 8.3 es el siguiente subpaso recomendado dentro de Phase 8 y debe
+especificar la coordinación runtime de operaciones independientes en varios
+docks. Debe reutilizar el servicio secuencial Phase 8.2 por dock, definir
+ownership y aislamiento de fallos y conservar la separación respecto a cámara,
+storage, networking y UI.
 
 Fuera del siguiente trabajo salvo aprobación expresa:
 
@@ -1046,24 +1089,26 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 - Operator MVP UI de Phase 9;
 - re-identificación, net count o decremento por reverso;
 - combinar cámaras o reconnects sin regla validada;
+- async/threading/concurrencia sin una necesidad y política explícitas;
 - afirmar count accuracy desde fixtures sintéticos.
 
-### 12.3 Condiciones de inicio de Phase 8.2
+### 12.3 Condiciones de inicio de Phase 8.3
 
-- auditoría técnica y CI de Phase 8.1 verificados;
-- límites entre operation, unloading session y counting lifecycle revisados;
-- ownership de un lifecycle Phase 7 por sesión especificado;
-- riesgos de reconnect, ID switch, fragmentación y total parcial visibles;
+- auditoría técnica y CI de Phase 8.2 verificados;
+- ownership de un servicio/counter por dock especificado;
+- aislamiento de fallos, reset y cierre entre docks definido;
+- riesgos de reconnect, ID switch, fragmentación, total parcial y resource
+  ownership visibles;
 - ninguna dependencia de storage/UI adelantada;
-- actualización de esta memoria incluida en el commit autorizado.
+- alcance Phase 8.3 autorizado explícitamente.
 
 ### 12.4 Criterios mínimos del siguiente cierre
 
-- ninguna regresión Phase 0–7;
-- Phase 8.2 limitada a integración session/counting autorizada;
-- evento geométrico, decisión lifecycle y sesión separados;
+- ninguna regresión Phase 0–8.2;
+- Phase 8.3 limitada a coordinación multi-dock autorizada;
+- operation, sesión, lifecycle counting y runtime por dock separados;
 - ID switches, fragmentación y reconnect tratados como riesgos observables;
-- resultados pobres y fallos conservados;
+- fallos de un dock no corrompen estado de otro;
 - documentación, ADRs y memoria sincronizadas;
 - quality gates, push y CI reportados con evidencia real.
 
@@ -1074,10 +1119,10 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 ### 13.1 Roadmap normativo Phase 0–16
 
 - **CONFIRMADO / implementado:** Phase 0, Phase 1, Phase 2.1–2.3, tooling Phase
-  3, tooling Phase 4.1–4.3, Phase 5.1–5.4, tooling Phase 6, Phase 7 y Phase 8.1
-  según sus alcances.
-- **CONFIRMADO / no iniciado:** Phase 8.2 y Phase 9–16 con límites definidos
-  en `AGENTS.md`.
+  3, tooling Phase 4.1–4.3, Phase 5.1–5.4, tooling Phase 6, Phase 7 y Phase
+  8.1–8.2 según sus alcances.
+- **PROPUESTO / no iniciado:** Phase 8.3, sujeto a especificación y autorización.
+- **CONFIRMADO / no iniciado:** Phase 9–16 con límites definidos en `AGENTS.md`.
 
 ### 13.2 Cierre técnico inmediato
 
@@ -1086,11 +1131,12 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 3. **COMPLETADO:** infraestructura offline de evaluación Phase 6.
 4. **COMPLETADO:** infraestructura lifecycle-aware de Phase 7.
 5. **COMPLETADO:** dominio multi-dock copy-on-write de Phase 8.1.
-6. **PENDIENTE:** auditar Phase 8.1 y ejecutar evaluación representativa Phase
-   6/7.
-7. **PENDIENTE:** especificar la integración Phase 8.2.
-8. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
-9. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
+6. **COMPLETADO:** integración secuencial session/counting Phase 8.2.
+7. **PENDIENTE:** auditar Phase 8.2 y ejecutar evaluación representativa Phase
+   6/7/8.
+8. **PENDIENTE:** especificar y autorizar Phase 8.3.
+9. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
+10. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
 
 ### 13.3 Validación técnica
 
@@ -1112,10 +1158,11 @@ conteo manual, criterios de éxito/fallo, rollback y revisión posterior.
 
 ### 13.5 Producto inicial
 
-**ROADMAP CONFIRMADO, implementación futura:**
+**ROADMAP CONFIRMADO y subpasos autorizados:**
 
 - Phase 8.1: dominio multi-dock implementado;
-- Phase 8.2: integración session/counting pendiente;
+- Phase 8.2: integración session/counting secuencial implementada;
+- Phase 8.3: coordinación runtime multi-dock propuesta, no iniciada;
 - Phase 9: Operator MVP UI;
 - Phase 10: SQLite y eventos;
 - Phase 13: review system/clips.
@@ -1219,10 +1266,12 @@ Checklist mínimo antes de commit:
 | Counter | Regla que incrementa únicamente un cruce positivo elegible por tracker. |
 | `DockId` | Identificador tipado Phase 8.1 para uno de exactamente cuatro docks físicos. |
 | `PigType` | Tipo estable `REGULAR`, `OPG`, `P12` o `NAE`; pertenece a cada unloading session. |
-| `UnloadingSession` | Grupo ordenado, inmutable y de un solo pig type dentro de una operación; todavía no posee un lifecycle Phase 7. |
+| `UnloadingSession` | Grupo ordenado, inmutable y de un solo pig type dentro de una operación; Phase 8.2 lo vincula externamente a un lifecycle Phase 7 mientras está activo. |
 | `TruckOperation` | Aggregate copy-on-write de un truck en un dock, con sesiones variables, estado y totales derivados. |
 | `DockOperationRegistry` | Registry puro con un current record por dock; no es persistence ni orchestration concurrente. |
-| Session | En Phase 8.1, grupo operativo ordenado dentro de un truck; su integración con counting queda en Phase 8.2. |
+| `SessionCountingLifecycle` | Provenance inmutable del vínculo entre una unloading session activa y un lifecycle Phase 7. |
+| `UnloadingSessionCountingService` | Boundary de aplicación Phase 8.2 que coordina start, update, completion/cancellation y transferencia exacta del total. |
+| Session | Grupo operativo ordenado dentro de un truck; Phase 8.2 le asigna un lifecycle counting aislado sin acoplar el aggregate a Phase 7. |
 | Stream | Secuencia potencialmente no acotada de una fuente USB/RTSP; file es desarrollo finito. |
 | Adapter | Capa que convierte entre frameworks externos y modelos/contratos HogFlow. |
 | Lifecycle | Periodo `start/open` a `close`, con estado y propiedad de recursos. |
