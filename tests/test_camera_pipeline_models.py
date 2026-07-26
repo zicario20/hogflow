@@ -7,12 +7,14 @@ import pytest
 
 from hogflow.application import OperatorInputError, VideoSourceKind, VideoSourceRequest
 from hogflow.camera import (
+    CameraRecoveryConfiguration,
     CameraSnapshot,
     CameraStatus,
     CountingPipelineSnapshot,
     CountingPipelineStatus,
     PipelineFailureCategory,
 )
+from hogflow.core import ConfigurationError
 from hogflow.streaming import SourceType
 
 
@@ -93,3 +95,36 @@ def test_snapshot_rejects_unsafe_failure_text() -> None:
             failure_category=PipelineFailureCategory.SOURCE_OPEN,
             failure_message=r"C:\private\video.mp4 failed",
         )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"enabled": 1}, "boolean"),
+        ({"max_reopen_attempts": -1}, "non-negative"),
+        ({"max_reopen_attempts": 0}, "at least one"),
+        ({"temporary_failures_before_reopen": True}, "non-negative"),
+        ({"temporary_failures_before_reopen": 0}, "at least one"),
+        ({"retry_delay_seconds": float("nan")}, "finite"),
+        ({"retry_delay_seconds": float("inf")}, "finite"),
+        ({"retry_delay_seconds": -0.1}, "finite"),
+    ],
+)
+def test_camera_recovery_configuration_rejects_invalid_values(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(ConfigurationError, match=message):
+        CameraRecoveryConfiguration(**kwargs)  # type: ignore[arg-type]
+
+
+def test_camera_recovery_configuration_is_immutable() -> None:
+    configuration = CameraRecoveryConfiguration(
+        max_reopen_attempts=2,
+        temporary_failures_before_reopen=4,
+        retry_delay_seconds=0,
+    )
+
+    assert configuration.retry_delay_seconds == 0.0
+    with pytest.raises(FrozenInstanceError):
+        configuration.max_reopen_attempts = 3  # type: ignore[misc]

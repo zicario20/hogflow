@@ -130,6 +130,7 @@ class ScriptedCrossingProcessor:
         self.release = release
         self.source_id: str | None = None
         self.started = 0
+        self.resets = 0
         self.closed = 0
         self.processed: list[tuple[int, str | None]] = []
 
@@ -176,6 +177,11 @@ class ScriptedCrossingProcessor:
             crossing_fingerprint=DEFAULT_CAMERA_CROSSING_CONFIGURATION.fingerprint,
             line_id="line-camera-integration",
         )
+
+    def reset(self) -> None:
+        if self.source_id is None:
+            raise RuntimeError("Synthetic processor must start before reset.")
+        self.resets += 1
 
     def close(self) -> None:
         if self.source_id is not None:

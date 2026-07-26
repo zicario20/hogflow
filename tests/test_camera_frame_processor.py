@@ -5,7 +5,11 @@ from datetime import datetime, timezone
 import pytest
 from _phase5_4_helpers import tracked_object
 
-from hogflow.camera import CameraPipelineProcessingError, DetectorTrackingCrossingProcessor
+from hogflow.camera import (
+    CameraPipelineProcessingError,
+    DetectorTrackingCrossingProcessor,
+    LatestPreviewFrameChannel,
+)
 from hogflow.counting import (
     LiveCrossingConfiguration,
     LiveCrossingDirection,
@@ -39,7 +43,9 @@ def packet(sequence: int) -> FramePacket:
     )
 
 
-def processor() -> DetectorTrackingCrossingProcessor:
+def processor(
+    preview_channel: LatestPreviewFrameChannel | None = None,
+) -> DetectorTrackingCrossingProcessor:
     tracker = ScriptedTracker(
         {
             0: (tracked_object(7, 60, 20, 80, 60),),
@@ -53,6 +59,14 @@ def processor() -> DetectorTrackingCrossingProcessor:
             NormalizedPoint(0.5, 1),
         ),
     )
+    settings = (
+        {}
+        if preview_channel is None
+        else {
+            "preview_publisher": preview_channel,
+            "preview_configuration": configuration,
+        }
+    )
     return DetectorTrackingCrossingProcessor(
         EmptyDetector(),
         tracker,
@@ -60,6 +74,7 @@ def processor() -> DetectorTrackingCrossingProcessor:
             configuration,
             lifecycle_id_factory=lambda _generation: lifecycle_id,
         ),
+        **settings,
     )
 
 
@@ -121,3 +136,77 @@ def test_crossing_detector_default_lifecycle_semantics_remain_backward_compatibl
     assert detector.lifecycle_id == "crossing-lifecycle-1"
     detector.reset()
     assert detector.lifecycle_id == "crossing-lifecycle-2"
+
+
+def test_frame_processor_publishes_current_tracks_and_crossing_without_history() -> None:
+    channel = LatestPreviewFrameChannel()
+    value = processor(channel)
+    value.start("shared_lane")
+
+    value.process(packet(0), "session-crossing-1")
+    first = channel.take_latest()
+    value.process(packet(1), "session-crossing-1")
+    second = channel.take_latest()
+
+    assert first is not None and first.tracks[0].tracker_id == 7
+    assert first.crossings == ()
+    assert second is not None
+    assert second.frame_sequence == 1
+    assert second.crossings[0].tracker_id == 7
+    assert second.crossings[0].direction is LiveCrossingDirection.NEGATIVE_TO_POSITIVE
+    value.close()
+
+
+def test_preview_publication_failure_does_not_change_crossing_result() -> None:
+    class FailingPreview:
+        failures = 0
+
+        def publish(self, _frame) -> None:
+            raise RuntimeError("synthetic renderer transport failure")
+
+        def record_publication_failure(self) -> None:
+            self.failures += 1
+
+    preview = FailingPreview()
+    configuration = LiveCrossingConfiguration(
+        enabled=True,
+        line=NormalizedLine(NormalizedPoint(0.5, 0), NormalizedPoint(0.5, 1)),
+    )
+    value = DetectorTrackingCrossingProcessor(
+        EmptyDetector(),
+        ScriptedTracker(
+            {
+                0: (tracked_object(7, 60, 20, 80, 60),),
+                1: (tracked_object(7, 20, 20, 40, 60),),
+            }
+        ),
+        lambda lifecycle_id: VirtualLineCrossingDetector(
+            configuration,
+            lifecycle_id_factory=lambda _generation: lifecycle_id,
+        ),
+        preview_publisher=preview,
+        preview_configuration=configuration,
+    )
+    value.start("shared_lane")
+
+    first = value.process(packet(0), "session-crossing-1")
+    second = value.process(packet(1), "session-crossing-1")
+
+    assert first is not None
+    assert second is not None and len(second.events) == 1
+    assert preview.failures == 2
+    value.close()
+
+
+def test_reconnect_reset_clears_crossing_state_without_closing_detector() -> None:
+    value = processor()
+    value.start("shared_lane")
+    value.process(packet(0), "session-crossing-1")
+
+    value.reset()
+    result = value.process(packet(1), "session-crossing-1")
+
+    assert result is not None
+    assert result.events == ()
+    assert value.is_started
+    value.close()

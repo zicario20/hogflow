@@ -16,14 +16,13 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 9.3 camera acquisition and counting-pipeline
-integration implemented. One configurable local camera or video file feeds one
-controlled shared-lane worker. Existing detector, tracker, crossing, Phase 7
-counting, and Phase 8 lane contracts remain authoritative; exact
-dock/source/lifecycle validation prevents delayed evidence from entering a
-later session. The desktop remains manually refreshed and in-memory, with
-immutable camera/pipeline status and no video preview, persistence, or
-production validation.
+Current roadmap status: Phase 9.4 live operator preview and diagnostics
+implemented, completing the authorized Phase 9 technical scope. One
+configurable local camera or video file feeds one controlled shared-lane
+worker. A latest-frame-only visual slot supplies UI-thread overlays and bounded
+health metrics without slowing or owning counting. Existing detector, tracker,
+crossing, Phase 7 counting, and Phase 8 lane contracts remain authoritative.
+Persistence and representative physical-camera/pig validation remain absent.
 
 ## Official project memory
 
@@ -150,6 +149,14 @@ serializes only the final shared-lane mutation, rejects delayed lifecycle
 evidence, and exposes immutable health snapshots. The default empty
 detector/tracker adapters provide technical integration only and do not create
 pig-counting evidence.
+
+Phase 9.4 adds one local ephemeral preview panel. Its thread-safe channel keeps
+only the newest immutable RGB frame, replacing older frames without a queue.
+The Tk thread renders current boxes, temporary track IDs, line, crossing
+direction, dimensions, source/pipeline status, FPS, failures, lane ownership,
+and current snapshot-derived totals. Preview failures do not affect counting.
+USB reopen is bounded per run and resets tracker/crossing state before resume;
+it does not solve identity continuity or establish count accuracy.
 
 ## Phase 0 documentation
 
@@ -452,6 +459,9 @@ detections or count evidence.
 * [Phase 9.3 camera/counting pipeline](docs/phase_9/phase_9_3_camera_counting_pipeline.md)
 * [Phase 9.3 validation](docs/phase_9/phase_9_3_validation.md)
 * [Phase 9.3 summary](docs/phase_9/phase_9_3_summary.md)
+* [Phase 9.4 live operator diagnostics](docs/phase_9/phase_9_4_live_operator_diagnostics.md)
+* [Phase 9.4 validation](docs/phase_9/phase_9_4_validation.md)
+* [Phase 9.4 summary](docs/phase_9/phase_9_4_summary.md)
 
 Technical launch examples:
 
@@ -482,11 +492,11 @@ LIVE CAMERA
 → DIRECTIONAL CROSSING EVENTS
 → LIFECYCLE DIRECTIONAL DECISIONS / LOCAL TELEMETRY
 
-Session totals are connected at the pure application boundary. Phase 9.3 can
+Session totals are connected at the pure application boundary. Phase 9.4 can
 acquire one configured source without blocking Tkinter and route valid crossing
-evidence to the one lane-owning session. Biological re-identification,
-pig-specific model validation, persistence, and video preview are not
-integrated.
+evidence to the one lane-owning session while rendering one latest-frame
+preview independently. Biological re-identification, pig-specific model
+validation, persistence, and empirical count validation are not integrated.
 
 Implemented generic Phase 2.3 development/video flow:
 
@@ -528,7 +538,8 @@ TRACKING REPLAY
 * Phase 8.4: one shared counting-lane ownership aligned
 * Phase 9.1: snapshot-driven Operator MVP application/presentation implemented
 * Phase 9.2: executable composition and operator workflow safety implemented
-* Phase 9.3: one shared camera/file acquisition and counting-pipeline integration implemented; physical/pig validation pending
+* Phase 9.3: one shared camera/file acquisition and counting-pipeline integration implemented
+* Phase 9.4: latest-frame operator preview, diagnostics, and bounded USB recovery implemented; physical/pig validation pending
 * Phase 10 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
@@ -565,11 +576,12 @@ and reverses do not decrement it. Real pig annotation may be incomplete, and no
 real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific
-tracking evaluation, SQLite persistence, camera preview, live counting
-ground-truth comparison, analytics, or pilot workflow. The Phase 9.3 UI can
-issue and render in-memory workflow commands and manually refreshed
-camera/pipeline health with snapshot-derived action safety, but has no durable
-state or video rendering. The default composition uses empty technical
+tracking evaluation, SQLite persistence, live counting
+ground-truth comparison, analytics, or pilot workflow. The Phase 9.4 UI can
+issue and render in-memory workflow commands with snapshot-derived action
+safety. Phase 9.4 adds ephemeral latest-frame rendering and bounded diagnostics,
+but has no durable state; real GUI throughput and camera reconnect behavior
+remain unvalidated. The default composition uses empty technical
 detector/tracker adapters and therefore normally produces no crossing results.
 The
 Phase 8.1 domain, Phase 8.2 lifecycle integration, and Phase

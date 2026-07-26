@@ -1407,3 +1407,49 @@ processes one acquired frame at a time. Manual UI refresh remains authoritative
 for display. Physical camera behavior, pig-specific detection, calibrated line
 placement, preview, reconnect loops, and production concurrency remain
 unvalidated or out of scope.
+
+## ADR-058 - Use one replaceable visual slot and UI-thread rendering
+
+Status: Accepted
+
+### Context
+
+Phase 9.3 deliberately keeps camera, detector, tracker, crossing, and Phase 8
+routing on one worker outside Tkinter. Phase 9.4 must expose current video and
+diagnostics without allowing a slow renderer to create backlog, call Tkinter
+from the worker, retain frame history, or become a second counting path. Live
+USB interruption also needs bounded recovery rather than an endless reconnect
+loop.
+
+### Decision
+
+Add one framework-neutral `LatestPreviewFrameChannel` with exactly one
+replaceable frame slot. The camera processor publishes immutable RGB24 and
+vector-overlay values after successful tracking; publication never waits for
+consumption. The Tk thread alone consumes and renders the current slot through
+the public application boundary. It maintains one cancellable 200 ms
+`root.after` callback and no presentation worker.
+
+Treat visual preparation and rendering as optional failure-isolated work.
+Rendering failure disables preview for that run while camera/counting
+continues. Keep business snapshots separate from visual frames.
+
+For USB sources only, allow a validated per-run `CameraRecoveryConfiguration`.
+After a bounded number of temporary failures, clear the visual slot, close the
+source, reset tracker/crossing state, and attempt at most the configured number
+of reopens. Never reopen a normally exhausted file, fabricate frames, change
+the Phase 8 session binding, or reset the Phase 7 session count.
+
+### Consequences
+
+Preview memory remains bounded to one channel frame plus the one frame
+currently rendered by Tk. Rendering cannot create acquisition backpressure,
+and the worker never touches widgets. Source recovery is observable through
+disconnected/opening/running states and aggregate attempt counters, and cannot
+loop forever.
+
+Resetting tracker state while retaining the active Phase 7 session lifecycle
+does not solve identity continuity. Tracker-ID reuse after reconnect can still
+cause undercount, while fragmentation/ID switches can cause overcount. Real
+camera reopen, UI throughput, pig tracking, and count accuracy remain pending
+empirical validation.

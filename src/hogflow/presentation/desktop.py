@@ -15,13 +15,16 @@ from hogflow.application import (
     VideoSourceRequest,
 )
 from hogflow.presentation.models import (
+    CameraPipelinePanel,
     ConfirmationRequest,
     OperatorAction,
     OperatorScreen,
 )
 from hogflow.presentation.presenter import OperatorPresenter
+from hogflow.presentation.preview import PreviewPrimitiveKind, PreviewRenderPlan
 
 _EMPTY = "—"
+_LIVE_REFRESH_INTERVAL_MS = 200
 
 
 def parse_session_plan(value: str) -> tuple[PlannedSession, ...]:
@@ -144,10 +147,21 @@ class TkOperatorView:
                 "pipeline_status",
                 "frames_acquired",
                 "frames_processed",
+                "fps",
+                "temporary_failures",
+                "stale",
+                "worker",
+                "recovery",
+                "preview",
                 "last_error",
                 "lifecycle",
             )
         }
+        self._preview_status_value = tk.StringVar(value="Preview Waiting")
+        self._preview_canvas: Any = None
+        self._preview_photo: Any = None
+        self._live_refresh_after_id: Any = None
+        self._closed = False
         self._session_plan_widget: Any = None
         self._buttons: dict[OperatorAction, Any] = {}
         self._build_layout()
@@ -163,9 +177,10 @@ class TkOperatorView:
         self._presenter = presenter
 
     def start(self) -> None:
-        """Render once and enter the toolkit loop without polling."""
+        """Render once, schedule one bounded UI refresh, and enter the toolkit loop."""
 
         self._require_presenter().refresh(self._dock())
+        self._schedule_live_refresh()
         self._root.mainloop()
 
     def render(self, screen: OperatorScreen) -> None:
@@ -190,6 +205,12 @@ class TkOperatorView:
                 ("pipeline_status", camera.pipeline_status),
                 ("frames_acquired", str(camera.frames_acquired)),
                 ("frames_processed", str(camera.frames_processed)),
+                ("fps", f"{camera.effective_fps:.1f}"),
+                ("temporary_failures", str(camera.temporary_failures)),
+                ("stale", str(camera.stale_evidence_rejected)),
+                ("worker", "Alive" if camera.worker_alive else "Stopped"),
+                ("recovery", str(camera.recovery_attempts)),
+                ("preview", camera.preview_status),
                 ("last_error", camera.last_error),
                 ("lifecycle", camera.active_crossing_lifecycle),
             )
@@ -238,6 +259,70 @@ class TkOperatorView:
             button.configure(state=("normal" if screen.actions.is_enabled(action) else "disabled"))
         self._status_value.set(screen.status_message)
 
+    def render_preview(
+        self,
+        plan: PreviewRenderPlan | None,
+        diagnostics: CameraPipelinePanel,
+    ) -> None:
+        """Render one latest frame on the UI thread only."""
+
+        if self._preview_canvas is None:
+            return
+        self._preview_status_value.set(
+            f"Preview: {diagnostics.preview_status} | "
+            f"FPS: {diagnostics.preview_fps:.1f} | "
+            f"Failures: {diagnostics.preview_failures}"
+        )
+        if plan is None:
+            if diagnostics.pipeline_status in ("Stopped", "Failed"):
+                self._preview_canvas.delete("all")
+                self._preview_canvas.create_text(
+                    12,
+                    20,
+                    anchor="nw",
+                    text=(
+                        f"Preview unavailable — camera {diagnostics.camera_status}; "
+                        f"pipeline {diagnostics.pipeline_status}"
+                    ),
+                )
+                self._preview_photo = None
+            return
+        photo = self._tk.PhotoImage(
+            master=self._root,
+            data=plan.ppm_data,
+            format="PPM",
+        )
+        if plan.subsample > 1:
+            photo = photo.subsample(plan.subsample, plan.subsample)
+        canvas = self._preview_canvas
+        canvas.configure(width=plan.display_width, height=plan.display_height)
+        canvas.delete("all")
+        canvas.create_image(0, 0, anchor="nw", image=photo)
+        self._preview_photo = photo
+        for primitive in plan.primitives:
+            coordinates = primitive.coordinates
+            if primitive.kind is PreviewPrimitiveKind.LINE:
+                canvas.create_line(*coordinates, fill="#00ffff", width=2)
+            elif primitive.kind is PreviewPrimitiveKind.RECTANGLE:
+                canvas.create_rectangle(*coordinates, outline="#ffd200", width=2)
+            elif primitive.kind is PreviewPrimitiveKind.POINT:
+                x, y = coordinates
+                canvas.create_oval(
+                    x - 3,
+                    y - 3,
+                    x + 3,
+                    y + 3,
+                    fill="#ff00ff",
+                    outline="#ff00ff",
+                )
+            else:
+                canvas.create_text(
+                    *coordinates,
+                    anchor="nw",
+                    text=primitive.text,
+                    fill="white",
+                )
+
     def show_error(self, message: str) -> None:
         """Expose an expected failure in the window and a modal dialog."""
 
@@ -262,13 +347,17 @@ class TkOperatorView:
     def close(self) -> None:
         """Destroy the one local window after application shutdown."""
 
+        self._closed = True
+        if self._live_refresh_after_id is not None:
+            self._root.after_cancel(self._live_refresh_after_id)
+            self._live_refresh_after_id = None
         self._root.destroy()
 
     def _build_layout(self) -> None:
         tk = self._tk
         self._root.title("HogFlow Operator MVP")
         self._root.columnconfigure(0, weight=1)
-        self._root.rowconfigure(2, weight=1)
+        self._root.rowconfigure(3, weight=1)
 
         lane = tk.LabelFrame(self._root, text="Shared Counting Lane")
         lane.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
@@ -297,6 +386,12 @@ class TkOperatorView:
             ("Pipeline", "pipeline_status"),
             ("Acquired", "frames_acquired"),
             ("Processed", "frames_processed"),
+            ("FPS", "fps"),
+            ("Temporary", "temporary_failures"),
+            ("Stale", "stale"),
+            ("Worker", "worker"),
+            ("Recovery", "recovery"),
+            ("Preview", "preview"),
             ("Lifecycle", "lifecycle"),
             ("Last Error", "last_error"),
         )
@@ -313,8 +408,24 @@ class TkOperatorView:
                 padx=(0, 12),
             )
 
+        preview = tk.LabelFrame(self._root, text="Live Shared-Camera Preview")
+        preview.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        tk.Label(preview, textvariable=self._preview_status_value, anchor="w").grid(
+            row=0,
+            column=0,
+            sticky="ew",
+        )
+        self._preview_canvas = tk.Canvas(
+            preview,
+            width=800,
+            height=450,
+            background="black",
+            highlightthickness=0,
+        )
+        self._preview_canvas.grid(row=1, column=0, sticky="nsew")
+
         body = tk.Frame(self._root)
-        body.grid(row=2, column=0, sticky="nsew", padx=8)
+        body.grid(row=3, column=0, sticky="nsew", padx=8)
         body.columnconfigure(0, weight=2)
         body.columnconfigure(1, weight=1)
 
@@ -450,14 +561,14 @@ class TkOperatorView:
             self._buttons[action] = button
 
         totals = tk.LabelFrame(self._root, text="Totals")
-        totals.grid(row=3, column=0, sticky="ew", padx=8, pady=8)
+        totals.grid(row=4, column=0, sticky="ew", padx=8, pady=8)
         tk.Label(totals, textvariable=self._totals_value, anchor="w").grid(
             row=0,
             column=0,
             sticky="ew",
         )
         tk.Label(self._root, textvariable=self._status_value, anchor="w").grid(
-            row=4,
+            row=5,
             column=0,
             sticky="ew",
             padx=8,
@@ -494,6 +605,21 @@ class TkOperatorView:
 
     def _request_exit(self) -> None:
         self._invoke(self._require_presenter().request_exit, self._dock())
+
+    def _schedule_live_refresh(self) -> None:
+        if self._closed or self._live_refresh_after_id is not None:
+            return
+        self._live_refresh_after_id = self._root.after(
+            _LIVE_REFRESH_INTERVAL_MS,
+            self._run_live_refresh,
+        )
+
+    def _run_live_refresh(self) -> None:
+        self._live_refresh_after_id = None
+        if self._closed:
+            return
+        self._invoke(self._require_presenter().refresh, self._dock())
+        self._schedule_live_refresh()
 
     def _dock(self) -> DockId:
         return DockId.parse(self._dock_value.get())

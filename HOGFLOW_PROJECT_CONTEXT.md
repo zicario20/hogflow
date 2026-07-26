@@ -10,13 +10,14 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 9.3 camera acquisition and counting-pipeline
-integration implemented. One configurable local camera/file source feeds one
-controlled worker and the existing detector, tracker, crossing, shared-lane,
-and Phase 7 contracts. Exact dock/source/lifecycle validation rejects delayed
-evidence. Camera/pipeline health is rendered from immutable snapshots; video
-preview, persistence, API, networking, physical-camera validation, and
-production UI validation remain absent.
+Current repository status: Phase 9.4 live operator preview and diagnostics
+implemented. One configurable local camera/file source feeds one controlled
+worker and the existing detector, tracker, crossing, shared-lane, and Phase 7
+contracts. Exact dock/source/lifecycle validation rejects delayed evidence.
+One replaceable visual slot exposes only the newest local frame to UI-thread
+overlays, while bounded USB recovery resets tracker/crossing state and cannot
+loop indefinitely. Persistence, API, networking, physical-camera validation,
+pig-specific evidence, and production UI validation remain absent.
 
 ## Project identity
 
@@ -507,10 +508,27 @@ IMPLEMENTED Phase 9.3 camera acquisition and counting-pipeline integration:
 * The default composition uses deterministic empty detector/tracker adapters.
   It validates integration without claiming pig detections or count evidence.
 
-NOT IMPLEMENTED in Phase 9.1–9.3:
+IMPLEMENTED Phase 9.4 live operator experience and diagnostics:
 
-* camera preview, video rendering, overlays, or automatic presentation polling
-* reconnect loops, async execution, scheduling, multiple workers, or multiple cameras
+* `LatestPreviewFrameChannel` retains at most one immutable local RGB frame;
+  newer frames replace older ones without queue, history, playback, or
+  recording.
+* The camera processor publishes current boxes, temporary track IDs, line,
+  anchors, sides, and crossing directions through framework-neutral values.
+* The Tk thread alone consumes/render frames and maintains one stoppable
+  200 ms refresh callback; the worker never calls Tkinter.
+* Immutable diagnostics include effective FPS, source/pipeline state, frame
+  totals, temporary failures, stale evidence, worker state, preview health,
+  and bounded USB reopen attempts.
+* Preview preparation/rendering failures are isolated and do not affect
+  crossing, counting, lane ownership, or business totals.
+* USB recovery is explicitly bounded per run, resets tracker/crossing state,
+  never reconnects normal file EOF, and fabricates no frames.
+
+NOT IMPLEMENTED in Phase 9.1–9.4:
+
+* frame history, playback, recording, calibration/ROI/line editing
+* unbounded reconnect loops, async execution, scheduling, multiple workers, or multiple cameras
 * persistence, SQLite, filesystem output, API, networking, or authentication
 * review-event or manual count-override workflow
 * Phase 10
@@ -604,15 +622,15 @@ must be serialized by the caller.
 
 ## Operator MVP User Interface
 
-IMPLEMENTED through Phase 9.3:
+IMPLEMENTED through Phase 9.4:
 
 The Operator MVP desktop exposes the authorized truck/session actions, four
-dock panels, shared-lane ownership/live count, finalized totals, and immutable
-camera/pipeline status using manual snapshot refresh. Its executable
+dock panels, shared-lane ownership/live count, finalized totals, immutable
+camera/pipeline status, and one ephemeral latest-frame preview. Its executable
 composition provides snapshot-derived button safety, destructive-action
-confirmations, source configuration, one-worker start/stop, status messages,
-validated forms, and safe shutdown. It owns no business state and does not
-increment counts.
+confirmations, source configuration, one-worker start/stop, current overlays,
+bounded visual refresh, status messages, validated forms, and safe shutdown.
+It owns no business state and does not increment counts.
 
 Broader planned Phase 9 information remains:
 
@@ -629,9 +647,9 @@ Broader planned Phase 9 information remains:
 
 The UI must consume project modules and must not duplicate counting logic or directly increment the AI count.
 
-Camera/video preview, last-event review, and review-recommended workflow remain
-unimplemented. Phase 9.2 confirmations guard destructive commands; they are
-not a persisted review workflow.
+Last-event review and review-recommended workflow remain unimplemented.
+Phase 9.2 confirmations guard destructive commands; they are not a persisted
+review workflow. Phase 9.4 diagnostics are not stored review events.
 
 ## SQLite conceptual data model
 
@@ -792,10 +810,11 @@ synthetic evidence only; representative reverse/duplicate validation and RTSP
 production validation remain pending. Phase 8.1 pure unloading-domain
 infrastructure, Phase 8.2 sequential session/counting integration, and Phase
 8.3 synchronous multi-dock coordination are implemented with synthetic
-evidence. Phase 9.3 adds a synthetic/headless-validated executable operator
-application with snapshot-derived workflow safety and one shared source worker
-over Phase 8. Physical-camera and representative pig ingestion have not been
-validated.
+evidence. Phase 9.4 completes the authorized technical Operator MVP with a
+synthetic/headless-validated executable, one shared source worker, one-slot
+preview, UI-thread overlays, bounded diagnostics, and bounded USB reopen over
+Phase 8. Physical-camera, real GUI, and representative pig ingestion have not
+been validated.
 
 ## Pilot readiness phase
 
@@ -926,21 +945,24 @@ IMPLEMENTED at repository level:
 * mutually exclusive lane ownership, exact routing, isolation, and terminal replacement
 * separated live and finalized totals with deterministic Dock 1-4 aggregate views
 * shared-lane shutdown cancellation, recovery-safe close failure, and architecture tests
-* stateless Phase 9.1–9.3 operator application commands and coordinator
+* stateless Phase 9.1–9.4 operator application commands and coordinator
   delegation
 * immutable operator screen models and snapshot-driven presenter
 * lazy local Tkinter desktop with four docks, one lane, guarded actions, status,
   confirmations, and totals
 * executable one-source composition, pre-application form validation, one
   controlled worker, lifecycle-safe routing, and safe shutdown
-* synthetic Phase 9.1–9.3 workflow, source, pipeline, error-display, bootstrap,
-  desktop, import, and architecture tests
+* one latest-frame-only visual channel with immutable overlay diagnostics
+* UI-thread Tk preview with one cancellable bounded refresh callback
+* failure-isolated preview publication/rendering and bounded USB source reopen
+* synthetic Phase 9.1–9.4 workflow, source, pipeline, preview, recovery,
+  error-display, bootstrap, desktop, import, and architecture tests
 
 Not yet implemented:
 
 * representative pig line-position evaluation and calibrated line selection
 * representative pig reverse-movement and duplicate-counting validation
-* later Phase 9 subphases and Phase 10 through Phase 16
+* Phase 10 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
@@ -949,11 +971,11 @@ Not yet implemented:
 * receiving batches or groups
 * exception-event management
 * SQLite event storage
-* camera/video preview and representative operator validation
+* representative physical-camera, GUI-performance, and operator validation
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 9.3 shared camera/file acquisition and
-counting-pipeline integration implemented with synthetic headless evidence.
-Representative pig validation, cross-reconnect session policy, physical camera
-validation, persistence, camera preview, and broader review workflow remain
-pending. Phase 10 has not started.
+Current roadmap status: Phase 9.4 latest-frame preview, diagnostics, and
+bounded USB recovery implemented with synthetic headless evidence, completing
+the authorized Phase 9 technical scope. Representative pig validation,
+cross-reconnect identity policy, physical-camera/GUI validation, persistence,
+and broader review workflow remain pending. Phase 10 has not started.

@@ -1,10 +1,11 @@
-"""Framework-neutral ports for the Phase 9.3 shared camera worker."""
+"""Framework-neutral ports for the Phase 9.3–9.4 shared camera worker."""
 
 from __future__ import annotations
 
 from typing import Protocol
 
 from hogflow.camera.models import ActiveCountingBinding
+from hogflow.camera.preview_models import PreviewFrame
 from hogflow.counting import LiveCrossingResult
 from hogflow.streaming import CameraSource, FramePacket, StreamConfiguration
 
@@ -26,6 +27,9 @@ class CountingFrameProcessor(Protocol):
     ) -> LiveCrossingResult | None:
         """Return crossing evidence only for an active lifecycle."""
 
+    def reset(self) -> None:
+        """Clear tracker/crossing state after one live-source reconnection."""
+
     def close(self) -> None:
         """Release detector, tracker, and crossing resources safely."""
 
@@ -42,6 +46,16 @@ class CountingFrameProcessorFactory(Protocol):
 
     def __call__(self) -> CountingFrameProcessor:
         """Return a processor that has not started."""
+
+
+class PreviewFramePublisher(Protocol):
+    """Non-blocking publication port for optional visual diagnostics."""
+
+    def publish(self, frame: PreviewFrame) -> None:
+        """Replace the current visual frame without waiting for the UI."""
+
+    def record_publication_failure(self) -> None:
+        """Record one isolated preview preparation/publication failure."""
 
 
 class SharedCountingRuntimeAccess(Protocol):
@@ -65,6 +79,7 @@ class SharedCountingRuntimeAccess(Protocol):
 __all__ = [
     "CountingFrameProcessor",
     "CountingFrameProcessorFactory",
+    "PreviewFramePublisher",
     "SharedCountingRuntimeAccess",
     "VideoSourceFactory",
 ]

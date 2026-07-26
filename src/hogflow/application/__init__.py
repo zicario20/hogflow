@@ -20,6 +20,11 @@ from hogflow.camera import (
     CountingPipelineSnapshot,
     CountingPipelineStatus,
     PipelineFailureCategory,
+    PreviewFailureCategory,
+    PreviewFrame,
+    PreviewHealthState,
+    PreviewSnapshot,
+    PreviewTrack,
 )
 from hogflow.domain import DockId, PigType, TruckOperationStatus
 from hogflow.sessions import DockRuntimeStatus, MultiDockRuntimeSnapshot
@@ -39,6 +44,11 @@ __all__ = [
     "OperatorApplicationService",
     "OperatorInputError",
     "PipelineFailureCategory",
+    "PreviewFailureCategory",
+    "PreviewFrame",
+    "PreviewHealthState",
+    "PreviewSnapshot",
+    "PreviewTrack",
     "PigType",
     "PlannedSession",
     "RegisterTruckCommand",

@@ -204,6 +204,7 @@ Authorized Phase 9 subphase:
 * Phase 9.1 — Operator MVP User Interface.
 * Phase 9.2 — Operator Workflow Safety & Executable Composition.
 * Phase 9.3 — Camera Acquisition and Counting Pipeline Integration.
+* Phase 9.4 — Live Operator Experience, Video Preview and Diagnostics.
 
 Phase 9.1 introduces a snapshot-driven presentation and application boundary
 over the public Phase 8 coordinator. It may register/start/cancel/complete
@@ -235,6 +236,19 @@ must never call Tkinter, and immutable snapshots are the only presentation
 view of camera/pipeline state. This subphase adds no video preview, overlay,
 automatic polling, reconnect loop, persistence, networking, multiple cameras,
 Phase 9.4, or Phase 10.
+
+Phase 9.4 authorizes one local, ephemeral, latest-frame-only preview over the
+existing shared worker and source. The worker may publish immutable RGB frames
+and diagnostic overlay values to one replaceable visual slot, but it must
+never call Tkinter or wait for rendering. The Tkinter thread alone consumes
+and renders that slot using one bounded, cancellable presentation refresh.
+Bounding boxes, temporary track IDs, line geometry, current crossing direction,
+camera/pipeline health, FPS, and bounded failure metrics are diagnostics only;
+the preview never owns business state or decides counts. USB reopen attempts
+may be automatic only under an explicit per-run bound and must reset
+tracker/crossing state before resuming. Phase 9.4 adds no recording, frame
+history, persistence, networking, multiple cameras, per-dock pipeline,
+calibration UI, Phase 10, or production-readiness claim.
 
 ### Phase 10
 
@@ -522,12 +536,12 @@ The UI must not directly increment the AI count.
 Phase 9.1 is the authorized first subset. Phase 9.2 adds executable composition
 and workflow safety. Phase 9.3 adds one shared-lane camera/file acquisition
 worker and immutable camera/pipeline status through the public application
-boundary. Manual display refresh and
-`MultiDockRuntimeCoordinator.snapshot()` remain authoritative; the worker
-never invokes Tkinter. Phase 9.3 contains no camera/video preview,
-last-event/review workflow, persistence, presentation polling/timer, network
-integration, multiple cameras, Phase 9.4, or Phase 10. Those broader concepts
-remain planned until a later subphase is explicitly approved.
+boundary. Phase 9.4 adds one latest-frame preview slot, UI-thread overlays,
+bounded visual diagnostics, and bounded USB reopen. Phase 8 snapshots remain
+authoritative for business state; the worker never invokes Tkinter and preview
+failures never alter counting. Phase 9.4 contains no recording, frame history,
+calibration/editor, last-event review workflow, persistence, network
+integration, multiple cameras, per-dock pipeline, or Phase 10.
 
 Minimum UI information and controls:
 

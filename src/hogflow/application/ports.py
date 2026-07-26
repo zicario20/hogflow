@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from hogflow.application.models import RegisterTruckCommand, VideoSourceRequest
-from hogflow.camera import CameraSnapshot, CountingPipelineSnapshot
+from hogflow.camera import (
+    CameraSnapshot,
+    CountingPipelineSnapshot,
+    PreviewFrame,
+    PreviewSnapshot,
+)
 from hogflow.domain import DockId
 from hogflow.sessions import MultiDockRuntimeSnapshot
 
@@ -58,6 +63,15 @@ class OperatorApplication(Protocol):
 
     def pipeline_snapshot(self) -> CountingPipelineSnapshot:
         """Return the current immutable pipeline state."""
+
+    def latest_preview_frame(self) -> PreviewFrame | None:
+        """Consume the newest optional visual frame without infrastructure access."""
+
+    def preview_snapshot(self) -> PreviewSnapshot:
+        """Return bounded preview availability and telemetry."""
+
+    def record_preview_render_failure(self) -> PreviewSnapshot:
+        """Isolate one presentation renderer failure from counting."""
 
 
 __all__ = ["OperatorApplication"]

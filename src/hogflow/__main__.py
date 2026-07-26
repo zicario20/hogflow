@@ -7,11 +7,12 @@ from collections.abc import Sequence
 
 from hogflow.application import OperatorInputError, VideoSourceRequest
 from hogflow.bootstrap import compose_operator_desktop
+from hogflow.camera import PreviewConfiguration
 from hogflow.core import HogFlowError
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the bounded Phase 9.3 executable parser."""
+    """Build the bounded Phase 9.4 executable parser."""
 
     parser = argparse.ArgumentParser(
         prog="hogflow",
@@ -36,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="Configure one existing local video file for deterministic validation.",
     )
+    parser.add_argument(
+        "--disable-preview",
+        action="store_true",
+        help="Disable the local latest-frame operator preview.",
+    )
     return parser
 
 
@@ -50,11 +56,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             source = VideoSourceRequest.camera(arguments.camera)
         elif arguments.video is not None:
             source = VideoSourceRequest.video_file(arguments.video)
-        composition = (
-            compose_operator_desktop()
-            if source is None
-            else compose_operator_desktop(video_source=source)
-        )
+        settings = {}
+        if source is not None:
+            settings["video_source"] = source
+        if arguments.disable_preview:
+            settings["preview_configuration"] = PreviewConfiguration(enabled=False)
+        composition = compose_operator_desktop(**settings)
         composition.run()
     except (HogFlowError, OperatorInputError) as exc:
         parser.error(str(exc))

@@ -16,6 +16,9 @@ from hogflow.application import (
     OperatorApplication,
     PigType,
     PipelineFailureCategory,
+    PreviewFailureCategory,
+    PreviewHealthState,
+    PreviewSnapshot,
     RegisterTruckCommand,
     TruckOperationStatus,
     VideoSourceRequest,
@@ -31,7 +34,8 @@ from hogflow.presentation.models import (
     OperatorStatus,
     TotalsPanel,
 )
-from hogflow.presentation.ports import OperatorView
+from hogflow.presentation.ports import OperatorPreviewView, OperatorView
+from hogflow.presentation.preview import build_preview_render_plan
 
 
 class OperatorPresenter:
@@ -249,20 +253,52 @@ class OperatorPresenter:
         dock_id: DockId,
         status: OperatorStatus,
     ) -> OperatorScreen:
+        pipeline = self._application.pipeline_snapshot()
+        preview = self._application.preview_snapshot()
         screen = screen_from_snapshot(
             snapshot,
-            pipeline=self._application.pipeline_snapshot(),
+            pipeline=pipeline,
+            preview=preview,
             dock_id=dock_id,
             status=status,
         )
         self._view.render(screen)
+        self._render_preview(screen, preview)
         return screen
+
+    def _render_preview(
+        self,
+        screen: OperatorScreen,
+        preview: PreviewSnapshot,
+    ) -> None:
+        if not isinstance(self._view, OperatorPreviewView):
+            return
+        if preview.health_state is PreviewHealthState.FAILED:
+            return
+        try:
+            frame = self._application.latest_preview_frame()
+            plan = (
+                None
+                if frame is None
+                else build_preview_render_plan(
+                    frame,
+                    diagnostic_lines=(
+                        f"camera={screen.camera_pipeline.camera_status}",
+                        f"pipeline={screen.camera_pipeline.pipeline_status}",
+                    ),
+                )
+            )
+            self._view.render_preview(plan, screen.camera_pipeline)
+        except Exception:
+            self._application.record_preview_render_failure()
+            self._view.show_error("Live preview rendering stopped; counting continues.")
 
 
 def screen_from_snapshot(
     snapshot: MultiDockRuntimeSnapshot,
     *,
     pipeline: CountingPipelineSnapshot | None = None,
+    preview: PreviewSnapshot | None = None,
     dock_id: DockId = DockId.DOCK_1,
     status: OperatorStatus | None = None,
 ) -> OperatorScreen:
@@ -309,12 +345,26 @@ def screen_from_snapshot(
         OperatorStatus.LANE_OCCUPIED if lane.occupied else OperatorStatus.READY
     )
     pipeline = pipeline or _not_configured_pipeline()
+    preview = preview or _disabled_preview()
     camera_panel = CameraPipelinePanel(
         source=pipeline.camera.display_name,
-        camera_status=pipeline.camera.status.value.replace("_", " ").title(),
+        camera_status=(
+            "Exhausted"
+            if pipeline.camera.source_exhausted
+            else pipeline.camera.status.value.replace("_", " ").title()
+        ),
         pipeline_status=pipeline.status.value.replace("_", " ").title(),
         frames_acquired=pipeline.camera.frames_acquired,
         frames_processed=pipeline.frames_processed,
+        effective_fps=pipeline.effective_fps,
+        temporary_failures=pipeline.temporary_processing_failures,
+        stale_evidence_rejected=pipeline.stale_results_rejected,
+        recovery_attempts=pipeline.recovery_attempts,
+        worker_alive=pipeline.worker_alive,
+        preview_status=preview.health_state.value.replace("_", " ").title(),
+        preview_available=preview.frame_available,
+        preview_fps=preview.effective_preview_fps,
+        preview_failures=preview.publication_failures + preview.render_failures,
         last_error=_text(pipeline.failure_message),
         active_crossing_lifecycle=_text(pipeline.active_crossing_lifecycle_id),
     )
@@ -440,6 +490,23 @@ def _not_configured_pipeline() -> CountingPipelineSnapshot:
         failure_message=None,
         started_at=None,
         stopped_at=None,
+    )
+
+
+def _disabled_preview() -> PreviewSnapshot:
+    return PreviewSnapshot(
+        enabled=False,
+        health_state=PreviewHealthState.DISABLED,
+        frame_available=False,
+        frames_published=0,
+        frames_replaced=0,
+        frames_consumed=0,
+        publication_failures=0,
+        render_failures=0,
+        effective_preview_fps=0.0,
+        last_frame_sequence=None,
+        failure_category=PreviewFailureCategory.NONE,
+        failure_message=None,
     )
 
 

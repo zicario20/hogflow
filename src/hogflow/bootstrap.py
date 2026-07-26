@@ -17,9 +17,12 @@ from hogflow.application import (
     VideoSourceRequest,
 )
 from hogflow.camera import (
+    CameraRecoveryConfiguration,
     CountingFrameProcessorFactory,
     CountingPipelineController,
     DetectorTrackingCrossingProcessor,
+    LatestPreviewFrameChannel,
+    PreviewConfiguration,
     VideoSourceFactory,
 )
 from hogflow.counting import (
@@ -74,6 +77,7 @@ class OperatorRuntimeComposition:
     coordinator: MultiDockRuntimeCoordinator
     runtime_access: SerializedMultiDockRuntimeAccess
     counting_pipeline: CountingPipelineController
+    preview_channel: LatestPreviewFrameChannel
     application: OperatorApplicationService
 
 
@@ -86,7 +90,7 @@ class OperatorDesktopComposition:
     view: OperatorDesktopView
 
     def run(self) -> None:
-        """Start the manually refreshed local desktop."""
+        """Start the local desktop and its UI-thread visual refresh."""
 
         try:
             self.view.start()
@@ -95,7 +99,9 @@ class OperatorDesktopComposition:
             raise
 
 
-def _default_processor_factory() -> DetectorTrackingCrossingProcessor:
+def _default_processor_factory(
+    preview_channel: LatestPreviewFrameChannel,
+) -> DetectorTrackingCrossingProcessor:
     """Build a framework-free no-detection processor for safe local composition."""
 
     return DetectorTrackingCrossingProcessor(
@@ -105,6 +111,8 @@ def _default_processor_factory() -> DetectorTrackingCrossingProcessor:
             DEFAULT_CAMERA_CROSSING_CONFIGURATION,
             lifecycle_id_factory=lambda _generation: lifecycle_id,
         ),
+        preview_publisher=preview_channel,
+        preview_configuration=DEFAULT_CAMERA_CROSSING_CONFIGURATION,
     )
 
 
@@ -114,6 +122,8 @@ def build_operator_runtime(
     lifecycle_id_factory: CrossingLifecycleIdFactory | None = None,
     source_factory: VideoSourceFactory | None = None,
     processor_factory: CountingFrameProcessorFactory | None = None,
+    preview_configuration: PreviewConfiguration = PreviewConfiguration(),
+    recovery_configuration: CameraRecoveryConfiguration = CameraRecoveryConfiguration(),
 ) -> OperatorRuntimeComposition:
     """Build one shared lane, source controller, and operator application."""
 
@@ -126,11 +136,14 @@ def build_operator_runtime(
     lane = SharedCountingLane(counter, source_id=OPERATOR_LANE_SOURCE_ID)
     coordinator = MultiDockRuntimeCoordinator(lane, clock=clock)
     runtime_access = SerializedMultiDockRuntimeAccess(coordinator)
+    preview_channel = LatestPreviewFrameChannel(preview_configuration)
     counting_pipeline = CountingPipelineController(
         runtime_access,
         source_factory or create_camera_source,
-        processor_factory or _default_processor_factory,
+        processor_factory or (lambda: _default_processor_factory(preview_channel)),
         clock=clock,
+        recovery_configuration=recovery_configuration,
+        preview_channel=preview_channel,
     )
     application = OperatorApplicationService(
         coordinator,
@@ -145,6 +158,7 @@ def build_operator_runtime(
         coordinator=coordinator,
         runtime_access=runtime_access,
         counting_pipeline=counting_pipeline,
+        preview_channel=preview_channel,
         application=application,
     )
 
@@ -157,6 +171,8 @@ def compose_operator_desktop(
     video_source: VideoSourceRequest | None = None,
     source_factory: VideoSourceFactory | None = None,
     processor_factory: CountingFrameProcessorFactory | None = None,
+    preview_configuration: PreviewConfiguration = PreviewConfiguration(),
+    recovery_configuration: CameraRecoveryConfiguration = CameraRecoveryConfiguration(),
 ) -> OperatorDesktopComposition:
     """Create and wire lane → coordinator → application → presenter → view."""
 
@@ -165,6 +181,8 @@ def compose_operator_desktop(
         lifecycle_id_factory=lifecycle_id_factory,
         source_factory=source_factory,
         processor_factory=processor_factory,
+        preview_configuration=preview_configuration,
+        recovery_configuration=recovery_configuration,
     )
     try:
         if video_source is not None:

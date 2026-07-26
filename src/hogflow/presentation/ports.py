@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from hogflow.presentation.models import ConfirmationRequest, OperatorScreen
+from hogflow.presentation.models import CameraPipelinePanel, ConfirmationRequest, OperatorScreen
+from hogflow.presentation.preview import PreviewRenderPlan
 
 
 @runtime_checkable
@@ -35,4 +36,16 @@ class OperatorDesktopView(OperatorView, Protocol):
         """Render once and run the local toolkit loop."""
 
 
-__all__ = ["OperatorDesktopView", "OperatorView"]
+@runtime_checkable
+class OperatorPreviewView(Protocol):
+    """Optional visual surface implemented by the Phase 9.4 desktop."""
+
+    def render_preview(
+        self,
+        plan: PreviewRenderPlan | None,
+        diagnostics: CameraPipelinePanel,
+    ) -> None:
+        """Render one latest visual plan or an explicit unavailable state."""
+
+
+__all__ = ["OperatorDesktopView", "OperatorPreviewView", "OperatorView"]

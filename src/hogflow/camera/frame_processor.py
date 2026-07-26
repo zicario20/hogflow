@@ -5,7 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from hogflow.camera.errors import CameraPipelineProcessingError
-from hogflow.counting import LiveCrossingDetector, LiveCrossingResult
+from hogflow.camera.ports import PreviewFramePublisher
+from hogflow.camera.preview_models import PreviewCrossing, PreviewFrame, PreviewTrack
+from hogflow.counting import (
+    LiveCrossingConfiguration,
+    LiveCrossingDetector,
+    LiveCrossingResult,
+    representative_point,
+)
 from hogflow.detection import (
     FrameDetections,
     LiveDetector,
@@ -36,12 +43,27 @@ class DetectorTrackingCrossingProcessor:
         detector: LiveDetector,
         tracker: LiveTracker,
         crossing_detector_factory: CrossingDetectorFactory,
+        *,
+        preview_publisher: PreviewFramePublisher | None = None,
+        preview_configuration: LiveCrossingConfiguration | None = None,
     ) -> None:
         if not callable(crossing_detector_factory):
             raise TypeError("Crossing detector factory must be callable.")
         self._detector = detector
         self._tracker = tracker
         self._crossing_detector_factory = crossing_detector_factory
+        if (preview_publisher is None) != (preview_configuration is None):
+            raise TypeError(
+                "Preview publication requires both publisher and crossing configuration."
+            )
+        if preview_configuration is not None and (
+            not isinstance(preview_configuration, LiveCrossingConfiguration)
+            or not preview_configuration.enabled
+            or preview_configuration.line is None
+        ):
+            raise TypeError("Preview requires enabled crossing configuration with a line.")
+        self._preview_publisher = preview_publisher
+        self._preview_configuration = preview_configuration
         self._crossing_detector: LiveCrossingDetector | None = None
         self._active_crossing_lifecycle_id: str | None = None
         self._source_id: str | None = None
@@ -93,21 +115,36 @@ class DetectorTrackingCrossingProcessor:
         )
         tracking = self._tracker.update(request)
         self._validate_tracking(request, tracking)
+        crossing: LiveCrossingResult | None = None
         detector = self._crossing_detector
-        if detector is None:
-            return None
-        crossing = detector.update(tracking)
-        if (
-            not isinstance(crossing, LiveCrossingResult)
-            or crossing.source_id != tracking.source_id
-            or crossing.frame_sequence != tracking.frame_sequence
-            or crossing.captured_at != tracking.captured_at
-            or crossing.crossing_lifecycle_id != crossing_lifecycle_id
-        ):
-            raise CameraPipelineProcessingError(
-                "Crossing output does not match the active source frame and lifecycle."
-            )
+        if detector is not None:
+            crossing = detector.update(tracking)
+            if (
+                not isinstance(crossing, LiveCrossingResult)
+                or crossing.source_id != tracking.source_id
+                or crossing.frame_sequence != tracking.frame_sequence
+                or crossing.captured_at != tracking.captured_at
+                or crossing.crossing_lifecycle_id != crossing_lifecycle_id
+            ):
+                raise CameraPipelineProcessingError(
+                    "Crossing output does not match the active source frame and lifecycle."
+                )
+        self._publish_preview(frame, tracking, crossing)
         return crossing
+
+    def reset(self) -> None:
+        """Clear reconnect-sensitive tracker and crossing state."""
+
+        if not self.is_started:
+            raise CameraPipelineProcessingError(
+                "Frame processor must start before reconnect reset."
+            )
+        detector = self._crossing_detector
+        self._crossing_detector = None
+        self._active_crossing_lifecycle_id = None
+        if detector is not None:
+            detector.close()
+        self._tracker.reset()
 
     def close(self) -> None:
         """Close all owned resources; repeated calls are safe."""
@@ -138,6 +175,85 @@ class DetectorTrackingCrossingProcessor:
             raise CameraPipelineProcessingError(
                 "Frame processor resources could not close cleanly."
             ) from pending
+
+    def _publish_preview(
+        self,
+        frame: FramePacket,
+        tracking: TrackingResult,
+        crossing: LiveCrossingResult | None,
+    ) -> None:
+        """Publish one optional visual value without changing processing outcome."""
+
+        publisher = self._preview_publisher
+        configuration = self._preview_configuration
+        if publisher is None or configuration is None or configuration.line is None:
+            return
+        try:
+            observations = (
+                {}
+                if crossing is None
+                else {item.tracker_id: item for item in crossing.observations}
+            )
+            tracks = []
+            for tracked_object in tracking.tracked_objects:
+                track = tracked_object.track
+                detection = track.detection
+                box = detection.bounding_box
+                observation = observations.get(track.tracker_id)
+                anchor = (
+                    observation.point
+                    if observation is not None
+                    else representative_point(
+                        box,
+                        tracking.frame_width,
+                        tracking.frame_height,
+                        configuration.anchor,
+                    )
+                )
+                side = (
+                    observation.side
+                    if observation is not None
+                    else configuration.line.classify(anchor, configuration.epsilon)
+                )
+                tracks.append(
+                    PreviewTrack(
+                        tracker_id=track.tracker_id,
+                        class_id=detection.class_id,
+                        class_name=detection.class_name,
+                        confidence=detection.confidence,
+                        x_min=box.x_min / tracking.frame_width,
+                        y_min=box.y_min / tracking.frame_height,
+                        x_max=box.x_max / tracking.frame_width,
+                        y_max=box.y_max / tracking.frame_height,
+                        anchor=anchor,
+                        side=side,
+                    )
+                )
+            publisher.publish(
+                PreviewFrame(
+                    source_id=frame.stream.stream_id,
+                    frame_sequence=frame.sequence_number,
+                    captured_at=frame.timestamp.acquired_at,
+                    frame_width=frame.dimensions.width,
+                    frame_height=frame.dimensions.height,
+                    rgb24=frame.payload.data,
+                    tracks=tuple(tracks),
+                    line=configuration.line,
+                    crossings=(
+                        ()
+                        if crossing is None
+                        else tuple(
+                            PreviewCrossing(item.tracker_id, item.direction)
+                            for item in crossing.events
+                        )
+                    ),
+                )
+            )
+        except Exception:
+            try:
+                publisher.record_publication_failure()
+            except Exception:
+                pass
 
     def _select_crossing_lifecycle(self, lifecycle_id: str | None) -> None:
         if lifecycle_id == self._active_crossing_lifecycle_id:

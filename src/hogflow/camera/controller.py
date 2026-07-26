@@ -11,10 +11,12 @@ from typing import Callable
 from hogflow.camera.errors import (
     CameraPipelineConfigurationError,
     CameraPipelineLifecycleError,
+    CameraPipelineProcessingError,
     CameraPipelineShutdownError,
     StaleCameraEvidenceError,
 )
 from hogflow.camera.models import (
+    CameraRecoveryConfiguration,
     CameraSnapshot,
     CameraStatus,
     CountingPipelineSnapshot,
@@ -27,6 +29,8 @@ from hogflow.camera.ports import (
     SharedCountingRuntimeAccess,
     VideoSourceFactory,
 )
+from hogflow.camera.preview_channel import LatestPreviewFrameChannel
+from hogflow.camera.preview_models import PreviewConfiguration, PreviewFrame, PreviewSnapshot
 from hogflow.counting import LiveCrossingError
 from hogflow.detection import (
     DetectionInferenceError,
@@ -66,6 +70,8 @@ class CountingPipelineController:
         monotonic_clock: Callable[[], float] = monotonic,
         worker_join_timeout_seconds: float = 5.0,
         startup_wait_seconds: float = 1.0,
+        recovery_configuration: CameraRecoveryConfiguration = CameraRecoveryConfiguration(),
+        preview_channel: LatestPreviewFrameChannel | None = None,
     ) -> None:
         if not callable(source_factory) or not callable(processor_factory):
             raise TypeError("Camera pipeline factories must be callable.")
@@ -75,6 +81,10 @@ class CountingPipelineController:
         ):
             if not isinstance(value, (int, float)) or isinstance(value, bool) or float(value) <= 0:
                 raise CameraPipelineConfigurationError(f"Camera pipeline {label} must be positive.")
+        if not isinstance(recovery_configuration, CameraRecoveryConfiguration):
+            raise CameraPipelineConfigurationError(
+                "Camera pipeline recovery configuration is invalid."
+            )
         self._runtime = runtime
         self._source_factory = source_factory
         self._processor_factory = processor_factory
@@ -82,6 +92,11 @@ class CountingPipelineController:
         self._monotonic = monotonic_clock
         self._join_timeout = float(worker_join_timeout_seconds)
         self._startup_wait = float(startup_wait_seconds)
+        self._recovery_configuration = recovery_configuration
+        self._preview = preview_channel or LatestPreviewFrameChannel(
+            PreviewConfiguration(enabled=False),
+            monotonic_clock=monotonic_clock,
+        )
         self._lock = RLock()
         self._stop_requested = Event()
         self._startup_complete = Event()
@@ -102,6 +117,10 @@ class CountingPipelineController:
         self._failure_message: str | None = None
         self._started_at: datetime | None = None
         self._stopped_at: datetime | None = None
+        self._first_frame_monotonic: float | None = None
+        self._last_frame_monotonic: float | None = None
+        self._recovery_attempts = 0
+        self._recovery_successes = 0
 
     def configure(self, configuration: StreamConfiguration) -> CountingPipelineSnapshot:
         """Configure one unopened camera or local-file source."""
@@ -142,6 +161,7 @@ class CountingPipelineController:
             self._camera_status = CameraStatus.CLOSED
             self._pipeline_status = CountingPipelineStatus.STOPPED
             self._reset_run_metrics()
+            self._preview.reset()
             return self._snapshot_locked()
 
     def configure_camera(self, camera_index: int) -> CountingPipelineSnapshot:
@@ -186,6 +206,7 @@ class CountingPipelineController:
             self._failure_category = PipelineFailureCategory.NONE
             self._failure_message = None
             self._source_exhausted = False
+            self._preview.reset()
             self._started_at = self._clock()
             self._stopped_at = None
             worker = Thread(
@@ -204,6 +225,7 @@ class CountingPipelineController:
         with self._lock:
             worker = self._worker
             if worker is None or not worker.is_alive():
+                self._preview.clear()
                 return self._snapshot_locked()
             self._pipeline_status = CountingPipelineStatus.STOPPING
             self._stop_requested.set()
@@ -230,13 +252,36 @@ class CountingPipelineController:
             raise CameraPipelineShutdownError(
                 "Counting pipeline worker did not stop within the configured timeout."
             )
+        self._preview.clear()
         return self.snapshot()
+
+    def close(self) -> CountingPipelineSnapshot:
+        """Stop acquisition and permanently close the optional visual channel."""
+
+        snapshot = self.stop()
+        self._preview.close()
+        return snapshot
 
     def snapshot(self) -> CountingPipelineSnapshot:
         """Return one immutable bounded camera/pipeline projection."""
 
         with self._lock:
             return self._snapshot_locked()
+
+    def latest_preview_frame(self) -> PreviewFrame | None:
+        """Return and remove the newest visual frame without blocking the worker."""
+
+        return self._preview.take_latest()
+
+    def preview_snapshot(self) -> PreviewSnapshot:
+        """Return bounded visual-channel telemetry without pixel data."""
+
+        return self._preview.snapshot()
+
+    def record_preview_render_failure(self) -> PreviewSnapshot:
+        """Disable a failed renderer while leaving camera/counting work unchanged."""
+
+        return self._preview.record_render_failure()
 
     def _run_worker(self) -> None:
         source = self._source
@@ -252,15 +297,25 @@ class CountingPipelineController:
         ended = False
         failure: tuple[PipelineFailureCategory, str] | None = None
         try:
-            source.open()
+            if not self._open_source(source):
+                return
             processor.start(source.identity.stream_id)
             with self._lock:
                 self._camera_status = CameraStatus.RUNNING
                 self._pipeline_status = CountingPipelineStatus.RUNNING
                 self._startup_complete.set()
             sequence = 0
+            temporary_source_failures = 0
             while not self._stop_requested.is_set():
-                result = source.read()
+                try:
+                    result = source.read()
+                except StreamFatalReadError:
+                    if self._recover_source(source, processor):
+                        temporary_source_failures = 0
+                        continue
+                    if self._stop_requested.is_set():
+                        break
+                    raise
                 if result.status is StreamReadStatus.FRAME:
                     if result.frame is None:
                         raise StreamFatalReadError(
@@ -282,6 +337,9 @@ class CountingPipelineController:
                         self._frames_acquired += 1
                         self._last_frame_index = sequence
                         self._last_successful_frame_at = acquired_at
+                        self._camera_status = CameraStatus.RUNNING
+                        self._record_frame_timing(packet.timestamp.monotonic_seconds)
+                    temporary_source_failures = 0
                     binding = self._runtime.active_binding()
                     lifecycle_id = None if binding is None else binding.crossing_lifecycle_id
                     try:
@@ -305,6 +363,23 @@ class CountingPipelineController:
                     sequence += 1
                     continue
                 if result.status is StreamReadStatus.TEMPORARY_UNAVAILABLE:
+                    temporary_source_failures += 1
+                    with self._lock:
+                        self._camera_status = CameraStatus.DISCONNECTED
+                    threshold = self._recovery_configuration.temporary_failures_before_reopen
+                    if (
+                        self._recovery_configuration.enabled
+                        and source.is_live
+                        and temporary_source_failures >= threshold
+                    ):
+                        if self._recover_source(source, processor):
+                            temporary_source_failures = 0
+                            continue
+                        if self._stop_requested.is_set():
+                            break
+                        raise StreamFatalReadError(
+                            "Live video source exhausted bounded recovery attempts."
+                        )
                     self._stop_requested.wait(result.retry_after_seconds)
                     continue
                 if result.status is StreamReadStatus.END_OF_STREAM:
@@ -312,6 +387,12 @@ class CountingPipelineController:
                     break
                 if result.status is StreamReadStatus.STOPPED and self._stop_requested.is_set():
                     break
+                if result.status is StreamReadStatus.STOPPED and self._recover_source(
+                    source,
+                    processor,
+                ):
+                    temporary_source_failures = 0
+                    continue
                 raise StreamFatalReadError("Video source stopped or was interrupted unexpectedly.")
         except Exception as exc:
             if not (self._stop_requested.is_set() and isinstance(exc, StreamFatalReadError)):
@@ -342,6 +423,66 @@ class CountingPipelineController:
                     self._pipeline_status = CountingPipelineStatus.STOPPED
                     self._camera_status = CameraStatus.ENDED if ended else CameraStatus.CLOSED
                     self._source_exhausted = ended
+
+    def _open_source(self, source: CameraSource) -> bool:
+        try:
+            source.open()
+            return True
+        except StreamOpenError:
+            if not self._can_recover(source):
+                raise
+        while self._can_recover(source):
+            if self._stop_requested.wait(self._recovery_configuration.retry_delay_seconds):
+                return False
+            with self._lock:
+                self._recovery_attempts += 1
+                self._camera_status = CameraStatus.OPENING
+            try:
+                source.open()
+            except StreamOpenError:
+                continue
+            with self._lock:
+                self._recovery_successes += 1
+            return True
+        raise StreamOpenError("Configured source exhausted bounded open recovery.")
+
+    def _recover_source(
+        self,
+        source: CameraSource,
+        processor: CountingFrameProcessor,
+    ) -> bool:
+        if not self._can_recover(source):
+            return False
+        self._preview.clear()
+        if source.is_open():
+            source.close()
+        processor.reset()
+        while self._can_recover(source):
+            with self._lock:
+                self._recovery_attempts += 1
+                self._camera_status = CameraStatus.OPENING
+            if self._stop_requested.wait(self._recovery_configuration.retry_delay_seconds):
+                return False
+            try:
+                source.open()
+            except StreamOpenError:
+                continue
+            with self._lock:
+                self._recovery_successes += 1
+                self._camera_status = CameraStatus.RUNNING
+            return True
+        return False
+
+    def _can_recover(self, source: CameraSource) -> bool:
+        configuration = self._configuration
+        return (
+            self._recovery_configuration.enabled
+            and source.is_live
+            and configuration is not None
+            and configuration.source_type is SourceType.USB
+            and self._recovery_attempts < self._recovery_configuration.max_reopen_attempts
+            and not self._stop_requested.is_set()
+        )
 
     def _snapshot_locked(self) -> CountingPipelineSnapshot:
         configuration = self._configuration
@@ -374,6 +515,9 @@ class CountingPipelineController:
             failure_message=self._failure_message,
             started_at=self._started_at,
             stopped_at=self._stopped_at,
+            effective_fps=self._effective_fps(),
+            recovery_attempts=self._recovery_attempts,
+            recovery_successes=self._recovery_successes,
         )
 
     def _record_failure(
@@ -398,6 +542,10 @@ class CountingPipelineController:
         self._failure_message = None
         self._started_at = None
         self._stopped_at = None
+        self._first_frame_monotonic = None
+        self._last_frame_monotonic = None
+        self._recovery_attempts = 0
+        self._recovery_successes = 0
 
     def _close_configured_source(self) -> None:
         source = self._source
@@ -406,6 +554,22 @@ class CountingPipelineController:
 
     def _worker_is_alive(self) -> bool:
         return self._worker is not None and self._worker.is_alive()
+
+    def _record_frame_timing(self, timestamp: float) -> None:
+        self._first_frame_monotonic = (
+            timestamp if self._first_frame_monotonic is None else self._first_frame_monotonic
+        )
+        self._last_frame_monotonic = timestamp
+
+    def _effective_fps(self) -> float:
+        if (
+            self._frames_acquired < 2
+            or self._first_frame_monotonic is None
+            or self._last_frame_monotonic is None
+        ):
+            return 0.0
+        duration = self._last_frame_monotonic - self._first_frame_monotonic
+        return 0.0 if duration <= 0 else (self._frames_acquired - 1) / duration
 
 
 def _failure_for(exc: BaseException) -> tuple[PipelineFailureCategory, str]:
@@ -436,6 +600,11 @@ def _failure_for(exc: BaseException) -> tuple[PipelineFailureCategory, str]:
         )
     if isinstance(exc, CameraPipelineLifecycleError):
         return (PipelineFailureCategory.LIFECYCLE, str(exc))
+    if isinstance(exc, CameraPipelineProcessingError):
+        return (
+            PipelineFailureCategory.LIFECYCLE,
+            "Camera processing lifecycle could not recover safely.",
+        )
     return (
         PipelineFailureCategory.INTERNAL,
         "Shared camera pipeline failed unexpectedly.",

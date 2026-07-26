@@ -19,6 +19,10 @@ from hogflow.camera import (
     CountingPipelineSnapshot,
     CountingPipelineStatus,
     PipelineFailureCategory,
+    PreviewFailureCategory,
+    PreviewFrame,
+    PreviewHealthState,
+    PreviewSnapshot,
 )
 from hogflow.domain import DockId
 from hogflow.sessions import MultiDockRuntimeCoordinator, MultiDockRuntimeSnapshot
@@ -31,8 +35,8 @@ class OperatorApplicationService:
     """Translate operator intent into public coordinator calls.
 
     The service owns no business state and no snapshot cache. Phase 8 remains
-    the only source of truth. A future camera composition root must provide the
-    crossing-lifecycle identity factory; Phase 9.2 does not open a camera.
+    the only source of truth. The composition root supplies both the camera
+    pipeline and the crossing-lifecycle identity factory.
     """
 
     def __init__(
@@ -114,7 +118,7 @@ class OperatorApplicationService:
         """Close the shared counter and cancel only an active lane binding."""
 
         if self._counting_pipeline is not None:
-            self._counting_pipeline.stop()
+            self._counting_pipeline.close()
         self._runtime.close()
         return self.snapshot()
 
@@ -179,6 +183,40 @@ class OperatorApplicationService:
             started_at=None,
             stopped_at=None,
         )
+
+    def latest_preview_frame(self) -> PreviewFrame | None:
+        """Consume only the newest optional frame through the application API."""
+
+        if self._counting_pipeline is None:
+            return None
+        return self._counting_pipeline.latest_preview_frame()
+
+    def preview_snapshot(self) -> PreviewSnapshot:
+        """Return visual availability without exposing the channel itself."""
+
+        if self._counting_pipeline is not None:
+            return self._counting_pipeline.preview_snapshot()
+        return PreviewSnapshot(
+            enabled=False,
+            health_state=PreviewHealthState.DISABLED,
+            frame_available=False,
+            frames_published=0,
+            frames_replaced=0,
+            frames_consumed=0,
+            publication_failures=0,
+            render_failures=0,
+            effective_preview_fps=0.0,
+            last_frame_sequence=None,
+            failure_category=PreviewFailureCategory.NONE,
+            failure_message=None,
+        )
+
+    def record_preview_render_failure(self) -> PreviewSnapshot:
+        """Record renderer failure without changing camera/counting lifecycle."""
+
+        if self._counting_pipeline is None:
+            return self.preview_snapshot()
+        return self._counting_pipeline.record_preview_render_failure()
 
     def _require_counting_pipeline(self) -> CountingPipelineController:
         if self._counting_pipeline is None:

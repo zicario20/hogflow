@@ -160,13 +160,22 @@ class CameraPipelinePanel:
     pipeline_status: str
     frames_acquired: int
     frames_processed: int
+    effective_fps: float
+    temporary_failures: int
+    stale_evidence_rejected: int
+    recovery_attempts: int
+    worker_alive: bool
+    preview_status: str
+    preview_available: bool
+    preview_fps: float
+    preview_failures: int
     last_error: str
     active_crossing_lifecycle: str
 
 
 @dataclass(frozen=True, slots=True)
 class OperatorScreen:
-    """One complete, immutable rendering input produced by a manual refresh."""
+    """One complete immutable rendering input produced from fresh snapshots."""
 
     counting_lane: CountingLanePanel
     docks: tuple[DockPanel, ...]

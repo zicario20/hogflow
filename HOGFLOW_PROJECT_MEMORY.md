@@ -4,13 +4,13 @@
 > `AGENTS.md`, no en sustitución de sus reglas normativas.
 
 Última reconstrucción integral: 25 de julio de 2026.
-Última actualización incremental: Phase 9.3, 26 de julio de 2026.
+Última actualización incremental: Phase 9.4, 26 de julio de 2026.
 
-Línea base técnica de Phase 9.3:
-`57db18e6078e40c96562c9216f705d327111f709`
-(`Implement Phase 9.2 operator workflow safety and composition`). Phase 9.3 se
+Línea base técnica de Phase 9.4:
+`a2088d02860f42cb21a018f43ee3bffab152c2e4`
+(`Implement Phase 9.3 camera acquisition and counting pipeline`). Phase 9.4 se
 publica mediante el commit
-`Implement Phase 9.3 camera acquisition and counting pipeline`; su SHA final
+`Implement Phase 9.4 live operator experience and diagnostics`; su SHA final
 debe consultarse con Git porque un documento no puede incluir de forma
 autorreferencial el SHA del mismo commit que lo contiene.
 
@@ -70,12 +70,13 @@ operaciones/sesiones de descarga. Phase 8.2 conecta secuencialmente una sesión
 activa con un lifecycle Phase 7 y transfiere su total final; Phase 8.3 coordina
 cuatro current records y Phase 8.4 los alinea con un único carril/source/counter
 compartido que solo una sesión puede poseer. Faltan el detector de cerdos
-validado, la cámara física validada, almacenamiento, preview y evaluación
+validado, la cámara física validada, almacenamiento y evaluación
 contra ground truth. Phase 9.2 ofrece un workflow de operador ejecutable,
-in-memory, manual-refresh y protegido por snapshots/confirmaciones, sin validar
-usabilidad operacional. Phase 9.3 añade una fuente camera/file y un worker
-compartidos con routing lifecycle-safe; su evidencia sigue siendo sintética y
-no contiene detecciones o conteos reales de cerdos.
+in-memory y protegido por snapshots/confirmaciones, sin validar usabilidad
+operacional. Phase 9.3 añade una fuente camera/file y un worker compartidos con
+routing lifecycle-safe. Phase 9.4 añade un preview local de una sola ranura,
+overlays en el hilo UI, diagnósticos y recuperación USB acotada; su evidencia
+sigue siendo sintética y no contiene detecciones o conteos reales de cerdos.
 
 ### 1.3 Usuarios previstos
 
@@ -249,7 +250,7 @@ Camera
 | Counter | Incrementar una vez por identidad temporal elegible. | **IMPLEMENTADO** en Phase 1 finita y Phase 7 live por lifecycle; no es identidad biológica ni total de sesión. |
 | Session | Modelar una operación de descarga, vincular cada grupo activo con un lifecycle counting aislado y coordinar cuatro docks hacia un carril compartido. | Dominio **IMPLEMENTADO** en Phase 8.1, integración secuencial **IMPLEMENTADA** en Phase 8.2, coordinación síncrona **IMPLEMENTADA** en Phase 8.3 y ownership de carril único **IMPLEMENTADO** en Phase 8.4. |
 | Storage | Persistir sesiones y eventos. | **PLANNED**, Phase 10; paquete placeholder solamente. |
-| Dashboard | Interfaz del operador y revisión. | Phase 9.3 **IMPLEMENTADA** como desktop workflow ejecutable con control/health de una fuente compartida; preview/revisión siguen planned. |
+| Dashboard | Interfaz del operador y revisión. | Phase 9.4 **IMPLEMENTADA** como workstation desktop con control/health y preview local diagnóstico de una fuente compartida; revisión persistente/analítica sigue planned. |
 
 ### 3.2 Responsabilidades y dependencias
 
@@ -279,13 +280,16 @@ Reglas:
   pipelines, frameworks, storage, networking ni UI.
 - `counting` no importa `sessions`; los coordinadores Phase 8.2–8.4 mantienen la
   dirección sin ciclo.
-- `camera` Phase 9.3 consume contratos públicos framework-neutral de source,
-  detector, tracker, crossing y runtime; no importa presentation/Tkinter.
-- `application` Phase 9.1–9.3 consume APIs públicas de `domain`, `sessions` y
+- `camera` Phase 9.3–9.4 consume contratos públicos framework-neutral de
+  source, detector, tracker, crossing y runtime; publica como máximo un frame
+  visual reemplazable y no importa presentation/Tkinter.
+- `application` Phase 9.1–9.4 consume APIs públicas de `domain`, `sessions` y
   camera orchestration; `presentation` consume solo ese boundary y sus modelos.
 - Phase 7/8 no importan `application` ni `presentation`; la UI no accede a
   atributos privados ni posee counts.
-- `bootstrap` y `__main__` son la capa superior de composición Phase 9.3; ningún
+- `presentation` construye overlays y objetos Tk únicamente en el hilo UI; un
+  error visual se registra de forma acotada y no cambia el pipeline/count.
+- `bootstrap` y `__main__` son la capa superior de composición Phase 9.4; ningún
   paquete inferior los importa y allí se construyen explícitamente counter,
   lane, coordinator, una fuente/pipeline, application, presenter y view.
 - `SerializedMultiDockRuntimeAccess` es la única frontera de serialización para
@@ -324,10 +328,14 @@ Reglas:
 | `MultiDockRuntimeSnapshot.completed_operation_count` | `src/hogflow/sessions/runtime_models.py` | Proyección read-only aditiva para que presentación no derive totales de operaciones. |
 | `CountingPipelineController`, `DetectorTrackingCrossingProcessor` | `src/hogflow/camera/` | Un worker/source compartido; reutiliza contratos live y enruta únicamente `LiveCrossingResult`, nunca incrementa counts. |
 | `CameraSnapshot`, `CountingPipelineSnapshot` | `src/hogflow/camera/models.py` | Proyecciones inmutables y sanitizadas de source, estado, métricas acotadas, lifecycle y error. |
+| `PreviewFrame`, `PreviewSnapshot`, `PreviewConfiguration` | `src/hogflow/camera/preview_models.py` | Frame RGB visual inmutable y métricas/status de preview; no son snapshots de negocio. |
+| `LatestPreviewFrameChannel` | `src/hogflow/camera/preview_channel.py` | Canal thread-safe de una sola ranura: cada publicación reemplaza el frame anterior y el consumo lo retira. |
+| `CameraRecoveryConfiguration` | `src/hogflow/camera/models.py` | Política USB inmutable, explícita y acotada de reintentos; file/EOF no reconecta. |
 | `SerializedMultiDockRuntimeAccess` | `src/hogflow/application/runtime_access.py` | Gateway único que serializa operador y lane routing y rechaza evidencia stale por dock/source/lifecycle. |
-| `OperatorApplication`, `OperatorApplicationService` | `src/hogflow/application/` | Comandos Phase 9.1–9.3 sin business state propio; delegan al coordinator/pipeline públicos, coordinan shutdown y devuelven snapshots frescos. |
-| `OperatorPresenter`, `OperatorView`, `OperatorScreen` | `src/hogflow/presentation/` | Boundary manual-refresh sin business state ni frameworks CV; muestra acciones, confirmaciones y health de pipeline. |
-| `OperatorRuntimeComposition`, `OperatorDesktopComposition` | `src/hogflow/bootstrap.py` | Composition root Phase 9.3; crea el único runtime/source/pipeline y enlaza presenter/view una sola vez. |
+| `OperatorApplication`, `OperatorApplicationService` | `src/hogflow/application/` | Comandos Phase 9.1–9.4 sin business state propio; delegan al coordinator/pipeline públicos, exponen preview visual y coordinan shutdown. |
+| `OperatorPresenter`, `OperatorView`, `OperatorScreen` | `src/hogflow/presentation/` | Boundary sin business state ni frameworks CV; muestra acciones, confirmaciones, health y solicita el último frame mediante application. |
+| `PreviewRenderPlan` | `src/hogflow/presentation/preview.py` | Plan puro de primitivas de overlay; Tkinter materializa PPM/canvas en el hilo UI. |
+| `OperatorRuntimeComposition`, `OperatorDesktopComposition` | `src/hogflow/bootstrap.py` | Composition root Phase 9.4; crea el único runtime/source/pipeline/canal visual y enlaza presenter/view una sola vez. |
 
 ### 3.4 Pipeline finito frente a pipeline en vivo
 
@@ -418,10 +426,10 @@ controlados mediante el contrato público Phase 7 y finaliza una sesión.
 | `src/hogflow/pipeline/` | Orquestación genérica y composición serial live detection/tracking/crossing/counting. |
 | `src/hogflow/domain/` | Docks, tipos, sesiones de descarga, aggregate de truck y registry puro Phase 8.1. |
 | `src/hogflow/sessions/` | Integración Phase 8.2 y coordinación Phase 8.3/8.4 de cuatro docks con un carril compartido. |
-| `src/hogflow/camera/` | Orquestación Phase 9.3 de una fuente/worker y processor detector→tracker→crossing sin frameworks en contratos. |
-| `src/hogflow/application/` | Workflow Phase 9.1–9.3 y gateway serializado que traduce intentos/evidencia en comandos públicos Phase 8. |
-| `src/hogflow/presentation/` | Read models, presenter y adapter desktop Tkinter lazy con seguridad y health Phase 9.3. |
-| `src/hogflow/bootstrap.py`, `src/hogflow/__main__.py` | Composition root de una fuente/pipeline y entry point ejecutable Phase 9.3. |
+| `src/hogflow/camera/` | Orquestación Phase 9.3–9.4 de una fuente/worker, processor detector→tracker→crossing, canal visual latest-only y recuperación USB acotada. |
+| `src/hogflow/application/` | Workflow Phase 9.1–9.4 y gateway serializado que traduce intentos/evidencia en comandos públicos Phase 8 y expone preview sin infraestructura directa. |
+| `src/hogflow/presentation/` | Read models, presenter, overlay renderer puro y adapter desktop Tkinter lazy con seguridad, health y preview Phase 9.4. |
+| `src/hogflow/bootstrap.py`, `src/hogflow/__main__.py` | Composition root de una fuente/pipeline/canal visual y entry point ejecutable Phase 9.4. |
 | `src/hogflow/storage/` | Placeholder; Phase 10 no implementada. |
 | `tests/` | Suite sintética/unitaria/arquitectónica; ningún medio real. |
 | `data/` | Workspace local protegido; Git conserva README, ejemplos seguros y `.gitkeep` aprobados. |
@@ -436,12 +444,13 @@ CLIs relevantes:
 - `python -m hogflow.adapters.camera_stream_cli`: diagnóstico de stream;
 - `python -m hogflow.video.live_detection_cli`: detección, tracking, crossing y
   counting lifecycle opcionales; sin sesión ni persistencia.
-- `python -m hogflow` o `hogflow run`: Operator MVP Phase 9.3 con composición
-  local con fuente opcional camera/file, refresh manual y runtime in-memory.
+- `python -m hogflow` o `hogflow run`: Operator MVP Phase 9.4 con composición
+  local camera/file, preview diagnóstico latest-only opcional (`--disable-preview`)
+  y runtime in-memory.
 
-Existe la aplicación/presentación ejecutable y protegida de operador Phase 9.3,
-pero no dashboard analítico, preview, validación física/pig-specific ni base de
-datos. Phase
+Existe la workstation ejecutable Phase 9.4 con preview local, overlays,
+diagnósticos y recuperación USB acotada, pero no dashboard analítico,
+validación física/pig-specific ni base de datos. Phase
 8.2 coordina una operación secuencial; Phase 8.3 compone cuatro dock records y
 Phase 8.4 les asigna un carril lógico compartido. Ninguna ejecuta la cámara
 física.
@@ -472,6 +481,7 @@ Resumen de madurez:
 | Phase 9.1 | Operator application/presentation snapshot-driven implementada. | Workflow sintético/headless; sin cámara ni estudio de operador. | Primer MVP UI técnico completo según alcance; validación operacional pendiente. |
 | Phase 9.2 | Workflow safety y composition ejecutable implementados. | Bootstrap, botones, confirmaciones, shutdown y Tk render validados sintéticamente/headless. | Infraestructura UI ejecutable completa según alcance; cámara y validación operacional pendientes. |
 | Phase 9.3 | Una fuente camera/file, un worker y pipeline compartido integrados con el carril Phase 8. | Fuentes, frames, crossing y fallos sintéticos/headless; sin cámara física ni detector de cerdo. | Infraestructura de adquisición/integración completa según alcance; evidencia real pendiente. |
+| Phase 9.4 | Preview local latest-only, overlays diagnósticos, métricas y recuperación USB acotada integrados sin afectar conteo. | Frames RGB, fallos, recovery y UI scheduling sintéticos/headless; sin cámara/display ni cerdos reales. | Implementación técnica completa según alcance; usabilidad, hardware y evidencia pig-specific pendientes. |
 
 ### 5.1 Phase 0 — Define problem and map process
 
@@ -859,14 +869,35 @@ Resumen de madurez:
 - **Estado:** implementación técnica completada según alcance; cámara física,
   detector/tracking de cerdos, preview y validación operacional pendientes.
 
-### 5.23 Estado de las fases posteriores
+### 5.23 Phase 9.4 — Live Operator Experience, Video Preview and Diagnostics
 
-Las subfases futuras de Phase 9 y Phase 10–16 no están iniciadas. Sus límites
-normativos permanecen:
+- **Objetivo:** completar Phase 9 con un preview local no autoritativo,
+  diagnósticos live y recuperación de cámara acotada sin ralentizar counting.
+- **Entregado:** `LatestPreviewFrameChannel` de una ranura, modelos visuales
+  inmutables, publicación RGB desde el processor, overlays puros, Canvas/PPM
+  materializado por Tk, un único callback UI acotado, FPS/health/recovery y
+  APIs application-only para disponibilidad, frame y métricas.
+- **Decisiones:** ADR-058; no existe cola ni historia visual; el worker nunca
+  llama Tkinter; preview consume después de tracking/crossing exitoso y sus
+  fallos no mutan pipeline/counting; USB reintenta con umbral, límite y delay
+  explícitos, mientras file/EOF no reconecta.
+- **Evidencia:** tests sintéticos/headless de reemplazo, startup/close,
+  thread-safety, overlays, render failure isolation, FPS, pérdida/reapertura,
+  lifecycle y boundaries. No se abrió cámara física ni display.
+- **Commit:** `Implement Phase 9.4 live operator experience and diagnostics`
+  (consultar SHA final en Git por la autorreferencia del documento).
+- **Estado:** implementación técnica completada según alcance; detector/tracking
+  pig-specific, rendimiento visual en hardware, usabilidad operacional,
+  reconexión con backends reales y count accuracy siguen pendientes.
+
+### 5.24 Estado de las fases posteriores
+
+Phase 9 está técnicamente completada según sus subfases autorizadas. Phase
+10–16 no están iniciadas y sus límites normativos permanecen:
 
 | Fase | Alcance normativo | Estado |
 | --- | --- | --- |
-| 9 | Operator MVP UI. | 9.1–9.3 IMPLEMENTED; preview/review workflow PLANNED |
+| 9 | Operator MVP UI. | 9.1–9.4 IMPLEMENTED; validación operacional/review persistente pendientes |
 | 10 | SQLite para sesiones/eventos. | NOT STARTED |
 | 11 | Evaluación contra ground truth humano. | NOT STARTED |
 | 12 | Error analysis y analytics dashboard. | NOT STARTED |
@@ -953,6 +984,7 @@ tabla preserva su razonamiento operativo.
 | 055 | 9.1 | Mirror mutable/UI directa o presenter snapshot-driven. | Application stateless sobre coordinator público; presenter sin cache y Tkinter lazy con refresh manual. | Una sola fuente de verdad y tests headless; cámara/polling/persistence quedan fuera. Aceptada. |
 | 056 | 9.2 | Duplicar reglas en UI o proyectar eligibility; composición dispersa o root único. | Phase 8 publica eligibility read-only y `hogflow.bootstrap` compone recursos una vez; presenter aplica estados/confirmaciones y shutdown sin cache. | Ejecutable seguro y testeable; sus IDs/fingerprint no-camera no son provenance real. Aceptada. |
 | 057 | 9.3 | Worker/counter por dock, `LiveCountingPipeline` con segundo counter o una fuente/pipeline compartida. | Un worker procesa source→detector→tracker→crossing y un gateway serializado enruta eventos al único `SharedCountingLane`; lifecycle exacto rechaza resultados delayed. | Sin llamadas Tk desde worker ni state per-dock de CV; validación física/pig-specific pendiente. Aceptada. |
+| 058 | 9.4 | Queue/history de preview o una ranura reemplazable; render en worker o UI; recovery ilimitada o acotada. | Un canal thread-safe de una ranura conserva solo el frame más reciente, Tk renderiza en su hilo y USB usa reintentos acotados; file/EOF no reconecta. | Preview no aplica backpressure ni decide negocio; fallos visuales se aíslan. Reconnect resetea tracker/crossing y conserva riesgos de identidad Phase 7. Aceptada. |
 
 ---
 
@@ -995,7 +1027,9 @@ tabla preserva su razonamiento operativo.
 | Componer una cámara ficticia o fabricar crossing results para el ejecutable. | Rechazada en Phase 9.2 | Confundiría wiring técnico con provenance y conteo real. | Una composición de cámara explícitamente autorizada debe aportar lifecycle y fingerprint reales. |
 | Crear camera/detector/tracker/counter o worker por dock. | Rechazada en Phase 9.3 | Contradice el corredor físico y único carril; duplicaría Phase 7 y mezclaría ownership. | Solo reconsiderar si la planta incorpora varios carriles físicos mediante una fase aprobada. |
 | Reutilizar `LiveCountingPipeline` dentro del runtime Phase 9.3. | Rechazada en Phase 9.3 | Ese pipeline posee su propio counter; Phase 8.4 establece que `SharedCountingLane` posee el único. | Reconsiderar solo tras rediseño explícito de ownership; hoy se enruta `LiveCrossingResult`. |
-| Actualización automática/polling de Tkinter desde el worker. | Rechazada en Phase 9.3 | Tkinter no es thread-safe y la UI debe seguir snapshot-driven/manual-refresh. | Una subfase aprobada puede añadir refresh de presentación aislado y stoppable, nunca llamadas Tk desde CV. |
+| Actualización de Tkinter desde el worker. | Rechazada en Phase 9.3 y preservada en Phase 9.4 | Tkinter no es thread-safe y el worker no debe poseer presentación. | No reconsiderar; Phase 9.4 usa un único callback de UI aislado, acotado y cancelable. |
+| Cola o historial de frames de preview. | Rechazada en Phase 9.4 | Acumularía memoria/latencia y podría ejercer backpressure sobre counting. | No reconsiderar para monitor live; playback/recording requeriría otra fase y data-governance explícita. |
+| Reconnect automático infinito. | Rechazada en Phase 9.4 | Ocultaría una fuente fallida, dificultaría shutdown y mantendría loops sin límite. | Solo ampliar límites mediante configuración y evidencia de backend autorizada; nunca loop ilimitado. |
 
 ---
 
@@ -1020,6 +1054,8 @@ tabla preserva su razonamiento operativo.
 | `origin/main` al iniciar Phase 9.2 | Mismo SHA que la línea base |
 | Línea base técnica de Phase 9.3 | `57db18e6078e40c96562c9216f705d327111f709` |
 | `origin/main` al iniciar Phase 9.3 | Mismo SHA que la línea base |
+| Línea base técnica de Phase 9.4 | `a2088d02860f42cb21a018f43ee3bffab152c2e4` |
+| `origin/main` al iniciar Phase 9.4 | Mismo SHA que la línea base |
 | Working tree al iniciar | Limpio |
 | Remote | `https://github.com/zicario20/hogflow.git` |
 | CI baseline Phase 8.1 | GitHub Actions `CI`, run `30167025451`, conclusión `success` para `cc7e1304105a35c0a3a2d8421ffa172cf9c73153` |
@@ -1038,6 +1074,7 @@ tabla preserva su razonamiento operativo.
 | Suite local Phase 9.1 | 770 passed; 1 warning de ByteTrack deprecated |
 | Suite local Phase 9.2 | 794 passed; 1 warning de ByteTrack deprecated |
 | Suite local Phase 9.3 | 830 passed; 1 warning de ByteTrack deprecated |
+| Suite local Phase 9.4 | 868 passed; 1 warning heredado de ByteTrack deprecated |
 | Python local verificado | 3.12.13; proyecto declara `>=3.10` |
 | Python CI | 3.12 en Ubuntu latest |
 
@@ -1076,14 +1113,17 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 - dominio puro multi-dock con cuatro docks, sesiones variables/mixed-type,
   aggregate copy-on-write, totales derivados y registry de ocupación;
 - integración secuencial session/counting y coordinación síncrona de cuatro
-  runtimes con counter/source/lifecycle aislados, snapshots y shutdown explícito;
-- workflow Phase 9.1–9.3 de operador sobre comandos públicos, presenter sin
+  dock records con un único carril/counter/source, snapshots y shutdown explícito;
+- workflow Phase 9.1–9.4 de operador sobre comandos públicos, presenter sin
   cache, cuatro dock panels, carril, live count y finalized totals;
 - composición ejecutable con una fuente camera/file y un worker compartidos,
   action states, confirmaciones, health snapshots, validación y shutdown seguro;
+- preview local latest-only con overlays diagnósticos, FPS, health/recovery,
+  publicación visual aislada y render Tk exclusivamente en el hilo UI;
 - routing source/dock/crossing-lifecycle exacto mediante un único gateway
   serializado; resultados delayed no entran en otra sesión;
-- adapter desktop Tkinter lazy y manual-refresh sin display requerido en CI;
+- adapter desktop Tkinter lazy, manual refresh de negocio y un único redraw
+  visual acotado sin display requerido en CI;
 - hardware USB para adquisición, lifecycle detector vacío y tracking de cajas
   sintéticas;
 - CI source-only y boundaries automatizados.
@@ -1095,12 +1135,12 @@ compileall y pip check con permisos `contents: read`. No sube artefactos.
 - tracking de cerdos representativo y métricas de identidad;
 - evaluación representativa de posiciones con ground truth humano;
 - validación representativa del conteo lifecycle-aware, reversos y duplicados;
-- cámara física Phase 9.3, detector pig-specific y evidencia de conteo real;
+- cámara física Phase 9.4, detector pig-specific y evidencia de conteo real;
 - ingestión concurrente de varias cámaras/sesiones (no corresponde a la
   topología actual de un solo carril);
 - agregación segura de reconnect lifecycles dentro de una sesión física;
-- SQLite, camera preview, broader operator review workflow, dashboard,
-  analytics y review clips;
+- SQLite, broader operator review workflow persistente, dashboard, analytics y
+  review clips;
 - evaluación contra ground truth y error de conteo;
 - RTSP production validation, multi-camera orchestration y piloto.
 
@@ -1155,6 +1195,8 @@ demás deudas permanecen explícitas.
 | HF-D036 | Alta de continuidad | **HECHO VERIFICADO** | `OperatorApplicationService.shutdown`; `MultiDockRuntimeCoordinator.close` | Salir con trabajo activo cancela el binding y descarta live count; sin persistencia, trucks/sesiones in-memory no sobreviven al proceso. | Phase 10 debe aportar persistencia/recovery antes de depender del desktop para continuidad operacional. | Intencional y confirmado al operador; recovery durable pendiente. |
 | HF-D037 | Baja de UX/safety | **HECHO VERIFICADO** | `OperatorActionState`; `DockRuntimeSnapshot` eligibility | Los botones reducen errores comunes, pero un caller no-UI aún puede invocar comandos inválidos. | Mantener Phase 8 como autoridad y sus validaciones; tratar action states como guía, no control de seguridad único. | Mitigado por validación de dominio existente. |
 | HF-D038 | Media de shutdown/hardware | **INFERENCIA respaldada por diseño** | `CountingPipelineController.stop`; adapter OpenCV | Cerrar la fuente intenta desbloquear reads y el join tiene timeout, pero backends/hardware distintos pueden bloquear de forma diferente. | Ejecutar smoke autorizado por backend/cámara y medir stop/reopen; mantener timeout como error observable. | Tests sintéticos pasan; validación física Phase 9.3 no realizada. |
+| HF-D039 | Media de UX/performance | **HECHO VERIFICADO SOLO EN TESTS HEADLESS** | `TkOperatorView`; `PreviewRenderPlan` | El canal, scheduler y overlays son deterministas, pero no se midieron fluidez, CPU, memoria, legibilidad o accesibilidad en un display/cámara reales. | Ejecutar smoke autorizado de workstation y perfilar render/FPS sin alterar el counting path. | Abierta empírica; preview técnico implementado. |
+| HF-D040 | Alta para count accuracy tras recovery | **INFERENCIA respaldada por diseño** | `CountingPipelineController._try_recover_source`; ADR-058 | La recuperación USB resetea tracker/crossing pero conserva el lifecycle de sesión Phase 7. IDs fragmentados pueden volver a contar; IDs reutilizados pueden causar undercount. | Medir reconnect con ground truth y definir una política operacional antes de aceptar recovery como continuidad exacta. | Recovery técnico acotado implementado; exactitud no validada. |
 
 ---
 
@@ -1267,28 +1309,27 @@ de estas métricas de conteo tiene todavía resultado empírico con cerdos.
 
 ### 12.1 Siguiente trabajo confirmado
 
-**HECHO VERIFICADO:** Phase 9.3 compone una fuente camera/file y un worker
-compartidos sobre los cuatro current dock records y el único shared lane,
-exclusivamente mediante contratos públicos y snapshots. La presentación no
-posee state de negocio, no calcula counts, no llama OpenCV y no recibe llamadas
-desde el worker.
+**HECHO VERIFICADO:** Phase 9.4 completa el Operator MVP técnico con una fuente,
+worker, shared lane y canal visual latest-only compartidos. La presentación no
+posee state de negocio, no calcula counts, no llama OpenCV y nunca recibe
+llamadas Tk desde el worker. Los fallos de render quedan separados del pipeline.
 
-**Recomendación actual:** auditar Phase 9.3 antes de autorizar Phase 9.4 o
-Phase 10. La evaluación representativa pendiente de Phase 6/7/8, ausencia de
-detector pig-specific y falta de prueba física Phase 9.3 deben permanecer
+**Recomendación actual:** auditar Phase 9.4 antes de comenzar Phase 10. La
+evaluación representativa pendiente de Phase 6/7/8, ausencia de detector
+pig-specific y falta de prueba física/display de Phase 9.4 deben permanecer
 explícitas.
 
 ### 12.2 Siguiente fase normativa
 
-Phase 9.1–9.3 implementan el workflow desktop snapshot-driven, su composición
-segura y la integración de una fuente/pipeline compartidos sin preview. El
-siguiente trabajo debe ser una auditoría de Phase 9.3. Phase 9.4 y Phase 10 no
-están iniciadas.
+Phase 9.1–9.4 implementan el workflow desktop snapshot-driven, su composición
+segura, la integración de fuente/pipeline y el preview diagnóstico. El
+siguiente trabajo debe ser una auditoría de Phase 9.4. Phase 10 no está
+iniciada.
 
 Fuera del siguiente trabajo salvo aprobación expresa:
 
 - SQLite/storage de Phase 10;
-- ampliar Phase 9.3 o iniciar preview Phase 9.4 sin prompt explícito;
+- ampliar Phase 9 o iniciar Phase 10 sin prompt explícito;
 - re-identificación, net count o decremento por reverso;
 - combinar cámaras o reconnects sin regla validada;
 - más workers, async o cámaras sin una necesidad y política explícitas;
@@ -1296,8 +1337,8 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 
 ### 12.3 Condiciones de inicio del siguiente trabajo
 
-- auditoría técnica y CI de Phase 9.3 verificados;
-- alcance adicional de Operator MVP especificado sin business logic duplicada;
+- auditoría técnica y CI de Phase 9.4 verificados;
+- cualquier alcance posterior especificado sin business logic duplicada;
 - riesgos de reconnect, ID switch, fragmentación, total parcial y shutdown
   visibles al operador;
 - ninguna dependencia de storage Phase 10 adelantada;
@@ -1305,8 +1346,8 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 
 ### 12.4 Criterios mínimos del siguiente cierre
 
-- ninguna regresión Phase 0–9.3;
-- siguiente subfase limitada al Operator MVP UI autorizado;
+- ninguna regresión Phase 0–9.4;
+- siguiente fase limitada al alcance autorizado;
 - operation/session de cada dock y ownership del carril compartido siguen
   separados;
 - ID switches, fragmentación y reconnect tratados como riesgos observables;
@@ -1322,9 +1363,9 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 
 - **CONFIRMADO / implementado:** Phase 0, Phase 1, Phase 2.1–2.3, tooling Phase
   3, tooling Phase 4.1–4.3, Phase 5.1–5.4, tooling Phase 6, Phase 7 y Phase
-  8.1–8.4 y Phase 9.1–9.3 según sus alcances.
-- **CONFIRMADO / no iniciado:** subfases futuras Phase 9 y Phase 10–16 con
-  límites definidos en `AGENTS.md`.
+  8.1–8.4 y Phase 9.1–9.4 según sus alcances.
+- **CONFIRMADO / no iniciado:** Phase 10–16 con límites definidos en
+  `AGENTS.md`.
 
 ### 13.2 Cierre técnico inmediato
 
@@ -1339,10 +1380,11 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 9. **COMPLETADO:** Operator MVP application/presentation Phase 9.1.
 10. **COMPLETADO:** workflow safety y composition ejecutable Phase 9.2.
 11. **COMPLETADO:** integración camera/file y counting pipeline Phase 9.3.
-12. **PENDIENTE:** auditar Phase 9.3 y ejecutar evaluación representativa Phase
+12. **COMPLETADO:** preview latest-only y diagnósticos Phase 9.4.
+13. **PENDIENTE:** auditar Phase 9.4 y ejecutar evaluación representativa Phase
    6/7/8.
-13. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
-14. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
+14. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
+15. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
 
 ### 13.3 Validación técnica
 
@@ -1373,7 +1415,8 @@ conteo manual, criterios de éxito/fallo, rollback y revisión posterior.
 - Phase 9.1: Operator MVP workflow snapshot-driven implementado;
 - Phase 9.2: composición ejecutable y workflow safety implementados;
 - Phase 9.3: una fuente/pipeline compartidos y status manual-refresh implementados;
-- Phase 9 restante: preview/review y ampliaciones solo con nueva autorización;
+- Phase 9.4: preview latest-only, overlays, health y recovery acotado implementados;
+- Phase 9: técnicamente completada según alcance; validación operacional pendiente;
 - Phase 10: SQLite y eventos;
 - Phase 13: review system/clips.
 
@@ -1485,10 +1528,14 @@ Checklist mínimo antes de commit:
 | `MultiDockRuntimeCoordinator` | Boundary síncrono que conserva cuatro current dock records y enruta uno de ellos al carril compartido. |
 | `SharedCountingLaneSnapshot` | Read view inmutable del ownership, lifecycle y live count del carril único. |
 | `DockRuntimeSnapshot` | Read view inmutable de un dock; solo el owner del carril expone current live count. |
-| `CountingPipelineController` | Orquestador Phase 9.3 de una fuente y worker compartidos; produce snapshots sanitizados y enruta crossing evidence sin poseer el counter. |
+| `CountingPipelineController` | Orquestador Phase 9.3–9.4 de una fuente y worker compartidos; produce snapshots sanitizados, publica preview y enruta crossing evidence sin poseer el counter. |
 | `SerializedMultiDockRuntimeAccess` | Boundary de serialización para comandos/snapshots/routing; revalida dock, source y lifecycle después del trabajo CV. |
 | `CameraSnapshot` / `CountingPipelineSnapshot` | Estado inmutable de adquisición/pipeline sin frames, paths ni objetos OpenCV. |
-| `OperatorApplicationService` | Boundary Phase 9.1–9.3 que traduce acciones del operador a métodos públicos del coordinator/pipeline, coordina shutdown y devuelve snapshots frescos. |
+| `PreviewFrame` | Frame visual RGB24 inmutable con overlays diagnósticos; no contiene ni sustituye snapshots de negocio. |
+| `LatestPreviewFrameChannel` | Ranura thread-safe que reemplaza el frame anterior y nunca acumula historia. |
+| `PreviewSnapshot` | Estado/métricas acotadas del canal visual, sin pixels ni objetos GUI. |
+| `CameraRecoveryConfiguration` | Umbral, máximo de reintentos y delay explícitos para recuperación de fuente USB; no aplica a EOF de file. |
+| `OperatorApplicationService` | Boundary Phase 9.1–9.4 que traduce acciones del operador a métodos públicos del coordinator/pipeline, coordina shutdown y expone snapshots/frame visual. |
 | `OperatorPresenter` | Presentador manual-refresh sin cache de state; convierte un snapshot Phase 8 en un `OperatorScreen`, deriva action states y solicita confirmaciones. |
 | `OperatorScreen` | Proyección inmutable y transitoria de carril, cuatro docks, action states, status y totales para una sola renderización. |
 | Composition root | `hogflow.bootstrap`/`hogflow.__main__`: única capa que construye y enlaza counter, lane, coordinator, una fuente/pipeline, application, presenter y Tk view. |

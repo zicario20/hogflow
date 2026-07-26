@@ -1041,16 +1041,19 @@ def test_phase_9_3_composition_wires_camera_without_framework_or_network_leakage
         assert required in bootstrap
 
 
-def test_phase_9_desktop_has_no_polling_timer_or_business_counter() -> None:
+def test_phase_9_desktop_has_only_one_bounded_ui_refresh_and_no_business_counter() -> None:
     desktop = (SOURCE_ROOT / "presentation" / "desktop.py").read_text(encoding="utf-8").lower()
 
     for forbidden in (
-        ".after(",
         "threading",
         "asyncio",
         "sleep(",
+        "while ",
         "lifecycle_directional_count",
         "counted_tracker",
         "process_counting_result",
     ):
         assert forbidden not in desktop
+    assert desktop.count(".after(") == 1
+    assert "_live_refresh_interval_ms = 200" in desktop
+    assert "after_cancel" in desktop

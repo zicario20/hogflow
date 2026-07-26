@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from math import isfinite
 from re import fullmatch
 
+from hogflow.core import ConfigurationError
 from hogflow.domain import DockId
 from hogflow.streaming import SourceType
 
@@ -20,6 +22,7 @@ class CameraStatus(str, Enum):
     CLOSED = "closed"
     OPENING = "opening"
     RUNNING = "running"
+    DISCONNECTED = "disconnected"
     ENDED = "ended"
     FAILED = "failed"
 
@@ -48,6 +51,49 @@ class PipelineFailureCategory(str, Enum):
     LIFECYCLE = "lifecycle"
     SHUTDOWN = "shutdown"
     INTERNAL = "internal"
+
+
+@dataclass(frozen=True, slots=True)
+class CameraRecoveryConfiguration:
+    """Bounded reopen policy for the one live USB source.
+
+    Recovery is never applied to normal local-file exhaustion. The maximum is
+    per pipeline run, so a broken source cannot create an endless reopen loop.
+    """
+
+    enabled: bool = True
+    max_reopen_attempts: int = 3
+    temporary_failures_before_reopen: int = 3
+    retry_delay_seconds: float = 0.25
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.enabled, bool):
+            raise ConfigurationError("Camera recovery enabled state must be boolean.")
+        for value, label in (
+            (self.max_reopen_attempts, "maximum reopen attempts"),
+            (
+                self.temporary_failures_before_reopen,
+                "temporary failures before reopen",
+            ),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ConfigurationError(f"Camera recovery {label} must be non-negative.")
+        if self.enabled and self.temporary_failures_before_reopen == 0:
+            raise ConfigurationError(
+                "Enabled camera recovery requires at least one temporary failure."
+            )
+        if self.enabled and self.max_reopen_attempts == 0:
+            raise ConfigurationError(
+                "Enabled camera recovery requires at least one reopen attempt."
+            )
+        if (
+            not isinstance(self.retry_delay_seconds, (int, float))
+            or isinstance(self.retry_delay_seconds, bool)
+            or not isfinite(self.retry_delay_seconds)
+            or float(self.retry_delay_seconds) < 0
+        ):
+            raise ConfigurationError("Camera recovery retry delay must be finite and non-negative.")
+        object.__setattr__(self, "retry_delay_seconds", float(self.retry_delay_seconds))
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +180,9 @@ class CountingPipelineSnapshot:
     failure_message: str | None
     started_at: datetime | None
     stopped_at: datetime | None
+    effective_fps: float = 0.0
+    recovery_attempts: int = 0
+    recovery_successes: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, CountingPipelineStatus):
@@ -144,9 +193,21 @@ class CountingPipelineSnapshot:
             (self.frames_processed, "processed frames"),
             (self.temporary_processing_failures, "temporary processing failures"),
             (self.stale_results_rejected, "stale results"),
+            (self.recovery_attempts, "recovery attempts"),
+            (self.recovery_successes, "recovery successes"),
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"Counting pipeline {label} must be non-negative.")
+        if self.recovery_successes > self.recovery_attempts:
+            raise ValueError("Pipeline recovery successes cannot exceed attempts.")
+        if (
+            not isinstance(self.effective_fps, (int, float))
+            or isinstance(self.effective_fps, bool)
+            or not isfinite(self.effective_fps)
+            or float(self.effective_fps) < 0
+        ):
+            raise ValueError("Counting pipeline FPS must be finite and non-negative.")
+        object.__setattr__(self, "effective_fps", float(self.effective_fps))
         if self.active_crossing_lifecycle_id is not None and (
             not isinstance(self.active_crossing_lifecycle_id, str)
             or fullmatch(_OPAQUE_ID, self.active_crossing_lifecycle_id) is None
@@ -182,6 +243,7 @@ def _validate_failure(
 
 __all__ = [
     "ActiveCountingBinding",
+    "CameraRecoveryConfiguration",
     "CameraSnapshot",
     "CameraStatus",
     "CountingPipelineSnapshot",

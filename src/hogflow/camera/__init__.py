@@ -15,6 +15,7 @@ from hogflow.camera.frame_processor import (
 )
 from hogflow.camera.models import (
     ActiveCountingBinding,
+    CameraRecoveryConfiguration,
     CameraSnapshot,
     CameraStatus,
     CountingPipelineSnapshot,
@@ -24,12 +25,24 @@ from hogflow.camera.models import (
 from hogflow.camera.ports import (
     CountingFrameProcessor,
     CountingFrameProcessorFactory,
+    PreviewFramePublisher,
     SharedCountingRuntimeAccess,
     VideoSourceFactory,
+)
+from hogflow.camera.preview_channel import LatestPreviewFrameChannel
+from hogflow.camera.preview_models import (
+    PreviewConfiguration,
+    PreviewCrossing,
+    PreviewFailureCategory,
+    PreviewFrame,
+    PreviewHealthState,
+    PreviewSnapshot,
+    PreviewTrack,
 )
 
 __all__ = [
     "ActiveCountingBinding",
+    "CameraRecoveryConfiguration",
     "CameraPipelineConfigurationError",
     "CameraPipelineError",
     "CameraPipelineLifecycleError",
@@ -45,6 +58,15 @@ __all__ = [
     "CrossingDetectorFactory",
     "DetectorTrackingCrossingProcessor",
     "PipelineFailureCategory",
+    "LatestPreviewFrameChannel",
+    "PreviewConfiguration",
+    "PreviewCrossing",
+    "PreviewFailureCategory",
+    "PreviewFrame",
+    "PreviewFramePublisher",
+    "PreviewHealthState",
+    "PreviewSnapshot",
+    "PreviewTrack",
     "SharedCountingRuntimeAccess",
     "StaleCameraEvidenceError",
     "VideoSourceFactory",
