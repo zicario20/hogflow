@@ -27,6 +27,7 @@ from hogflow.models import BoundingBox
 from hogflow.tracking.models import TrackingResult
 
 _SOURCE_ID = r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
+_LIFECYCLE_ID = r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,15 +83,20 @@ class VirtualLineCrossingDetector:
         *,
         monotonic_clock: Callable[[], float] = monotonic,
         wall_clock: Callable[[], datetime] | None = None,
+        lifecycle_id_factory: Callable[[int], str] | None = None,
     ) -> None:
         if not isinstance(configuration, LiveCrossingConfiguration):
             raise InputDataError("Crossing detector requires LiveCrossingConfiguration.")
         self._configuration = configuration
         self._monotonic = monotonic_clock
         self._wall_clock = wall_clock or (lambda: datetime.now(timezone.utc))
+        if lifecycle_id_factory is not None and not callable(lifecycle_id_factory):
+            raise InputDataError("Crossing lifecycle ID factory must be callable.")
+        self._lifecycle_id_factory = lifecycle_id_factory
         self._telemetry = LiveCrossingTelemetry()
         self._source_id: str | None = None
         self._lifecycle_generation = 0
+        self._lifecycle_id: str | None = None
         self._last_sequence: int | None = None
         self._update_index = 0
         self._states: dict[int, _TrackSideState] = {}
@@ -109,7 +115,11 @@ class VirtualLineCrossingDetector:
             raise CrossingLifecycleError(
                 "Crossing lifecycle identity is available only after startup."
             )
-        return f"crossing-lifecycle-{self._lifecycle_generation}"
+        if self._lifecycle_id is None:
+            raise CrossingLifecycleError(
+                "Crossing lifecycle identity is unavailable before startup."
+            )
+        return self._lifecycle_id
 
     def start(self, source_id: str) -> None:
         """Bind the detector to one source and start a fresh lifecycle."""
@@ -227,6 +237,7 @@ class VirtualLineCrossingDetector:
             return
         self._states.clear()
         self._source_id = None
+        self._lifecycle_id = None
         self._last_sequence = None
         self._update_index = 0
         self._telemetry.record_closed()
@@ -312,6 +323,14 @@ class VirtualLineCrossingDetector:
 
     def _begin_new_lifecycle(self) -> None:
         self._lifecycle_generation += 1
+        lifecycle_id = (
+            f"crossing-lifecycle-{self._lifecycle_generation}"
+            if self._lifecycle_id_factory is None
+            else self._lifecycle_id_factory(self._lifecycle_generation)
+        )
+        if not isinstance(lifecycle_id, str) or fullmatch(_LIFECYCLE_ID, lifecycle_id) is None:
+            raise InputDataError("Crossing lifecycle factory returned invalid opaque text.")
+        self._lifecycle_id = lifecycle_id
         self._last_sequence = None
         self._update_index = 0
         self._states.clear()

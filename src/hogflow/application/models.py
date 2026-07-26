@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
 
 from hogflow.application.errors import OperatorInputError
 from hogflow.domain import DockId, PigType, TruckOperation, UnloadingSession
@@ -59,4 +61,65 @@ class RegisterTruckCommand:
         return operation
 
 
-__all__ = ["PlannedSession", "RegisterTruckCommand"]
+class VideoSourceKind(str, Enum):
+    """Operator-selectable local source categories."""
+
+    CAMERA = "camera"
+    VIDEO_FILE = "video_file"
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class VideoSourceRequest:
+    """Validated operator request whose local file path stays out of repr."""
+
+    kind: VideoSourceKind
+    camera_index: int | None = None
+    local_file: Path | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, VideoSourceKind):
+            raise OperatorInputError("Video source kind must be camera or video file.")
+        if self.kind is VideoSourceKind.CAMERA:
+            if (
+                not isinstance(self.camera_index, int)
+                or isinstance(self.camera_index, bool)
+                or self.camera_index < 0
+                or self.local_file is not None
+            ):
+                raise OperatorInputError("Camera source requires one non-negative device index.")
+        elif (
+            self.camera_index is not None
+            or not isinstance(self.local_file, Path)
+            or not self.local_file.is_file()
+        ):
+            raise OperatorInputError("Local video source must identify an existing file.")
+
+    @classmethod
+    def camera(cls, camera_index: int) -> VideoSourceRequest:
+        """Create one local camera request."""
+
+        return cls(VideoSourceKind.CAMERA, camera_index=camera_index)
+
+    @classmethod
+    def video_file(cls, path: str | Path) -> VideoSourceRequest:
+        """Create one local-file request without retaining it in public output."""
+
+        if not isinstance(path, (str, Path)):
+            raise OperatorInputError("Local video source must be a file path.")
+        return cls(VideoSourceKind.VIDEO_FILE, local_file=Path(path))
+
+    def __repr__(self) -> str:
+        detail = (
+            f"camera_index={self.camera_index}"
+            if self.kind is VideoSourceKind.CAMERA
+            else "local_file=<protected>"
+        )
+        return f"VideoSourceRequest(kind={self.kind.value!r}, {detail})"
+
+
+__all__ = [
+    "PlannedSession",
+    "RegisterTruckCommand",
+    "VideoSourceKind",
+    "VideoSourceRequest",
+]

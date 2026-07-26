@@ -5,9 +5,11 @@ from hogflow.presentation.desktop import (
     create_tk_operator_view,
     parse_register_truck_form,
     parse_session_plan,
+    parse_video_source_form,
     run_operator_desktop,
 )
 from hogflow.presentation.models import (
+    CameraPipelinePanel,
     ConfirmationKind,
     ConfirmationRequest,
     CountingLanePanel,
@@ -24,6 +26,7 @@ from hogflow.presentation.presenter import OperatorPresenter, screen_from_snapsh
 __all__ = [
     "ConfirmationKind",
     "ConfirmationRequest",
+    "CameraPipelinePanel",
     "CountingLanePanel",
     "DockPanel",
     "OperatorAction",
@@ -38,6 +41,7 @@ __all__ = [
     "create_tk_operator_view",
     "parse_register_truck_form",
     "parse_session_plan",
+    "parse_video_source_form",
     "run_operator_desktop",
     "screen_from_snapshot",
 ]

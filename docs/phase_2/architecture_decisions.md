@@ -1356,3 +1356,54 @@ and presentation, but lower layers do not import it. No camera, CV framework,
 polling, timer, thread, network, persistence, authentication, scheduling, or
 hardware dependency is introduced. Executable operation remains in-memory and
 does not validate plant usability or pig-count accuracy.
+
+## ADR-057 - Use one shared camera worker and one serialized lane gateway
+
+Status: Accepted
+
+### Context
+
+Phase 8.4 established one physical corridor, one source, and one Phase 7
+counter shared by four dock business contexts. Phase 9.2 deliberately composed
+no camera. Camera acquisition and detector/tracker work cannot block Tkinter,
+but the shared lane and multi-dock coordinator are caller-serialized. Reusing
+`LiveCountingPipeline` directly would create a second Phase 7 counter and
+violate the shared-lane ownership rule.
+
+### Decision
+
+Add one application-level `CountingPipelineController` with one controlled
+non-daemon worker. The worker owns source acquisition and serial
+detector/tracker/crossing processing. It routes only immutable
+`LiveCrossingResult` evidence to `SharedCountingLane`; that lane remains the
+sole counter owner.
+
+Add `SerializedMultiDockRuntimeAccess` as the single mutation/read gateway for
+operator commands, lane-binding snapshots, and camera evidence. Expensive
+computer-vision work runs outside its lock. Before routing, the gateway
+revalidates the exact dock, source, and crossing lifecycle captured for the
+frame. A delayed result is stale evidence and cannot increment a later session.
+
+Permit `VirtualLineCrossingDetector` to receive an optional lifecycle-ID
+factory so camera crossing provenance can exactly match the active Phase 8
+session. Its existing generated lifecycle IDs remain the default, preserving
+Phase 5.4 compatibility.
+
+The executable composition uses existing empty detector/tracker adapters by
+default. This validates acquisition, lifecycle, shutdown, and routing
+infrastructure without fabricating pig detections. A validated local detector
+can be injected through the same public contracts in a separately authorized
+configuration.
+
+### Consequences
+
+Exactly one source, worker, detector, tracker, crossing detector, and shared
+counter exist in the executable composition. Docks remain independent
+business contexts and never own computer-vision resources. Tkinter is never
+called from the worker, and imports/help do not open a source.
+
+There is no queue or unbounded frame history in this orchestration: the worker
+processes one acquired frame at a time. Manual UI refresh remains authoritative
+for display. Physical camera behavior, pig-specific detection, calibrated line
+placement, preview, reconnect loops, and production concurrency remain
+unvalidated or out of scope.

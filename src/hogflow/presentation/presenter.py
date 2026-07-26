@@ -5,16 +5,23 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from hogflow.application import (
+    CameraSnapshot,
+    CameraStatus,
+    CountingPipelineSnapshot,
+    CountingPipelineStatus,
     DockId,
     DockRuntimeStatus,
     ExpectedOperatorError,
     MultiDockRuntimeSnapshot,
     OperatorApplication,
     PigType,
+    PipelineFailureCategory,
     RegisterTruckCommand,
     TruckOperationStatus,
+    VideoSourceRequest,
 )
 from hogflow.presentation.models import (
+    CameraPipelinePanel,
     ConfirmationKind,
     ConfirmationRequest,
     CountingLanePanel,
@@ -44,6 +51,58 @@ class OperatorPresenter:
             else OperatorStatus.READY
         )
         return self._render(snapshot, dock_id, status)
+
+    def configure_video_source(
+        self,
+        request: VideoSourceRequest,
+        dock_id: DockId = DockId.DOCK_1,
+    ) -> OperatorScreen:
+        """Configure one local source through the application boundary."""
+
+        try:
+            self._application.configure_video_source(request)
+        except ExpectedOperatorError as exc:
+            self._view.show_error(str(exc))
+            raise
+        return self._render(
+            self._application.snapshot(),
+            dock_id,
+            OperatorStatus.SOURCE_CONFIGURED,
+        )
+
+    def start_counting_pipeline(
+        self,
+        dock_id: DockId = DockId.DOCK_1,
+    ) -> OperatorScreen:
+        """Start the one shared worker and render its current status."""
+
+        try:
+            self._application.start_counting_pipeline()
+        except ExpectedOperatorError as exc:
+            self._view.show_error(str(exc))
+            raise
+        return self._render(
+            self._application.snapshot(),
+            dock_id,
+            OperatorStatus.PIPELINE_STARTED,
+        )
+
+    def stop_counting_pipeline(
+        self,
+        dock_id: DockId = DockId.DOCK_1,
+    ) -> OperatorScreen:
+        """Stop the one shared worker and render released source state."""
+
+        try:
+            self._application.stop_counting_pipeline()
+        except ExpectedOperatorError as exc:
+            self._view.show_error(str(exc))
+            raise
+        return self._render(
+            self._application.snapshot(),
+            dock_id,
+            OperatorStatus.PIPELINE_STOPPED,
+        )
 
     def register_truck(self, command: RegisterTruckCommand) -> OperatorScreen:
         """Register one truck and render its selected dock."""
@@ -190,7 +249,12 @@ class OperatorPresenter:
         dock_id: DockId,
         status: OperatorStatus,
     ) -> OperatorScreen:
-        screen = screen_from_snapshot(snapshot, dock_id=dock_id, status=status)
+        screen = screen_from_snapshot(
+            snapshot,
+            pipeline=self._application.pipeline_snapshot(),
+            dock_id=dock_id,
+            status=status,
+        )
         self._view.render(screen)
         return screen
 
@@ -198,6 +262,7 @@ class OperatorPresenter:
 def screen_from_snapshot(
     snapshot: MultiDockRuntimeSnapshot,
     *,
+    pipeline: CountingPipelineSnapshot | None = None,
     dock_id: DockId = DockId.DOCK_1,
     status: OperatorStatus | None = None,
 ) -> OperatorScreen:
@@ -243,12 +308,23 @@ def screen_from_snapshot(
     current_status = status or (
         OperatorStatus.LANE_OCCUPIED if lane.occupied else OperatorStatus.READY
     )
+    pipeline = pipeline or _not_configured_pipeline()
+    camera_panel = CameraPipelinePanel(
+        source=pipeline.camera.display_name,
+        camera_status=pipeline.camera.status.value.replace("_", " ").title(),
+        pipeline_status=pipeline.status.value.replace("_", " ").title(),
+        frames_acquired=pipeline.camera.frames_acquired,
+        frames_processed=pipeline.frames_processed,
+        last_error=_text(pipeline.failure_message),
+        active_crossing_lifecycle=_text(pipeline.active_crossing_lifecycle_id),
+    )
     return OperatorScreen(
         counting_lane=lane_panel,
         docks=dock_panels,
         totals=totals,
+        camera_pipeline=camera_panel,
         selected_dock_id=selected_dock.value,
-        actions=_action_state(snapshot, selected_dock),
+        actions=_action_state(snapshot, selected_dock, pipeline),
         status_message=current_status.value,
         generated_at=snapshot.generated_at.isoformat(),
     )
@@ -257,6 +333,7 @@ def screen_from_snapshot(
 def _action_state(
     snapshot: MultiDockRuntimeSnapshot,
     selected_dock: DockId,
+    pipeline: CountingPipelineSnapshot,
 ) -> OperatorActionState:
     dock = snapshot.for_dock(selected_dock)
     runtime_open = not snapshot.coordinator_closed
@@ -274,6 +351,24 @@ def _action_state(
         complete_truck=runtime_open and dock.operation_can_complete,
         cancel_truck=runtime_open
         and dock.operation_status in (TruckOperationStatus.PLANNED, TruckOperationStatus.ACTIVE),
+        configure_source=runtime_open
+        and pipeline.status
+        not in (
+            CountingPipelineStatus.STARTING,
+            CountingPipelineStatus.RUNNING,
+            CountingPipelineStatus.STOPPING,
+        ),
+        start_pipeline=runtime_open
+        and pipeline.status is CountingPipelineStatus.STOPPED
+        and pipeline.camera.status is CameraStatus.CLOSED,
+        stop_pipeline=runtime_open
+        and pipeline.worker_alive
+        and pipeline.status
+        in (
+            CountingPipelineStatus.STARTING,
+            CountingPipelineStatus.RUNNING,
+            CountingPipelineStatus.STOPPING,
+        ),
         refresh=True,
         exit=True,
     )
@@ -319,6 +414,33 @@ def _pig_type_label(pig_type: PigType | None) -> str:
 
 def _text(value: str | None) -> str:
     return "—" if value is None else value
+
+
+def _not_configured_pipeline() -> CountingPipelineSnapshot:
+    return CountingPipelineSnapshot(
+        status=CountingPipelineStatus.STOPPED,
+        camera=CameraSnapshot(
+            source_id=None,
+            source_type=None,
+            display_name="Not configured",
+            status=CameraStatus.NOT_CONFIGURED,
+            last_frame_index=None,
+            frames_acquired=0,
+            last_successful_frame_at=None,
+            source_exhausted=False,
+            failure_category=PipelineFailureCategory.NONE,
+            failure_message=None,
+        ),
+        frames_processed=0,
+        temporary_processing_failures=0,
+        stale_results_rejected=0,
+        active_crossing_lifecycle_id=None,
+        worker_alive=False,
+        failure_category=PipelineFailureCategory.NONE,
+        failure_message=None,
+        started_at=None,
+        stopped_at=None,
+    )
 
 
 __all__ = ["OperatorPresenter", "screen_from_snapshot"]

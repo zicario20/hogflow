@@ -10,12 +10,13 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 9.2 Operator MVP workflow safety and
-executable composition implemented. Four operational dock records and one
-shared lane are rendered from immutable Phase 8 snapshots; operator actions
-delegate through public coordinator methods and their availability is derived
-from authoritative read projections. This does not implement camera ingestion,
-persistence, API, networking, or production UI validation.
+Current repository status: Phase 9.3 camera acquisition and counting-pipeline
+integration implemented. One configurable local camera/file source feeds one
+controlled worker and the existing detector, tracker, crossing, shared-lane,
+and Phase 7 contracts. Exact dock/source/lifecycle validation rejects delayed
+evidence. Camera/pipeline health is rendered from immutable snapshots; video
+preview, persistence, API, networking, physical-camera validation, and
+production UI validation remain absent.
 
 ## Project identity
 
@@ -483,13 +484,33 @@ IMPLEMENTED Phase 9.2 operator workflow safety and composition:
   explicit confirmation with discard consequences.
 * Status messages, lane-owner text, pre-application form validation, and
   coordinated shutdown make the manual workflow explicit.
-* The composition uses no camera, frames, detector, tracker, crossing pipeline,
-  polling, worker, thread, persistence, or network.
+* The Phase 9.2 baseline composition used no camera, frames, detector, tracker,
+  crossing pipeline, polling, worker, thread, persistence, or network.
 
-NOT IMPLEMENTED in Phase 9.1–9.2:
+IMPLEMENTED Phase 9.3 camera acquisition and counting-pipeline integration:
 
-* camera acquisition, preview, video rendering, or automatic live ingestion
-* polling, timers, threads, async execution, scheduling, or multiple windows
+* One application-defined controller owns one configured USB-index or local
+  video-file source and one non-daemon worker for the shared physical lane.
+* Existing `LiveDetector`, `LiveTracker`, and `LiveCrossingDetector` contracts
+  run serially; only immutable `LiveCrossingResult` evidence reaches
+  `SharedCountingLane`, which remains the sole Phase 7 counter owner.
+* `SerializedMultiDockRuntimeAccess` is the single synchronization boundary for
+  operator commands, lane-binding reads, snapshots, and evidence routing.
+  Expensive frame processing occurs outside the lock.
+* Exact dock, source, and crossing-lifecycle provenance prevents delayed
+  results from an old session from incrementing a later session.
+* Camera and pipeline lifecycle, bounded metrics, safe errors, and worker
+  liveness are exposed as immutable snapshots.
+* The Tkinter desktop remains manually refreshed and adds only source
+  configuration, start/stop controls, and textual health; the worker never
+  invokes Tkinter.
+* The default composition uses deterministic empty detector/tracker adapters.
+  It validates integration without claiming pig detections or count evidence.
+
+NOT IMPLEMENTED in Phase 9.1–9.3:
+
+* camera preview, video rendering, overlays, or automatic presentation polling
+* reconnect loops, async execution, scheduling, multiple workers, or multiple cameras
 * persistence, SQLite, filesystem output, API, networking, or authentication
 * review-event or manual count-override workflow
 * Phase 10
@@ -583,14 +604,15 @@ must be serialized by the caller.
 
 ## Operator MVP User Interface
 
-IMPLEMENTED through Phase 9.2:
+IMPLEMENTED through Phase 9.3:
 
 The Operator MVP desktop exposes the authorized truck/session actions, four
-dock panels, shared-lane ownership/live count, and finalized totals using
-manual snapshot refresh. Its executable composition provides snapshot-derived
-button safety, destructive-action confirmations, status messages, validated
-forms, and safe shutdown. It owns no business state and does not increment
-counts.
+dock panels, shared-lane ownership/live count, finalized totals, and immutable
+camera/pipeline status using manual snapshot refresh. Its executable
+composition provides snapshot-derived button safety, destructive-action
+confirmations, source configuration, one-worker start/stop, status messages,
+validated forms, and safe shutdown. It owns no business state and does not
+increment counts.
 
 Broader planned Phase 9 information remains:
 
@@ -770,9 +792,10 @@ synthetic evidence only; representative reverse/duplicate validation and RTSP
 production validation remain pending. Phase 8.1 pure unloading-domain
 infrastructure, Phase 8.2 sequential session/counting integration, and Phase
 8.3 synchronous multi-dock coordination are implemented with synthetic
-evidence. Phase 9.2 adds a synthetic/headless-validated executable operator
-application with snapshot-derived workflow safety over Phase 8. Concurrent
-camera ingestion has not started.
+evidence. Phase 9.3 adds a synthetic/headless-validated executable operator
+application with snapshot-derived workflow safety and one shared source worker
+over Phase 8. Physical-camera and representative pig ingestion have not been
+validated.
 
 ## Pilot readiness phase
 
@@ -903,15 +926,15 @@ IMPLEMENTED at repository level:
 * mutually exclusive lane ownership, exact routing, isolation, and terminal replacement
 * separated live and finalized totals with deterministic Dock 1-4 aggregate views
 * shared-lane shutdown cancellation, recovery-safe close failure, and architecture tests
-* stateless Phase 9.1–9.2 operator application commands and coordinator
+* stateless Phase 9.1–9.3 operator application commands and coordinator
   delegation
 * immutable operator screen models and snapshot-driven presenter
 * lazy local Tkinter desktop with four docks, one lane, guarded actions, status,
   confirmations, and totals
-* executable no-camera composition, pre-application form validation, and safe
-  shutdown
-* synthetic Phase 9.1–9.2 workflow, error-display, bootstrap, desktop, import,
-  and architecture tests
+* executable one-source composition, pre-application form validation, one
+  controlled worker, lifecycle-safe routing, and safe shutdown
+* synthetic Phase 9.1–9.3 workflow, source, pipeline, error-display, bootstrap,
+  desktop, import, and architecture tests
 
 Not yet implemented:
 
@@ -922,15 +945,15 @@ Not yet implemented:
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
 * pig-specific tracking evaluation
-* shared physical camera acquisition or real concurrent ingestion
+* physical-camera validation, representative pig pipeline input, or production concurrency
 * receiving batches or groups
 * exception-event management
 * SQLite event storage
 * camera/video preview and representative operator validation
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 9.2 Operator MVP workflow safety and executable
-composition implemented with synthetic headless evidence. Representative pig
-validation, cross-reconnect session policy, physical camera integration,
-persistence, camera preview, and broader review workflow remain pending. Phase
-10 has not started.
+Current roadmap status: Phase 9.3 shared camera/file acquisition and
+counting-pipeline integration implemented with synthetic headless evidence.
+Representative pig validation, cross-reconnect session policy, physical camera
+validation, persistence, camera preview, and broader review workflow remain
+pending. Phase 10 has not started.

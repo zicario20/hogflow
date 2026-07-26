@@ -16,6 +16,9 @@ class OperatorAction(str, Enum):
     CANCEL_SESSION = "cancel_session"
     COMPLETE_TRUCK = "complete_truck"
     CANCEL_TRUCK = "cancel_truck"
+    CONFIGURE_SOURCE = "configure_source"
+    START_PIPELINE = "start_pipeline"
+    STOP_PIPELINE = "stop_pipeline"
     REFRESH = "refresh"
     EXIT = "exit"
 
@@ -32,6 +35,9 @@ class OperatorStatus(str, Enum):
     SESSION_CANCELLED = "Session Cancelled — Unfinished live count discarded"
     TRUCK_COMPLETED = "Truck Completed"
     OPERATION_CANCELLED = "Operation Cancelled"
+    SOURCE_CONFIGURED = "Video Source Configured"
+    PIPELINE_STARTED = "Counting Pipeline Started"
+    PIPELINE_STOPPED = "Counting Pipeline Stopped"
     ACTION_NOT_CONFIRMED = "Action Not Confirmed"
     APPLICATION_CLOSED = "Application Closed"
     ERROR = "Error"
@@ -72,6 +78,9 @@ class OperatorActionState:
     cancel_session: bool
     complete_truck: bool
     cancel_truck: bool
+    configure_source: bool
+    start_pipeline: bool
+    stop_pipeline: bool
     refresh: bool
     exit: bool
 
@@ -86,6 +95,9 @@ class OperatorActionState:
                 self.cancel_session,
                 self.complete_truck,
                 self.cancel_truck,
+                self.configure_source,
+                self.start_pipeline,
+                self.stop_pipeline,
                 self.refresh,
                 self.exit,
             )
@@ -140,12 +152,26 @@ class TotalsPanel:
 
 
 @dataclass(frozen=True, slots=True)
+class CameraPipelinePanel:
+    """Display-only camera and one-worker pipeline projection."""
+
+    source: str
+    camera_status: str
+    pipeline_status: str
+    frames_acquired: int
+    frames_processed: int
+    last_error: str
+    active_crossing_lifecycle: str
+
+
+@dataclass(frozen=True, slots=True)
 class OperatorScreen:
     """One complete, immutable rendering input produced by a manual refresh."""
 
     counting_lane: CountingLanePanel
     docks: tuple[DockPanel, ...]
     totals: TotalsPanel
+    camera_pipeline: CameraPipelinePanel
     selected_dock_id: str
     actions: OperatorActionState
     status_message: str
@@ -165,6 +191,7 @@ class OperatorScreen:
 __all__ = [
     "ConfirmationKind",
     "ConfirmationRequest",
+    "CameraPipelinePanel",
     "CountingLanePanel",
     "DockPanel",
     "OperatorAction",

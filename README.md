@@ -16,13 +16,14 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 9.2 Operator MVP workflow safety and executable
-composition implemented. The desktop is driven exclusively by fresh Phase 8
-snapshots and public commands: it shows four independent dock operations, the
-single shared-lane owner, the live lifecycle count, finalized totals, and
-snapshot-derived valid actions. This remains in-memory, manual-refresh
-infrastructure without camera execution, persistence, or production
-validation.
+Current roadmap status: Phase 9.3 camera acquisition and counting-pipeline
+integration implemented. One configurable local camera or video file feeds one
+controlled shared-lane worker. Existing detector, tracker, crossing, Phase 7
+counting, and Phase 8 lane contracts remain authoritative; exact
+dock/source/lifecycle validation prevents delayed evidence from entering a
+later session. The desktop remains manually refreshed and in-memory, with
+immutable camera/pipeline status and no video preview, persistence, or
+production validation.
 
 ## Official project memory
 
@@ -142,6 +143,13 @@ Phase 9.2 adds the executable `python -m hogflow` / `hogflow run` composition,
 snapshot-derived button eligibility, destructive-action confirmations,
 operator status messages, pre-application form validation, and safe shutdown.
 Its composition deliberately creates no camera or crossing pipeline.
+
+Phase 9.3 replaces that no-camera composition with an optional single shared
+camera/file source and one controlled detector/tracker/crossing worker. It
+serializes only the final shared-lane mutation, rejects delayed lifecycle
+evidence, and exposes immutable health snapshots. The default empty
+detector/tracker adapters provide technical integration only and do not create
+pig-counting evidence.
 
 ## Phase 0 documentation
 
@@ -420,9 +428,20 @@ Phase 9.2 supplies the executable composition and workflow-safety layer:
 * coordinated shutdown without fabricated completion;
 * manual refresh only and no hidden presentation snapshot cache.
 
-The composition constructs the existing in-memory shared counter/lane runtime
-but deliberately creates no camera, frame, detection, tracking, or crossing
-input. Its technical lifecycle identifiers are not real camera provenance.
+Phase 9.3 supplies the shared camera/counting integration:
+
+* one configurable non-negative USB camera index or existing local video file;
+* one non-daemon worker for serial source, detection, tracking, and crossing;
+* one serialized gateway for operator commands and shared-lane evidence;
+* exact dock/source/crossing-lifecycle checks against delayed results;
+* immutable camera/pipeline health snapshots and manual-refresh UI controls;
+* deterministic source, worker, failure, stale-evidence, shutdown, and
+  architecture tests.
+
+The composition constructs exactly one source/pipeline and the existing single
+shared counter/lane runtime. Its default detector and tracker are explicit
+empty technical adapters, so it validates integration without fabricating pig
+detections or count evidence.
 
 * [Phase 9.1 Operator MVP](docs/phase_9/phase_9_1_operator_mvp.md)
 * [Phase 9.1 validation](docs/phase_9/phase_9_1_validation.md)
@@ -430,6 +449,20 @@ input. Its technical lifecycle identifiers are not real camera provenance.
 * [Phase 9.2 workflow safety](docs/phase_9/phase_9_2_operator_workflow_safety.md)
 * [Phase 9.2 validation](docs/phase_9/phase_9_2_validation.md)
 * [Phase 9.2 summary](docs/phase_9/phase_9_2_summary.md)
+* [Phase 9.3 camera/counting pipeline](docs/phase_9/phase_9_3_camera_counting_pipeline.md)
+* [Phase 9.3 validation](docs/phase_9/phase_9_3_validation.md)
+* [Phase 9.3 summary](docs/phase_9/phase_9_3_summary.md)
+
+Technical launch examples:
+
+```console
+python -m hogflow run --camera 0
+python -m hogflow run --video local-validation.mp4
+hogflow --help
+```
+
+Neither `--help` nor package import opens a camera. The no-source workflow
+demonstration remains available.
 
 ## High-level pipeline
 
@@ -449,11 +482,11 @@ LIVE CAMERA
 → DIRECTIONAL CROSSING EVENTS
 → LIFECYCLE DIRECTIONAL DECISIONS / LOCAL TELEMETRY
 
-Session totals are connected at the pure application boundary and Phase 9.2
-can operate that workflow through public commands, safe actions, and snapshots.
-Camera
-acquisition, biological re-identification, persistence, and video preview are
-not integrated. Phase 8.4 still does not open or schedule the physical camera.
+Session totals are connected at the pure application boundary. Phase 9.3 can
+acquire one configured source without blocking Tkinter and route valid crossing
+evidence to the one lane-owning session. Biological re-identification,
+pig-specific model validation, persistence, and video preview are not
+integrated.
 
 Implemented generic Phase 2.3 development/video flow:
 
@@ -492,9 +525,10 @@ TRACKING REPLAY
 * Phase 8.1: multi-dock unloading domain infrastructure implemented
 * Phase 8.2: sequential unloading-session/Phase 7 lifecycle integration implemented
 * Phase 8.3: synchronous multi-dock runtime foundation implemented
-* Phase 8.4: one shared counting-lane ownership aligned; camera execution remains unimplemented
+* Phase 8.4: one shared counting-lane ownership aligned
 * Phase 9.1: snapshot-driven Operator MVP application/presentation implemented
 * Phase 9.2: executable composition and operator workflow safety implemented
+* Phase 9.3: one shared camera/file acquisition and counting-pipeline integration implemented; physical/pig validation pending
 * Phase 10 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
@@ -531,11 +565,13 @@ and reverses do not decrement it. Real pig annotation may be incomplete, and no
 real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific
-tracking evaluation, camera-to-session runtime integration, SQLite persistence,
-camera preview, live counting ground-truth comparison, analytics, or pilot
-workflow. The Phase 9.2 UI can issue and render in-memory workflow commands
-with snapshot-derived action safety, but has no automatic live input or durable
-state. The no-camera composition normally receives no crossing results. The
+tracking evaluation, SQLite persistence, camera preview, live counting
+ground-truth comparison, analytics, or pilot workflow. The Phase 9.3 UI can
+issue and render in-memory workflow commands and manually refreshed
+camera/pipeline health with snapshot-derived action safety, but has no durable
+state or video rendering. The default composition uses empty technical
+detector/tracker adapters and therefore normally produces no crossing results.
+The
 Phase 8.1 domain, Phase 8.2 lifecycle integration, and Phase
 8.3–8.4 coordinator/lane are synthetic and in-memory only. The coordinator is
 synchronous and caller-serialized; it does not open the shared camera.

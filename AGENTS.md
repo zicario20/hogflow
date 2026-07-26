@@ -203,6 +203,7 @@ Authorized Phase 9 subphase:
 
 * Phase 9.1 — Operator MVP User Interface.
 * Phase 9.2 — Operator Workflow Safety & Executable Composition.
+* Phase 9.3 — Camera Acquisition and Counting Pipeline Integration.
 
 Phase 9.1 introduces a snapshot-driven presentation and application boundary
 over the public Phase 8 coordinator. It may register/start/cancel/complete
@@ -223,6 +224,17 @@ camera composition replaces them. Phase 9.2 must remain manual-refresh and
 must not add camera acquisition, OpenCV preview, YOLO, polling, timers,
 threads, networking, persistence, authentication, scheduling, hardware, or
 Phase 10.
+
+Phase 9.3 authorizes exactly one configurable local camera/file source, one
+controlled background worker, and one detector/tracker/crossing pipeline for
+the shared physical lane. The worker may route exact lifecycle-qualified
+crossing evidence through a serialized application boundary to the existing
+`SharedCountingLane`; the lane remains the sole Phase 7 counter owner. Docks
+must not own cameras, detectors, trackers, workers, or counters. Camera work
+must never call Tkinter, and immutable snapshots are the only presentation
+view of camera/pipeline state. This subphase adds no video preview, overlay,
+automatic polling, reconnect loop, persistence, networking, multiple cameras,
+Phase 9.4, or Phase 10.
 
 ### Phase 10
 
@@ -508,11 +520,14 @@ The UI must not duplicate counting logic.
 The UI must not directly increment the AI count.
 
 Phase 9.1 is the authorized first subset. Phase 9.2 adds executable composition
-and workflow safety while preserving manual refresh and the
-existing `MultiDockRuntimeCoordinator.snapshot()` read model. It contains no
-camera/video preview, last-event/review workflow, persistence, polling, timer,
-thread, or network integration. Those broader Phase 9 concepts remain planned
-until a later subphase is explicitly approved.
+and workflow safety. Phase 9.3 adds one shared-lane camera/file acquisition
+worker and immutable camera/pipeline status through the public application
+boundary. Manual display refresh and
+`MultiDockRuntimeCoordinator.snapshot()` remain authoritative; the worker
+never invokes Tkinter. Phase 9.3 contains no camera/video preview,
+last-event/review workflow, persistence, presentation polling/timer, network
+integration, multiple cameras, Phase 9.4, or Phase 10. Those broader concepts
+remain planned until a later subphase is explicitly approved.
 
 Minimum UI information and controls:
 

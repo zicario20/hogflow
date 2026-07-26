@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from hogflow.application.models import RegisterTruckCommand
+from hogflow.application.models import RegisterTruckCommand, VideoSourceRequest
+from hogflow.camera import CameraSnapshot, CountingPipelineSnapshot
 from hogflow.domain import DockId
 from hogflow.sessions import MultiDockRuntimeSnapshot
 
@@ -39,6 +40,24 @@ class OperatorApplication(Protocol):
 
     def shutdown(self) -> MultiDockRuntimeSnapshot:
         """Close the shared runtime safely and return its terminal snapshot."""
+
+    def configure_video_source(
+        self,
+        request: VideoSourceRequest,
+    ) -> CountingPipelineSnapshot:
+        """Configure one local source without opening it."""
+
+    def start_counting_pipeline(self) -> CountingPipelineSnapshot:
+        """Start the one shared camera worker."""
+
+    def stop_counting_pipeline(self) -> CountingPipelineSnapshot:
+        """Stop the one shared camera worker."""
+
+    def camera_snapshot(self) -> CameraSnapshot:
+        """Return the current immutable camera state."""
+
+    def pipeline_snapshot(self) -> CountingPipelineSnapshot:
+        """Return the current immutable pipeline state."""
 
 
 __all__ = ["OperatorApplication"]

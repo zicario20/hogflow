@@ -12,6 +12,7 @@ from hogflow.application import (
     PigType,
     PlannedSession,
     RegisterTruckCommand,
+    VideoSourceRequest,
 )
 from hogflow.presentation.models import (
     ConfirmationRequest,
@@ -100,6 +101,22 @@ def parse_register_truck_form(
     )
 
 
+def parse_video_source_form(kind: str, value: str) -> VideoSourceRequest:
+    """Validate a local camera index or video file before application invocation."""
+
+    if kind == "camera":
+        try:
+            camera_index = int(value)
+        except (TypeError, ValueError) as exc:
+            raise OperatorInputError("Camera source requires a non-negative device index.") from exc
+        return VideoSourceRequest.camera(camera_index)
+    if kind == "video":
+        if not isinstance(value, str) or not value.strip():
+            raise OperatorInputError("Local video source requires an existing file.")
+        return VideoSourceRequest.video_file(value.strip())
+    raise OperatorInputError("Video source kind must be camera or video.")
+
+
 class TkOperatorView:
     """Unstyled Tkinter adapter with snapshot-only business rendering."""
 
@@ -110,6 +127,8 @@ class TkOperatorView:
         self._dock_value = tk.StringVar(value=DockId.DOCK_1.value)
         self._operation_value = tk.StringVar(value="")
         self._session_value = tk.StringVar(value="")
+        self._source_kind_value = tk.StringVar(value="camera")
+        self._source_value = tk.StringVar(value="0")
         self._status_value = tk.StringVar(value="Ready")
         self._lane_values = {
             name: tk.StringVar(value=_EMPTY)
@@ -117,6 +136,18 @@ class TkOperatorView:
         }
         self._dock_values = {dock: tk.StringVar(value="") for dock in DockId}
         self._totals_value = tk.StringVar(value="")
+        self._pipeline_values = {
+            name: tk.StringVar(value=_EMPTY)
+            for name in (
+                "source",
+                "camera_status",
+                "pipeline_status",
+                "frames_acquired",
+                "frames_processed",
+                "last_error",
+                "lifecycle",
+            )
+        }
         self._session_plan_widget: Any = None
         self._buttons: dict[OperatorAction, Any] = {}
         self._build_layout()
@@ -151,6 +182,19 @@ class TkOperatorView:
         )
         for key, value in values:
             self._lane_values[key].set(value)
+        if hasattr(self, "_pipeline_values"):
+            camera = screen.camera_pipeline
+            pipeline_values = (
+                ("source", camera.source),
+                ("camera_status", camera.camera_status),
+                ("pipeline_status", camera.pipeline_status),
+                ("frames_acquired", str(camera.frames_acquired)),
+                ("frames_processed", str(camera.frames_processed)),
+                ("last_error", camera.last_error),
+                ("lifecycle", camera.active_crossing_lifecycle),
+            )
+            for key, value in pipeline_values:
+                self._pipeline_values[key].set(value)
         for panel, dock in zip(screen.docks, DockId, strict=True):
             flags = tuple(
                 value
@@ -224,7 +268,7 @@ class TkOperatorView:
         tk = self._tk
         self._root.title("HogFlow Operator MVP")
         self._root.columnconfigure(0, weight=1)
-        self._root.rowconfigure(1, weight=1)
+        self._root.rowconfigure(2, weight=1)
 
         lane = tk.LabelFrame(self._root, text="Shared Counting Lane")
         lane.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
@@ -245,8 +289,32 @@ class TkOperatorView:
                 padx=(0, 12),
             )
 
+        pipeline = tk.LabelFrame(self._root, text="Shared Camera Pipeline")
+        pipeline.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
+        pipeline_fields = (
+            ("Source", "source"),
+            ("Camera", "camera_status"),
+            ("Pipeline", "pipeline_status"),
+            ("Acquired", "frames_acquired"),
+            ("Processed", "frames_processed"),
+            ("Lifecycle", "lifecycle"),
+            ("Last Error", "last_error"),
+        )
+        for column, (label, key) in enumerate(pipeline_fields):
+            tk.Label(pipeline, text=f"{label}:").grid(
+                row=0,
+                column=column * 2,
+                sticky="w",
+            )
+            tk.Label(pipeline, textvariable=self._pipeline_values[key]).grid(
+                row=0,
+                column=column * 2 + 1,
+                sticky="w",
+                padx=(0, 12),
+            )
+
         body = tk.Frame(self._root)
-        body.grid(row=1, column=0, sticky="nsew", padx=8)
+        body.grid(row=2, column=0, sticky="nsew", padx=8)
         body.columnconfigure(0, weight=2)
         body.columnconfigure(1, weight=1)
 
@@ -291,6 +359,20 @@ class TkOperatorView:
             column=1,
             sticky="ew",
         )
+        tk.Label(actions, text="Source").grid(row=5, column=0, sticky="w")
+        source_frame = tk.Frame(actions)
+        source_frame.grid(row=5, column=1, sticky="ew")
+        tk.OptionMenu(
+            source_frame,
+            self._source_kind_value,
+            "camera",
+            "video",
+        ).grid(row=0, column=0, sticky="ew")
+        tk.Entry(source_frame, textvariable=self._source_value).grid(
+            row=0,
+            column=1,
+            sticky="ew",
+        )
 
         callbacks: tuple[tuple[OperatorAction, str, Callable[[], None]], ...] = (
             (OperatorAction.REGISTER_TRUCK, "Register Truck", self._register_truck),
@@ -329,13 +411,34 @@ class TkOperatorView:
                 lambda: self._invoke(self._require_presenter().cancel_truck, self._dock()),
             ),
             (
+                OperatorAction.CONFIGURE_SOURCE,
+                "Configure/Open Source",
+                self._configure_source,
+            ),
+            (
+                OperatorAction.START_PIPELINE,
+                "Start Pipeline",
+                lambda: self._invoke(
+                    self._require_presenter().start_counting_pipeline,
+                    self._dock(),
+                ),
+            ),
+            (
+                OperatorAction.STOP_PIPELINE,
+                "Stop Pipeline",
+                lambda: self._invoke(
+                    self._require_presenter().stop_counting_pipeline,
+                    self._dock(),
+                ),
+            ),
+            (
                 OperatorAction.REFRESH,
                 "Refresh Snapshot",
                 self._refresh_selected_dock,
             ),
             (OperatorAction.EXIT, "Exit Application", self._request_exit),
         )
-        for row, (action, label, callback) in enumerate(callbacks, start=5):
+        for row, (action, label, callback) in enumerate(callbacks, start=6):
             button = tk.Button(actions, text=label, command=callback)
             button.grid(
                 row=row,
@@ -347,14 +450,14 @@ class TkOperatorView:
             self._buttons[action] = button
 
         totals = tk.LabelFrame(self._root, text="Totals")
-        totals.grid(row=2, column=0, sticky="ew", padx=8, pady=8)
+        totals.grid(row=3, column=0, sticky="ew", padx=8, pady=8)
         tk.Label(totals, textvariable=self._totals_value, anchor="w").grid(
             row=0,
             column=0,
             sticky="ew",
         )
         tk.Label(self._root, textvariable=self._status_value, anchor="w").grid(
-            row=3,
+            row=4,
             column=0,
             sticky="ew",
             padx=8,
@@ -369,6 +472,18 @@ class TkOperatorView:
                 self._session_plan_widget.get("1.0", "end"),
             )
             self._require_presenter().register_truck(command)
+        except OperatorInputError as exc:
+            self.show_error(str(exc))
+        except ExpectedOperatorError:
+            pass
+
+    def _configure_source(self) -> None:
+        try:
+            request = parse_video_source_form(
+                self._source_kind_value.get(),
+                self._source_value.get(),
+            )
+            self._require_presenter().configure_video_source(request, self._dock())
         except OperatorInputError as exc:
             self.show_error(str(exc))
         except ExpectedOperatorError:
@@ -418,5 +533,6 @@ __all__ = [
     "create_tk_operator_view",
     "parse_register_truck_form",
     "parse_session_plan",
+    "parse_video_source_form",
     "run_operator_desktop",
 ]

@@ -1001,18 +1001,15 @@ def test_phase_9_composition_is_the_only_layer_wiring_counting_to_presentation()
     assert "hogflow.sessions" not in main_module
 
 
-def test_phase_9_composition_has_no_camera_network_storage_or_concurrency() -> None:
+def test_phase_9_3_composition_wires_camera_without_framework_or_network_leakage() -> None:
     files = (
         SOURCE_ROOT / "__main__.py",
         SOURCE_ROOT / "bootstrap.py",
     )
     forbidden_tokens = (
-        "hogflow.adapters",
-        "hogflow.detection",
         "hogflow.pipeline",
         "hogflow.storage",
         "hogflow.streaming",
-        "hogflow.tracking",
         "cv2",
         "numpy",
         "supervision",
@@ -1034,6 +1031,14 @@ def test_phase_9_composition_has_no_camera_network_storage_or_concurrency() -> N
     ]
 
     assert not violations
+    bootstrap = (SOURCE_ROOT / "bootstrap.py").read_text(encoding="utf-8").lower()
+    for required in (
+        "hogflow.adapters",
+        "hogflow.camera",
+        "hogflow.detection",
+        "hogflow.tracking",
+    ):
+        assert required in bootstrap
 
 
 def test_phase_9_desktop_has_no_polling_timer_or_business_counter() -> None:

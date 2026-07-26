@@ -102,8 +102,9 @@ modules may consume immutable tracking-domain models but never tracker adapters.
 | `pipeline` | Synchronous generic counting and serial live detector/tracker/crossing orchestration with immutable results. | `video`, `detection`, `tracking`, `streaming`, `models`, `counting`; `core/config` when needed | Data inventory, concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated crossing geometry |
 | `video` | Framework-neutral source contract plus CLI/output and OpenCV metadata infrastructure. | `models` for contract; `adapters`, `pipeline`, `counting`, `core`, `config` for generic entrypoint/output; `data` models/validation for metadata inspection | Sessions, storage, UI business logic, duplicated counting rules |
 | `sessions` | Phase 8.2 one-session lifecycle integration plus Phase 8.3/8.4 synchronous four-dock coordination through one shared counting lane. | `core`, `domain`, public `counting` interfaces/models | Adapters, video, detection/tracking implementations, pipeline, streaming, UI, persistence, networking, camera acquisition, threading/async orchestration |
-| `application` | Phase 9.1 operator commands and stateless delegation to the public Phase 8 coordinator. | `core`, `domain`, public `sessions` interfaces/models | Adapters, video, detection/tracking implementations, pipeline, streaming, presentation, persistence, networking, camera acquisition, threading/async orchestration |
-| `presentation` | Phase 9.1 immutable display models, presenter, and lazy local desktop adapter. | public `application` interfaces/models and Python standard-library UI adapter | Domain/session/counting internals, adapters, CV frameworks, pipeline, streaming, storage, filesystem, networking, polling, threading/async orchestration |
+| `camera` | Phase 9.3 one-source/one-worker acquisition and detector→tracker→crossing orchestration for the shared lane. | Public `streaming`, `detection`, `tracking`, `counting`, and application runtime-access ports | Presentation/Tkinter, storage, networking, concrete CV frameworks, duplicated counting rules |
+| `application` | Phase 9 operator commands, serialized runtime access, and delegation to the public Phase 8/camera boundaries. | `core`, `domain`, public `sessions` and `camera` interfaces/models | Adapters, concrete video/detection/tracking implementations, presentation, persistence, networking, direct OpenCV, Tkinter |
+| `presentation` | Phase 9 immutable display models, presenter, and lazy local desktop adapter. | public `application` interfaces/models and Python standard-library UI adapter | Domain/session/counting internals, adapters, CV frameworks, camera implementation, pipeline, streaming, storage, filesystem, networking, polling, worker mutation |
 | `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | Video, detection, tracking, pipeline, direct UI code |
 | `domain` | Phase 8.1 immutable docks, pig types, unloading sessions, truck aggregate, and dock occupancy rules. | `core` only when necessary | Adapters, CV frameworks, video, detection, tracking, counting, pipeline, sessions, storage, networking, UI |
 
@@ -233,6 +234,22 @@ Presentation continues to depend only on the public application boundary and
 immutable presentation models. Button availability, confirmations, and status
 messages do not authorize direct domain mutation. No background execution,
 camera, adapter, storage, network, or database dependency is permitted.
+
+Phase 9.3 adds `hogflow.camera` as an application-level orchestration boundary.
+It may depend inward on framework-neutral streaming, detection, tracking,
+crossing, and Phase 8 runtime-access ports. It must not import presentation or
+Tkinter. OpenCV remains confined to the existing infrastructure adapters and is
+loaded only when a configured source is created. The uppermost bootstrap may
+wire one concrete camera source adapter and the existing detector/tracker
+contracts; this is composition, not permission for framework objects to escape.
+
+One `SerializedMultiDockRuntimeAccess` lock serializes operator mutations,
+shared-lane binding reads, snapshots, and crossing-result routing. The single
+camera worker performs source reads and detector/tracker/crossing processing
+outside that lock, then revalidates the exact dock/source/lifecycle binding
+before routing evidence. Presentation talks only to the public application
+service and immutable snapshots. No per-dock camera, detector, tracker, counter,
+worker, or queue is permitted by this boundary.
 
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on
