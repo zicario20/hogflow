@@ -1163,3 +1163,58 @@ once. Cancellation discards unfinished counting. A failed counter close leaves
 the immutable domain unchanged. The service deliberately does not coordinate
 simultaneous docks, persist results, run cameras, or aggregate reconnect
 lifecycles; those require later explicit phases.
+
+## ADR-053 - Coordinate four docks synchronously with one owned service and counter each
+
+Status: Accepted
+
+### Context
+
+Phase 8.1 models four independent current dock occupancies and Phase 8.2 binds
+one operation's sessions sequentially to one Phase 7 counter. Phase 8.3 must
+coordinate all four without moving rules into a second aggregate, sharing
+counter state, guessing result ownership, or introducing unrequested
+concurrency infrastructure.
+
+Separate Phase 7 counter instances generate lifecycle IDs in their own local
+scope by default. Merely creating four counters therefore does not prove that
+their active lifecycle provenance is globally unique.
+
+### Decision
+
+Implement `MultiDockRuntimeCoordinator` in the `hogflow.sessions` application
+layer. Keep one private runtime record per current dock, with one explicit
+source, injected counter, and Phase 8.2 service. Route every command by typed
+`DockId`; never scan docks to infer ownership.
+
+Validate source ownership and active/finalized crossing/counting lifecycle IDs
+across all current runtimes. Extend Phase 8.2 startup with an optional
+pre-commit lifecycle validator so a global counting-ID collision closes the
+prospective counter without committing the immutable session transition.
+Require the injected counter factory to provide distinguishable lifecycle IDs;
+reject collisions rather than rewriting Phase 7 provenance.
+
+Keep the coordinator synchronous and caller-serialized. Expose immutable
+Dock 1–4 snapshots and derived finalized totals, while keeping live session
+counts separate. Terminal current records remain readable and are replaced by
+the next registration, preserving the Phase 8.1 no-history policy.
+
+Global shutdown attempts every runtime. Active sessions are cancelled through
+Phase 8.2, unfinished totals are discarded, trucks are not completed or
+cancelled automatically, and close failures are aggregated. Commands are
+rejected after shutdown.
+
+### Consequences
+
+Dock operations, counters, tracker identities, current totals, lifecycle
+provenance, and failures remain isolated. The same numeric tracker ID may
+contribute independently at different docks because Phase 7 source/lifecycle
+scope remains authoritative. A local error does not create a global runtime
+failure.
+
+The coordinator is not thread-safe and does not run cameras. The factory must
+construct counters with globally distinguishable lifecycle identities.
+In-memory terminal history is bounded to one current record per dock, and
+shutdown of active work is a cancellation boundary requiring external recovery.
+UI, persistence, camera orchestration, and true concurrent ingestion remain
+later phases.

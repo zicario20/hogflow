@@ -10,11 +10,10 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 8.2 unloading-session/counting integration
-implemented - one active unloading session owns one isolated Phase 7 lifecycle,
-completion transfers its final positive total exactly once, cancellation
-discards unfinished counting, and domain/counting dependencies remain
-one-directional. Runtime multi-dock orchestration remains pending.
+Current repository status: Phase 8.3 synchronous multi-dock runtime
+coordination implemented. Four logically active dock runtimes can retain
+isolated operations, sources, Phase 8.2 services, and Phase 7 counters. This
+does not implement concurrent camera ingestion, persistence, API, or UI.
 
 ## Project identity
 
@@ -401,6 +400,35 @@ NOT IMPLEMENTED in Phase 8.2:
 * persistence, SQLite, API, UI, networking, threading, or async execution
 * automatic session creation, scheduling, or Phase 8.3
 
+IMPLEMENTED Phase 8.3 multi-dock runtime coordination:
+
+* A synchronous `MultiDockRuntimeCoordinator` manages exactly the four typed
+  docks through one private runtime record per current dock.
+* Every occupied runtime owns one explicit source, injected Phase 7 counter,
+  and Phase 8.2 service after operation startup.
+* Commands and crossing results route by explicit `DockId`; no source scanning
+  or ownership guessing occurs.
+* Active sources and active/finalized crossing/counting lifecycle IDs are
+  validated across current dock records.
+* A Phase 8.2 pre-commit validator closes a prospective counter and preserves
+  immutable session state when a global lifecycle collision is found.
+* Live session totals remain separate from completed-session truck and
+  aggregate pig-type totals.
+* Terminal current records remain readable and replaceable without pretending
+  to be historical persistence.
+* Shutdown attempts all docks, cancels active sessions through Phase 8.2,
+  discards unfinished totals, aggregates close failures, and never completes
+  or cancels a truck automatically.
+* Dock snapshots are immutable and always ordered Dock 1 through Dock 4.
+
+NOT IMPLEMENTED in Phase 8.3:
+
+* camera acquisition or four concurrent camera streams
+* thread safety, async execution, workers, queues, or scheduling
+* persistence/history, SQLite, API, networking, or UI
+* automatic truck/session generation or hardware control
+* Phase 9 or Phase 10
+
 ## Unique tracker counting concept
 
 IMPLEMENTED per-lifecycle policy and session transfer:
@@ -430,7 +458,8 @@ When uncertainty cannot be resolved by a validated rule, the project preference 
 
 ## Multi-dock unloading workflow and session model
 
-IMPLEMENTED Phase 8.1 pure domain and Phase 8.2 application integration:
+IMPLEMENTED Phase 8.1 pure domain, Phase 8.2 application integration, and
+Phase 8.3 synchronous runtime coordination:
 
 The operational reference commonly uses three gate sections and approximately
 60 pigs per section, but neither value is a domain rule. Phase 8.1 models
@@ -473,6 +502,9 @@ Phase 8.2 starts that session and its counter lifecycle together, delegates
 crossing results to Phase 7, and transfers the final positive-direction total
 only when completion closes the lifecycle successfully. Cancellation closes
 the lifecycle without transferring its unfinished total.
+Phase 8.3 composes one such service per occupied dock, preserves cross-dock
+source/lifecycle isolation, and derives read-only combined finalized totals.
+Calls remain synchronous and must be serialized by the caller.
 
 ## Operator MVP User Interface
 
@@ -652,9 +684,9 @@ but representative pig replay, human crossing-event ground truth, and line
 calibration remain pending. Phase 7 lifecycle counting has deterministic
 synthetic evidence only; representative reverse/duplicate validation and RTSP
 production validation remain pending. Phase 8.1 pure unloading-domain
-infrastructure and Phase 8.2 sequential session/counting integration are
-implemented with synthetic evidence; runtime multi-dock orchestration has not
-started.
+infrastructure, Phase 8.2 sequential session/counting integration, and Phase
+8.3 synchronous multi-dock coordination are implemented with synthetic
+evidence. Concurrent camera ingestion has not started.
 
 ## Pilot readiness phase
 
@@ -780,24 +812,29 @@ IMPLEMENTED at repository level:
 * exactly-once final count transfer and cancellation discard behavior
 * fresh Phase 7 current gauges and identity state for sequential sessions
 * synthetic Phase 8.2 lifecycle, transfer, reuse, cancellation, failure, and architecture tests
+* synchronous Phase 8.3 four-dock runtime coordinator and immutable snapshots
+* one injected Phase 7 counter and Phase 8.2 service per current dock runtime
+* cross-dock source/lifecycle uniqueness, routing, isolation, and terminal replacement
+* separated live and finalized totals with deterministic Dock 1-4 aggregate views
+* Phase 8.3 shutdown cancellation, partial-close reporting, and architecture tests
 
 Not yet implemented:
 
 * representative pig line-position evaluation and calibrated line selection
 * representative pig reverse-movement and duplicate-counting validation
-* Phase 8.3 and Phase 9 through Phase 16
+* Phase 9 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
 * pig-specific tracking evaluation
-* simultaneous runtime coordination of several dock/session counters
+* true concurrent camera ingestion for several docks
 * receiving batches or groups
 * exception-event management
 * SQLite event storage
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 8.2 unloading-session/Phase 7 integration
+Current roadmap status: Phase 8.3 synchronous multi-dock runtime coordination
 implemented with synthetic evidence. Representative pig validation,
-cross-reconnect session policy, and multi-dock runtime coordination remain
-pending; Phase 8.3 has not started.
+cross-reconnect session policy, concurrent camera ingestion, persistence, and
+operator UI remain pending. Phase 9 and Phase 10 have not started.

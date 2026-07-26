@@ -27,6 +27,10 @@ integration layer.
 Phase 8.2 adds one sequential application coordinator in `sessions`; it may
 consume the Phase 8.1 domain and Phase 7 public counting interfaces, while
 neither dependency imports back from `sessions`.
+Phase 8.3 adds a synchronous four-dock coordinator in the same application
+layer. It composes one Phase 8.2 service and injected Phase 7 counter per dock
+without adding camera, framework, persistence, networking, UI, threading, or
+async dependencies.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -90,7 +94,7 @@ modules may consume immutable tracking-domain models but never tracker adapters.
 | `streaming` | Framework-neutral live-frame contracts, immutable packets, source configuration, bounded buffering, health, lifecycle, reconnect policy, and synthetic source. | `core` and Python standard library | `adapters`, OpenCV, NumPy, Torch, Ultralytics, Supervision, detection, tracking, counting, pipeline, sessions, storage, UI logic |
 | `pipeline` | Synchronous generic counting and serial live detector/tracker/crossing orchestration with immutable results. | `video`, `detection`, `tracking`, `streaming`, `models`, `counting`; `core/config` when needed | Data inventory, concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated crossing geometry |
 | `video` | Framework-neutral source contract plus CLI/output and OpenCV metadata infrastructure. | `models` for contract; `adapters`, `pipeline`, `counting`, `core`, `config` for generic entrypoint/output; `data` models/validation for metadata inspection | Sessions, storage, UI business logic, duplicated counting rules |
-| `sessions` | Phase 8.2 application boundary between one unloading session and one Phase 7 counting lifecycle. | `core`, `domain`, public `counting` interfaces/models | Adapters, video, detection/tracking implementations, pipeline, streaming, UI, persistence, networking |
+| `sessions` | Phase 8.2 one-session lifecycle integration and Phase 8.3 synchronous four-dock runtime coordination. | `core`, `domain`, public `counting` interfaces/models | Adapters, video, detection/tracking implementations, pipeline, streaming, UI, persistence, networking, camera acquisition, threading/async orchestration |
 | `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | Video, detection, tracking, pipeline, direct UI code |
 | `domain` | Phase 8.1 immutable docks, pig types, unloading sessions, truck aggregate, and dock occupancy rules. | `core` only when necessary | Adapters, CV frameworks, video, detection, tracking, counting, pipeline, sessions, storage, networking, UI |
 
@@ -193,6 +197,13 @@ prospective immutable session transition only after Phase 7 starts or closes
 successfully. Completion transfers the last validated lifecycle total once;
 cancellation transfers none. No live pipeline, camera, framework, queue,
 thread, persistence, network, or UI dependency is introduced.
+
+Phase 8.3 composes one Phase 8.2 service and one injected counter per current
+dock in `sessions`. The coordinator routes commands by typed `DockId`, validates
+source and lifecycle ownership globally, and exposes immutable snapshots. It
+does not change Phase 8.1 aggregates or Phase 7 counting rules. Calls are
+synchronous and must be serialized by the caller; no camera, worker, thread,
+async task, queue, persistence, network, API, or UI dependency is introduced.
 
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on

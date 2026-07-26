@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Callable
 
 from hogflow.core import InputDataError
 from hogflow.counting import (
@@ -105,14 +106,26 @@ class UnloadingSessionCountingService:
 
         return self._current_count
 
+    @property
+    def last_processed_frame(self) -> int | None:
+        """Return the latest active-lifecycle frame without exposing the counter."""
+
+        if self._active_lifecycle is None:
+            return None
+        return self._counter.statistics().last_frame_sequence
+
     def start_session(
         self,
         session_id: str,
         crossing_lifecycle_id: str,
         started_at: datetime,
+        *,
+        lifecycle_validator: Callable[[SessionCountingLifecycle], None] | None = None,
     ) -> SessionCountingLifecycle:
         """Start one domain session and one fresh Phase 7 lifecycle atomically."""
 
+        if lifecycle_validator is not None and not callable(lifecycle_validator):
+            raise SessionCountingConfigurationError("Session lifecycle validator must be callable.")
         if self._active_lifecycle is not None or self._counter.is_started:
             raise SessionCountingLifecycleError(
                 "Exactly one counting lifecycle may exist for the active session."
@@ -160,6 +173,8 @@ class UnloadingSessionCountingService:
                 counting_configuration_fingerprint=self._counter.configuration.fingerprint,
                 started_at=lifecycle_started_at,
             )
+            if lifecycle_validator is not None:
+                lifecycle_validator(lifecycle)
         except Exception:
             self._close_after_failed_start()
             raise

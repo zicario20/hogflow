@@ -166,6 +166,7 @@ Authorized Phase 8 subphase:
 
 * Phase 8.1 — Multi-Dock Unloading Domain Model and Rules.
 * Phase 8.2 — Unloading Session ↔ Phase 7 Counting Lifecycle Integration.
+* Phase 8.3 — Multi-Dock Runtime Coordination.
 
 Phase 8.1 models exactly four independently occupied docks and a variable
 number of ordered single-pig-type unloading sessions per truck operation. The
@@ -180,6 +181,16 @@ positive-direction total exactly once, and cancellation discards unfinished
 counting. Phase 8.2 does not add multi-dock runtime orchestration, persistence,
 networking, API, UI, camera orchestration, concurrency, automatic session
 generation, or Phase 8.3.
+
+Phase 8.3 implements a synchronous application coordinator in
+`hogflow.sessions`. It may maintain one current runtime per supported dock,
+with one explicit source, one Phase 8.2 service, and one independently created
+Phase 7 counter. It must validate source and lifecycle ownership across docks,
+route commands by typed `DockId`, expose immutable snapshots, and preserve
+dock-local failure isolation. Calls are caller-serialized; Phase 8.3 does not
+implement camera acquisition, true concurrent ingestion, threading, async
+execution, persistence, API, networking, UI, automatic scheduling, Phase 9, or
+Phase 10.
 
 ### Phase 9
 
@@ -441,6 +452,12 @@ application-oriented `sessions` package: every started unloading session owns
 one fresh Phase 7 lifecycle, completed lifecycle totals transfer exactly once,
 and cancelled lifecycle totals are discarded. Domain and counting packages
 must not depend back on this integration layer.
+
+Phase 8.3 may compose one Phase 8.2 service and one injected counter per dock
+inside the same application package. It must not duplicate aggregate or Phase
+7 counting rules. The same numeric tracker ID is isolated by each dock's
+source/session lifecycle, while active lifecycle IDs must remain globally
+unique across current dock runtimes.
 
 ---
 

@@ -250,6 +250,27 @@ def test_finalized_crossing_lifecycle_cannot_be_reused() -> None:
     assert not counter.is_started
 
 
+def test_lifecycle_validator_rejection_closes_counter_without_committing_session() -> None:
+    service, counter = service_for()
+    original = service.operation
+
+    def reject(_lifecycle) -> None:
+        raise SessionCountingLifecycleError("synthetic global lifecycle conflict")
+
+    with pytest.raises(SessionCountingLifecycleError, match="global lifecycle conflict"):
+        service.start_session(
+            "session-1",
+            "crossing-session-1",
+            at(1),
+            lifecycle_validator=reject,
+        )
+
+    assert service.operation == original
+    assert service.active_lifecycle is None
+    assert service.finalized_lifecycles == ()
+    assert not counter.is_started
+
+
 def test_crossing_source_lifecycle_and_time_are_validated_before_counting() -> None:
     service, counter = service_for()
     lifecycle = service.start_session("session-1", "crossing-session-1", at(2))
