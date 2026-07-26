@@ -16,10 +16,11 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 8.4 shared counting-lane alignment implemented.
-The coordinator maintains four independent dock operations while one shared
-corridor/source/counter may belong to exactly one active unloading session.
-This is in-memory application infrastructure, not camera execution or
+Current roadmap status: Phase 9.1 Operator MVP presentation implemented. The
+desktop is driven exclusively by fresh Phase 8 snapshots and public commands:
+it shows four independent dock operations, the single shared-lane owner, the
+live lifecycle count, and finalized totals. This remains in-memory,
+manual-refresh infrastructure without camera execution, persistence, or
 production validation.
 
 ## Official project memory
@@ -129,6 +130,12 @@ one `SharedCountingLane` owns the sole source and Phase 7 counter. At most one
 session binds the lane; completion/cancellation releases it. Calls must be
 serialized by the caller; no camera acquisition, threading, async execution,
 persistence, API, networking, or UI is added.
+
+Phase 9.1 adds a stateless operator application service, immutable display
+models, a presenter, and a lazy local Tkinter desktop. Operator actions route
+only through public coordinator methods and every render comes from
+`MultiDockRuntimeCoordinator.snapshot()`. The UI does not calculate counts,
+poll, open a camera, persist data, or access Phase 7/8 internals.
 
 ## Phase 0 documentation
 
@@ -385,6 +392,25 @@ Phase 8.4 aligns the runtime with one physical counting corridor:
 * [Phase 8.4 validation](docs/phase_8/phase_8_4_validation.md)
 * [Phase 8.4 summary](docs/phase_8/phase_8_4_summary.md)
 
+## Phase 9
+
+Phase 9.1 supplies the first functional Operator MVP workflow:
+
+* one shared-lane panel with owner, session, pig type, and live count;
+* four immutable dock panels;
+* register/start/complete/cancel truck and session actions;
+* finalized total and pig-type views;
+* explicit expected-error display;
+* manual snapshot refresh only;
+* no camera preview, persistence, polling, networking, or production UI claim.
+
+The desktop requires an already composed operator application. It does not
+construct camera or counting resources.
+
+* [Phase 9.1 Operator MVP](docs/phase_9/phase_9_1_operator_mvp.md)
+* [Phase 9.1 validation](docs/phase_9/phase_9_1_validation.md)
+* [Phase 9.1 summary](docs/phase_9/phase_9_1_summary.md)
+
 ## High-level pipeline
 
 Production input through lifecycle directional decisions implemented through
@@ -403,10 +429,10 @@ LIVE CAMERA
 → DIRECTIONAL CROSSING EVENTS
 → LIFECYCLE DIRECTIONAL DECISIONS / LOCAL TELEMETRY
 
-Session totals are connected at the pure application boundary but camera
-acquisition, biological re-identification, persistence, and operator UI are
-not integrated. Phase 8.4 coordinates four dock operations through one shared
-counting resource; it still does not open or schedule the physical camera.
+Session totals are connected at the pure application boundary and Phase 9.1
+can operate that workflow through public commands and snapshots. Camera
+acquisition, biological re-identification, persistence, and video preview are
+not integrated. Phase 8.4 still does not open or schedule the physical camera.
 
 Implemented generic Phase 2.3 development/video flow:
 
@@ -419,8 +445,8 @@ VIDEO SOURCE
 → FINITE-SEGMENT DIRECTIONAL COUNTER
 → ANNOTATED VIDEO / JSONL EVENTS
 
-Planned later-roadmap flow adds pig-specific validation, session management,
-storage, operator UI, and evaluation only in their approved phases.
+Planned later-roadmap flow adds pig-specific validation, storage, broader
+operator preview/review workflow, and evaluation only in approved phases.
 
 Implemented Phase 6 offline evaluation flow:
 
@@ -446,7 +472,8 @@ TRACKING REPLAY
 * Phase 8.2: sequential unloading-session/Phase 7 lifecycle integration implemented
 * Phase 8.3: synchronous multi-dock runtime foundation implemented
 * Phase 8.4: one shared counting-lane ownership aligned; camera execution remains unimplemented
-* Phase 9 through Phase 16: not started
+* Phase 9.1: snapshot-driven Operator MVP application/presentation implemented
+* Phase 10 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
 The source-controlled repository contains no real pig video and makes no claim
@@ -483,8 +510,9 @@ real pig detector was trained or validated during Phase 4.3
 implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific
 tracking evaluation, camera-to-session runtime integration, SQLite persistence,
-operator UI, live counting ground-truth comparison, analytics, or pilot
-workflow. The Phase 8.1 domain, Phase 8.2 lifecycle integration, and Phase
+camera preview, live counting ground-truth comparison, analytics, or pilot
+workflow. The Phase 9.1 UI can issue and render in-memory workflow commands but
+has no automatic live input or durable state. The Phase 8.1 domain, Phase 8.2 lifecycle integration, and Phase
 8.3–8.4 coordinator/lane are synthetic and in-memory only. The coordinator is
 synchronous and caller-serialized; it does not open the shared camera.
 A reconnect changing the crossing lifecycle during one unloading session is

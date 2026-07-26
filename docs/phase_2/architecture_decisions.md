@@ -1272,3 +1272,42 @@ ADR-053 remains historical documentation of Phase 8.3 but its per-dock
 counter/source factory is no longer the current architecture. Multiple
 physical lanes, camera acquisition, concurrency, scheduling, persistence, and
 UI remain outside Phase 8.4.
+
+## ADR-055 - Keep the first operator UI snapshot-driven and stateless
+
+Status: Accepted
+
+### Context
+
+Phase 8.4 exposes the complete current four-dock and shared-lane read model
+through immutable snapshots and all permitted transitions through public
+coordinator methods. A presentation-owned mirror, direct aggregate mutation,
+or UI-owned count would create a second source of truth. Camera, persistence,
+polling, and production UI concerns are not authorized in Phase 9.1.
+
+### Decision
+
+Add a small `hogflow.application` boundary that translates immutable operator
+commands into public `MultiDockRuntimeCoordinator` calls and always returns a
+fresh snapshot. Add `hogflow.presentation` above it with immutable display
+models, a presenter, and a lazy Tkinter desktop adapter.
+
+The presenter owns no snapshot cache. Live count comes directly from
+`SharedCountingLaneSnapshot.current_session_count`, while finalized totals
+come directly from the aggregate snapshot. Expected domain/application errors
+are displayed and remain observable. Manual refresh is the only refresh
+mechanism.
+
+Require the application composition root to inject the crossing-lifecycle ID
+factory. The desktop does not open or infer camera/pipeline lifecycle state.
+
+### Consequences
+
+The four dock panels, single lane owner, actions, live count, and finalized
+totals can be exercised headlessly without moving Phase 7/8 rules into UI.
+Tkinter is optional at runtime and absent from import-time behavior.
+
+The Phase 9.1 desktop cannot acquire frames, update live counts by itself,
+poll, persist, or recover across restart. A future explicitly authorized
+composition must connect camera lifecycle provenance without weakening this
+boundary.

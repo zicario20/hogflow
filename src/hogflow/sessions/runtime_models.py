@@ -171,6 +171,14 @@ class MultiDockRuntimeSnapshot:
     aggregate_totals_by_pig_type: tuple[PigTypeTotal, ...]
     coordinator_closed: bool
 
+    @property
+    def completed_operation_count(self) -> int:
+        """Return completed terminal records currently retained by the runtime."""
+
+        return sum(
+            item.operation_status is TruckOperationStatus.COMPLETED for item in self.dock_snapshots
+        )
+
     def __post_init__(self) -> None:
         if (
             not isinstance(self.generated_at, datetime)

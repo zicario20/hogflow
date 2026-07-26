@@ -887,3 +887,99 @@ def test_phase_7_and_phase_8_1_do_not_depend_back_on_sessions() -> None:
     ]
 
     assert not violations
+
+
+def test_phase_9_application_uses_only_public_phase_8_boundaries() -> None:
+    files = (
+        SOURCE_ROOT / "application" / "errors.py",
+        SOURCE_ROOT / "application" / "models.py",
+        SOURCE_ROOT / "application" / "operator_service.py",
+        SOURCE_ROOT / "application" / "ports.py",
+    )
+    forbidden_tokens = (
+        "hogflow.adapters",
+        "hogflow.detection",
+        "hogflow.pipeline",
+        "hogflow.presentation",
+        "hogflow.storage",
+        "hogflow.streaming",
+        "hogflow.tracking",
+        "cv2",
+        "numpy",
+        "supervision",
+        "ultralytics",
+        "sqlite",
+        "threading",
+        "asyncio",
+        "socket",
+        "requests",
+        "._coordinator._",
+    )
+
+    violations = [
+        f"{source_file.name}: {token}"
+        for source_file in files
+        for token in forbidden_tokens
+        if token in source_file.read_text(encoding="utf-8").lower()
+    ]
+
+    assert not violations
+
+
+def test_phase_9_presentation_depends_only_on_application_and_presentation() -> None:
+    files = (
+        SOURCE_ROOT / "presentation" / "desktop.py",
+        SOURCE_ROOT / "presentation" / "models.py",
+        SOURCE_ROOT / "presentation" / "ports.py",
+        SOURCE_ROOT / "presentation" / "presenter.py",
+    )
+    forbidden_tokens = (
+        "hogflow.adapters",
+        "hogflow.counting",
+        "hogflow.detection",
+        "hogflow.domain",
+        "hogflow.pipeline",
+        "hogflow.sessions",
+        "hogflow.storage",
+        "hogflow.streaming",
+        "hogflow.tracking",
+        "cv2",
+        "numpy",
+        "supervision",
+        "ultralytics",
+        "sqlite",
+        "threading",
+        "asyncio",
+        "socket",
+        "requests",
+        "pathlib",
+        "open(",
+    )
+
+    violations = [
+        f"{source_file.name}: {token}"
+        for source_file in files
+        for token in forbidden_tokens
+        if token in source_file.read_text(encoding="utf-8").lower()
+    ]
+
+    assert not violations
+
+
+def test_phase_7_and_phase_8_do_not_depend_on_phase_9() -> None:
+    lower_layer_files = tuple(
+        source_file
+        for package in ("counting", "domain", "sessions")
+        for source_file in (SOURCE_ROOT / package).glob("*.py")
+    )
+
+    violations = [
+        source_file.name
+        for source_file in lower_layer_files
+        if any(
+            token in source_file.read_text(encoding="utf-8").lower()
+            for token in ("hogflow.application", "hogflow.presentation")
+        )
+    ]
+
+    assert not violations

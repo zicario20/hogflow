@@ -10,10 +10,11 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 8.4 shared counting-lane alignment
-implemented. Four operational dock records remain isolated, while one shared
-corridor/source/Phase 7 counter can be bound to exactly one active unloading
-session. This does not implement camera ingestion, persistence, API, or UI.
+Current repository status: Phase 9.1 Operator MVP application/presentation
+implemented. Four operational dock records and one shared lane are rendered
+from immutable Phase 8 snapshots, and operator actions delegate through public
+coordinator methods. This does not implement camera ingestion, persistence,
+API, networking, or production UI validation.
 
 ## Project identity
 
@@ -453,6 +454,29 @@ NOT IMPLEMENTED in Phase 8.4:
 * automatic lane ownership selection
 * Phase 9 or Phase 10
 
+IMPLEMENTED Phase 9.1 operator MVP presentation:
+
+* Immutable operator registration commands translate into validated Phase 8.1
+  operations without retaining a mutable mirror.
+* A stateless application service delegates register/start/complete/cancel
+  actions to public `MultiDockRuntimeCoordinator` methods.
+* A presenter renders only fresh coordinator snapshots into immutable lane,
+  Dock 1–4, and finalized-total display models.
+* Live count comes directly from
+  `SharedCountingLaneSnapshot.current_session_count`.
+* One lazy local Tkinter adapter supplies the unstyled desktop layout, manual
+  refresh, and expected-error display without import-time GUI effects.
+* Headless synthetic tests exercise operation/session workflow, lane
+  ownership/release, live/finalized totals, errors, and dependencies.
+
+NOT IMPLEMENTED in Phase 9.1:
+
+* camera acquisition, preview, video rendering, or automatic live ingestion
+* polling, timers, threads, async execution, scheduling, or multiple windows
+* persistence, SQLite, filesystem output, API, networking, or authentication
+* review-event, confirmation, or manual count-override workflow
+* Phase 10
+
 NOT IMPLEMENTED in Phase 8.3:
 
 * camera acquisition or four concurrent camera streams
@@ -542,11 +566,14 @@ must be serialized by the caller.
 
 ## Operator MVP User Interface
 
-PLANNED in Phase 9:
+IMPLEMENTED first subset in Phase 9.1:
 
-The Operator MVP UI is intended to become the normal operator interface once it exists, while terminal logs remain available for development and diagnostics.
+The Operator MVP desktop exposes the authorized truck/session actions, four
+dock panels, shared-lane ownership/live count, and finalized totals using
+manual snapshot refresh. It owns no business state and does not increment
+counts.
 
-Minimum planned UI information and controls:
+Broader planned Phase 9 information remains:
 
 * CURRENT SECTION
 * SESSION STATUS
@@ -560,6 +587,9 @@ Minimum planned UI information and controls:
 * REVIEW RECOMMENDED STATUS
 
 The UI must consume project modules and must not duplicate counting logic or directly increment the AI count.
+
+Camera/video preview, last-event review, confirmation, and review-recommended
+workflow are not part of Phase 9.1 and remain unimplemented.
 
 ## SQLite conceptual data model
 
@@ -720,7 +750,9 @@ synthetic evidence only; representative reverse/duplicate validation and RTSP
 production validation remain pending. Phase 8.1 pure unloading-domain
 infrastructure, Phase 8.2 sequential session/counting integration, and Phase
 8.3 synchronous multi-dock coordination are implemented with synthetic
-evidence. Concurrent camera ingestion has not started.
+evidence. Phase 9.1 adds a synthetic/headless-validated operator
+application/presentation over Phase 8 snapshots. Concurrent camera ingestion
+has not started.
 
 ## Pilot readiness phase
 
@@ -851,12 +883,16 @@ IMPLEMENTED at repository level:
 * mutually exclusive lane ownership, exact routing, isolation, and terminal replacement
 * separated live and finalized totals with deterministic Dock 1-4 aggregate views
 * shared-lane shutdown cancellation, recovery-safe close failure, and architecture tests
+* stateless Phase 9.1 operator application commands and coordinator delegation
+* immutable operator screen models and snapshot-driven presenter
+* lazy local Tkinter desktop with four docks, one lane, actions, and totals
+* synthetic Phase 9.1 workflow, error-display, import, and architecture tests
 
 Not yet implemented:
 
 * representative pig line-position evaluation and calibrated line selection
 * representative pig reverse-movement and duplicate-counting validation
-* Phase 9 through Phase 16
+* later Phase 9 subphases and Phase 10 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
@@ -865,10 +901,11 @@ Not yet implemented:
 * receiving batches or groups
 * exception-event management
 * SQLite event storage
-* operator UI
+* camera/video preview and representative operator validation
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 8.4 shared counting-lane alignment implemented
-with synthetic evidence. Representative pig validation, cross-reconnect
-session policy, physical camera integration, persistence, and operator UI
-remain pending. Phase 9 and Phase 10 have not started.
+Current roadmap status: Phase 9.1 Operator MVP application/presentation
+implemented with synthetic headless evidence. Representative pig validation,
+cross-reconnect session policy, physical camera integration, persistence,
+camera preview, and broader operator workflow remain pending. Phase 10 has not
+started.

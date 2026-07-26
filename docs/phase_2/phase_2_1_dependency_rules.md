@@ -32,6 +32,10 @@ layer. Phase 8.4 corrects its resource topology: the coordinator composes four
 operational dock records with one `SharedCountingLane`, source, Phase 8.2
 service binding, and injected Phase 7 counter. No camera, framework,
 persistence, networking, UI, threading, or async dependency is added.
+Phase 9.1 adds a stateless operator application boundary over the public Phase
+8 coordinator and a snapshot-driven presentation boundary over that
+application. Tkinter remains a lazy local adapter and no camera, persistence,
+network, filesystem, polling, thread, or async dependency is added.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -50,6 +54,8 @@ Implemented direction:
 * `evaluation line positions → counting/tracking models/core`
 * `domain unloading models/aggregates → core`
 * `sessions application coordination → domain/counting public interfaces/core`
+* `operator application → sessions/domain public interfaces/core`
+* `presentation → operator application`
 * `annotation models/policy/YOLO/manifest → evaluation models/models/core`
 * `data splitting/frame planning → annotation models/core/data`
 * `frame extraction → data planning/annotation models/core/OpenCV`
@@ -96,6 +102,8 @@ modules may consume immutable tracking-domain models but never tracker adapters.
 | `pipeline` | Synchronous generic counting and serial live detector/tracker/crossing orchestration with immutable results. | `video`, `detection`, `tracking`, `streaming`, `models`, `counting`; `core/config` when needed | Data inventory, concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated crossing geometry |
 | `video` | Framework-neutral source contract plus CLI/output and OpenCV metadata infrastructure. | `models` for contract; `adapters`, `pipeline`, `counting`, `core`, `config` for generic entrypoint/output; `data` models/validation for metadata inspection | Sessions, storage, UI business logic, duplicated counting rules |
 | `sessions` | Phase 8.2 one-session lifecycle integration plus Phase 8.3/8.4 synchronous four-dock coordination through one shared counting lane. | `core`, `domain`, public `counting` interfaces/models | Adapters, video, detection/tracking implementations, pipeline, streaming, UI, persistence, networking, camera acquisition, threading/async orchestration |
+| `application` | Phase 9.1 operator commands and stateless delegation to the public Phase 8 coordinator. | `core`, `domain`, public `sessions` interfaces/models | Adapters, video, detection/tracking implementations, pipeline, streaming, presentation, persistence, networking, camera acquisition, threading/async orchestration |
+| `presentation` | Phase 9.1 immutable display models, presenter, and lazy local desktop adapter. | public `application` interfaces/models and Python standard-library UI adapter | Domain/session/counting internals, adapters, CV frameworks, pipeline, streaming, storage, filesystem, networking, polling, threading/async orchestration |
 | `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | Video, detection, tracking, pipeline, direct UI code |
 | `domain` | Phase 8.1 immutable docks, pig types, unloading sessions, truck aggregate, and dock occupancy rules. | `core` only when necessary | Adapters, CV frameworks, video, detection, tracking, counting, pipeline, sessions, storage, networking, UI |
 
@@ -208,6 +216,15 @@ aggregates or Phase 7 counting rules. Calls are synchronous and must be
 serialized by the caller; no camera, worker, thread, async task, queue,
 persistence, network, API, or UI dependency is introduced.
 
+Phase 9.1 introduces `application` above Phase 8 and `presentation` above that
+application boundary. `OperatorApplicationService` translates validated
+operator commands into public coordinator calls and returns only fresh
+`MultiDockRuntimeSnapshot` values. `OperatorPresenter` creates transient
+display projections and retains no snapshot cache. The local Tkinter adapter
+is imported only when explicitly run; it creates no display at module import,
+uses no timer or polling, and owns no counting/session rule. Phase 7, `domain`,
+and `sessions` do not import Phase 9 packages.
+
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on
 contracts and HogFlow models.
@@ -217,8 +234,10 @@ contracts and HogFlow models.
 Future roadmap work remains governed by lower-level dependencies:
 
 * `sessions → core/domain/counting public interfaces`
+* `application → core/domain/sessions public interfaces`
+* `presentation → application`
 * `storage → core/domain/sessions`
-* `future UI → pipeline/sessions/storage`
+* `future persisted UI → application/storage`
 
 These arrows do not mark those packages as implemented.
 
