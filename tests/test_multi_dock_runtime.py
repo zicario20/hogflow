@@ -633,6 +633,51 @@ def test_snapshot_separates_live_and_finalized_totals() -> None:
     assert snapshot.aggregate_completed_pig_count == 0
 
 
+def test_snapshot_exposes_authoritative_next_session_and_completion_eligibility() -> None:
+    runtime, _lane, _counter = coordinator()
+    register(runtime, DockId.DOCK_1, (PigType.OPG, PigType.REGULAR))
+
+    planned = runtime.runtime_for(DockId.DOCK_1)
+    assert planned.next_planned_session_id == "dock_1-session-1"
+    assert planned.next_planned_pig_type is PigType.OPG
+    assert not planned.operation_can_start_session
+    assert not planned.operation_can_complete
+
+    runtime.start_operation(DockId.DOCK_1, at(0))
+    active = runtime.runtime_for(DockId.DOCK_1)
+    assert active.operation_can_start_session
+
+    runtime.start_session(
+        DockId.DOCK_1,
+        "dock_1-session-1",
+        "workflow-crossing-1",
+        at(1),
+    )
+    session_active = runtime.runtime_for(DockId.DOCK_1)
+    assert not session_active.operation_can_start_session
+    assert not session_active.operation_can_complete
+
+    runtime.complete_session(DockId.DOCK_1, at(2))
+    next_session = runtime.runtime_for(DockId.DOCK_1)
+    assert next_session.next_planned_session_id == "dock_1-session-2"
+    assert next_session.next_planned_pig_type is PigType.REGULAR
+    assert next_session.operation_can_start_session
+    assert not next_session.operation_can_complete
+
+    runtime.start_session(
+        DockId.DOCK_1,
+        "dock_1-session-2",
+        "workflow-crossing-2",
+        at(3),
+    )
+    runtime.complete_session(DockId.DOCK_1, at(4))
+    completable = runtime.runtime_for(DockId.DOCK_1)
+    assert completable.next_planned_session_id is None
+    assert completable.next_planned_pig_type is None
+    assert not completable.operation_can_start_session
+    assert completable.operation_can_complete
+
+
 def test_completed_counts_aggregate_across_docks_in_stable_pig_type_order() -> None:
     runtime, _lane, _counter = coordinator()
     for index, (dock_id, pig_type, count) in enumerate(

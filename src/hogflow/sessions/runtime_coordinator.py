@@ -14,6 +14,7 @@ from hogflow.domain import (
     PigTypeTotal,
     TruckOperation,
     TruckOperationStatus,
+    UnloadingSessionStatus,
 )
 from hogflow.sessions.errors import SessionCountingIntegrationError
 from hogflow.sessions.lane_errors import (
@@ -402,6 +403,10 @@ class MultiDockRuntimeCoordinator:
                 operation_status=None,
                 active_session_id=None,
                 active_pig_type=None,
+                next_planned_session_id=None,
+                next_planned_pig_type=None,
+                operation_can_start_session=False,
+                operation_can_complete=False,
                 current_session_count=0,
                 truck_total=0,
                 totals_by_pig_type=tuple(PigTypeTotal(item, 0) for item in PigType),
@@ -418,6 +423,12 @@ class MultiDockRuntimeCoordinator:
 
         owns_lane = lane.occupied and lane.active_dock_id is dock
         active_session = operation.active_session if owns_lane else None
+        planned_sessions = tuple(
+            session
+            for session in operation.sessions
+            if session.status is UnloadingSessionStatus.PLANNED
+        )
+        next_planned_session = planned_sessions[0] if planned_sessions else None
         if operation.status.is_terminal:
             status = DockRuntimeStatus.TERMINAL
         elif owns_lane:
@@ -434,6 +445,26 @@ class MultiDockRuntimeCoordinator:
             operation_status=operation.status,
             active_session_id=(None if active_session is None else active_session.session_id),
             active_pig_type=(None if active_session is None else active_session.pig_type),
+            next_planned_session_id=(
+                None if next_planned_session is None else next_planned_session.session_id
+            ),
+            next_planned_pig_type=(
+                None if next_planned_session is None else next_planned_session.pig_type
+            ),
+            operation_can_start_session=(
+                operation.status is TruckOperationStatus.ACTIVE
+                and not lane.occupied
+                and next_planned_session is not None
+            ),
+            operation_can_complete=(
+                operation.status is TruckOperationStatus.ACTIVE
+                and not owns_lane
+                and not planned_sessions
+                and any(
+                    session.status is UnloadingSessionStatus.COMPLETED
+                    for session in operation.sessions
+                )
+            ),
             current_session_count=lane.current_session_count if owns_lane else 0,
             truck_total=operation.truck_total,
             totals_by_pig_type=operation.totals_by_pig_type,

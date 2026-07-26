@@ -124,3 +124,32 @@ def test_invalid_operator_transition_propagates_without_fabricating_state() -> N
     after = application.snapshot()
     assert after.dock_snapshots == before.dock_snapshots
     assert after.counting_lane == before.counting_lane
+
+
+def test_operator_shutdown_closes_idle_runtime_and_is_idempotent() -> None:
+    application, _coordinator = operator_application()
+
+    first = application.shutdown()
+    second = application.shutdown()
+
+    assert first.coordinator_closed
+    assert first.counting_lane.closed
+    assert second.dock_snapshots == first.dock_snapshots
+    assert second.counting_lane == first.counting_lane
+    assert second.coordinator_closed
+
+
+def test_operator_shutdown_cancels_only_active_session_without_finalizing_count() -> None:
+    application, coordinator = operator_application()
+    application.register_truck(registration())
+    application.start_truck(DockId.DOCK_1)
+    application.start_session(DockId.DOCK_1, "dock_1-session-1")
+    add_positive_count(coordinator, DockId.DOCK_1, (101, 102))
+
+    snapshot = application.shutdown()
+
+    dock = snapshot.for_dock(DockId.DOCK_1)
+    assert snapshot.coordinator_closed
+    assert not snapshot.counting_lane.occupied
+    assert dock.truck_total == 0
+    assert dock.runtime_status is DockRuntimeStatus.OPERATION_ACTIVE

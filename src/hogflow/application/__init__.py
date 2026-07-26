@@ -8,13 +8,14 @@ from hogflow.application.operator_service import (
     OperatorApplicationService,
 )
 from hogflow.application.ports import OperatorApplication
-from hogflow.domain import DockId, PigType
-from hogflow.sessions import MultiDockRuntimeSnapshot
+from hogflow.domain import DockId, PigType, TruckOperationStatus
+from hogflow.sessions import DockRuntimeStatus, MultiDockRuntimeSnapshot
 
 __all__ = [
     "Clock",
     "CrossingLifecycleIdFactory",
     "DockId",
+    "DockRuntimeStatus",
     "ExpectedOperatorError",
     "MultiDockRuntimeSnapshot",
     "OperatorApplication",
@@ -23,4 +24,5 @@ __all__ = [
     "PigType",
     "PlannedSession",
     "RegisterTruckCommand",
+    "TruckOperationStatus",
 ]

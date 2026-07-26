@@ -13,12 +13,18 @@ from hogflow.application import (
     PlannedSession,
     RegisterTruckCommand,
 )
-from hogflow.presentation.models import OperatorScreen
+from hogflow.presentation.models import (
+    ConfirmationRequest,
+    OperatorAction,
+    OperatorScreen,
+)
 from hogflow.presentation.presenter import OperatorPresenter
+
+_EMPTY = "—"
 
 
 def parse_session_plan(value: str) -> tuple[PlannedSession, ...]:
-    """Parse newline-separated ``id,sequence,type[,expected]`` input."""
+    """Parse and validate newline-separated ``id,sequence,type[,expected]`` input."""
 
     if not isinstance(value, str):
         raise OperatorInputError("Session plan must be text.")
@@ -26,60 +32,113 @@ def parse_session_plan(value: str) -> tuple[PlannedSession, ...]:
     if not rows:
         raise OperatorInputError("Register Truck requires at least one session row.")
     sessions: list[PlannedSession] = []
+    session_ids: set[str] = set()
+    sequences: set[int] = set()
     for row_number, row in enumerate(rows, start=1):
         fields = tuple(item.strip() for item in row.split(","))
         if len(fields) not in (3, 4):
             raise OperatorInputError(
                 f"Session row {row_number} must use id,sequence,type[,expected]."
             )
+        if not fields[0]:
+            raise OperatorInputError(f"Session row {row_number} requires a session ID.")
         try:
             sequence_number = int(fields[1])
+        except ValueError as exc:
+            raise OperatorInputError(
+                f"Session row {row_number} sequence must be a positive integer."
+            ) from exc
+        if sequence_number <= 0:
+            raise OperatorInputError(
+                f"Session row {row_number} sequence must be a positive integer."
+            )
+        try:
             pig_type = PigType.parse(fields[2].lower())
+        except ExpectedOperatorError as exc:
+            raise OperatorInputError(
+                f"Session row {row_number} pig type must be regular, opg, p12, or nae."
+            ) from exc
+        try:
             expected_count = None
             if len(fields) == 4 and fields[3]:
                 expected_count = int(fields[3])
-            sessions.append(
-                PlannedSession(
-                    session_id=fields[0],
-                    sequence_number=sequence_number,
-                    pig_type=pig_type,
-                    expected_count=expected_count,
-                )
+            session = PlannedSession(
+                session_id=fields[0],
+                sequence_number=sequence_number,
+                pig_type=pig_type,
+                expected_count=expected_count,
             )
         except (ExpectedOperatorError, ValueError) as exc:
             raise OperatorInputError(f"Session row {row_number} is invalid.") from exc
+        if session.session_id in session_ids:
+            raise OperatorInputError(
+                f"Session row {row_number} repeats session ID {session.session_id}."
+            )
+        if session.sequence_number in sequences:
+            raise OperatorInputError(
+                f"Session row {row_number} repeats sequence {session.sequence_number}."
+            )
+        session_ids.add(session.session_id)
+        sequences.add(session.sequence_number)
+        sessions.append(session)
     return tuple(sessions)
 
 
-class TkOperatorView:
-    """Unstyled Tkinter adapter with no business-state ownership."""
+def parse_register_truck_form(
+    dock_id: DockId,
+    operation_id: str,
+    session_plan: str,
+) -> RegisterTruckCommand:
+    """Validate the complete form before invoking the application service."""
 
-    def __init__(self, root: Any, tk: Any, application: OperatorApplication) -> None:
+    if not isinstance(operation_id, str) or not operation_id.strip():
+        raise OperatorInputError("Register Truck requires an operation ID.")
+    return RegisterTruckCommand(
+        dock_id=DockId.parse(dock_id),
+        operation_id=operation_id.strip(),
+        sessions=parse_session_plan(session_plan),
+    )
+
+
+class TkOperatorView:
+    """Unstyled Tkinter adapter with snapshot-only business rendering."""
+
+    def __init__(self, root: Any, tk: Any) -> None:
         self._root = root
         self._tk = tk
-        self._application = application
-        self._presenter = OperatorPresenter(application, self)
+        self._presenter: OperatorPresenter | None = None
         self._dock_value = tk.StringVar(value=DockId.DOCK_1.value)
         self._operation_value = tk.StringVar(value="")
         self._session_value = tk.StringVar(value="")
-        self._message_value = tk.StringVar(value="")
+        self._status_value = tk.StringVar(value="Ready")
         self._lane_values = {
-            name: tk.StringVar(value="—")
+            name: tk.StringVar(value=_EMPTY)
             for name in ("status", "dock", "truck", "pig_type", "session", "count")
         }
         self._dock_values = {dock: tk.StringVar(value="") for dock in DockId}
         self._totals_value = tk.StringVar(value="")
         self._session_plan_widget: Any = None
+        self._buttons: dict[OperatorAction, Any] = {}
         self._build_layout()
+        self._root.protocol("WM_DELETE_WINDOW", self._request_exit)
+
+    def bind_presenter(self, presenter: OperatorPresenter) -> None:
+        """Attach exactly one presenter at the composition boundary."""
+
+        if not isinstance(presenter, OperatorPresenter):
+            raise TypeError("Desktop view requires an OperatorPresenter.")
+        if self._presenter is not None:
+            raise RuntimeError("Desktop presenter is already bound.")
+        self._presenter = presenter
 
     def start(self) -> None:
         """Render once and enter the toolkit loop without polling."""
 
-        self._presenter.refresh()
+        self._require_presenter().refresh(self._dock())
         self._root.mainloop()
 
     def render(self, screen: OperatorScreen) -> None:
-        """Replace widget text using one fresh immutable screen model."""
+        """Replace widget output and control state from one immutable screen."""
 
         lane = screen.counting_lane
         values = (
@@ -93,17 +152,35 @@ class TkOperatorView:
         for key, value in values:
             self._lane_values[key].set(value)
         for panel, dock in zip(screen.docks, DockId, strict=True):
+            flags = tuple(
+                value
+                for value, enabled in (
+                    ("SELECTED", panel.is_selected),
+                    ("LANE OWNER", panel.owns_lane),
+                )
+                if enabled
+            )
+            heading = f" [{', '.join(flags)}]" if flags else ""
             self._dock_values[dock].set(
                 "\n".join(
                     (
+                        f"{panel.title}{heading}",
                         f"Operation ID: {panel.operation_id}",
                         f"Status: {panel.status}",
                         f"Pig Type: {panel.pig_type}",
                         f"Truck Total: {panel.truck_total}",
                         f"Current Session: {panel.current_session}",
+                        f"Next Session: {panel.next_session}",
+                        f"Next Pig Type: {panel.next_pig_type}",
+                        f"Owns Shared Lane: {'YES' if panel.owns_lane else 'NO'}",
                     )
                 )
             )
+        selected = next(item for item in screen.docks if item.is_selected)
+        if selected.current_session != _EMPTY:
+            self._session_value.set(selected.current_session)
+        elif selected.next_session != _EMPTY:
+            self._session_value.set(selected.next_session)
         totals = screen.totals
         by_type = " | ".join(
             f"{pig_type}: {total}" for pig_type, total in totals.totals_by_pig_type
@@ -113,15 +190,35 @@ class TkOperatorView:
             f"Completed trucks: {totals.completed_trucks} | "
             f"Active trucks: {totals.active_trucks}"
         )
-        self._message_value.set(f"Snapshot: {screen.generated_at}")
+        for action, button in self._buttons.items():
+            button.configure(state=("normal" if screen.actions.is_enabled(action) else "disabled"))
+        self._status_value.set(screen.status_message)
 
     def show_error(self, message: str) -> None:
         """Expose an expected failure in the window and a modal dialog."""
 
-        self._message_value.set(f"Error: {message}")
+        self._status_value.set(f"Error: {message}")
         from tkinter import messagebox
 
         messagebox.showerror("HogFlow", message, parent=self._root)
+
+    def confirm(self, request: ConfirmationRequest) -> bool:
+        """Ask the operator to acknowledge one destructive transition."""
+
+        from tkinter import messagebox
+
+        return bool(
+            messagebox.askyesno(
+                request.title,
+                request.message,
+                parent=self._root,
+            )
+        )
+
+    def close(self) -> None:
+        """Destroy the one local window after application shutdown."""
+
+        self._root.destroy()
 
     def _build_layout(self) -> None:
         tk = self._tk
@@ -168,11 +265,12 @@ class TkOperatorView:
         actions = tk.LabelFrame(body, text="Operator Actions")
         actions.grid(row=0, column=1, sticky="nsew")
         tk.Label(actions, text="Dock").grid(row=0, column=0, sticky="w")
-        tk.OptionMenu(actions, self._dock_value, *(dock.value for dock in DockId)).grid(
-            row=0,
-            column=1,
-            sticky="ew",
-        )
+        tk.OptionMenu(
+            actions,
+            self._dock_value,
+            *(dock.value for dock in DockId),
+            command=lambda _value: self._refresh_selected_dock(),
+        ).grid(row=0, column=1, sticky="ew")
         tk.Label(actions, text="Operation ID").grid(row=1, column=0, sticky="w")
         tk.Entry(actions, textvariable=self._operation_value).grid(
             row=1,
@@ -194,43 +292,59 @@ class TkOperatorView:
             sticky="ew",
         )
 
-        buttons: tuple[tuple[str, Callable[[], None]], ...] = (
-            ("Register Truck", self._register_truck),
-            ("Start Truck", lambda: self._invoke(self._presenter.start_truck, self._dock())),
+        callbacks: tuple[tuple[OperatorAction, str, Callable[[], None]], ...] = (
+            (OperatorAction.REGISTER_TRUCK, "Register Truck", self._register_truck),
             (
+                OperatorAction.START_TRUCK,
+                "Start Truck",
+                lambda: self._invoke(self._require_presenter().start_truck, self._dock()),
+            ),
+            (
+                OperatorAction.START_SESSION,
                 "Start Session",
                 lambda: self._invoke(
-                    self._presenter.start_session,
+                    self._require_presenter().start_session,
                     self._dock(),
                     self._session_value.get().strip(),
                 ),
             ),
             (
+                OperatorAction.COMPLETE_SESSION,
                 "Complete Session",
-                lambda: self._invoke(self._presenter.complete_session, self._dock()),
+                lambda: self._invoke(self._require_presenter().complete_session, self._dock()),
             ),
             (
+                OperatorAction.CANCEL_SESSION,
                 "Cancel Session",
-                lambda: self._invoke(self._presenter.cancel_session, self._dock()),
+                lambda: self._invoke(self._require_presenter().cancel_session, self._dock()),
             ),
             (
+                OperatorAction.COMPLETE_TRUCK,
                 "Complete Truck",
-                lambda: self._invoke(self._presenter.complete_truck, self._dock()),
+                lambda: self._invoke(self._require_presenter().complete_truck, self._dock()),
             ),
             (
+                OperatorAction.CANCEL_TRUCK,
                 "Cancel Truck",
-                lambda: self._invoke(self._presenter.cancel_truck, self._dock()),
+                lambda: self._invoke(self._require_presenter().cancel_truck, self._dock()),
             ),
-            ("Refresh Snapshot", lambda: self._invoke(self._presenter.refresh)),
+            (
+                OperatorAction.REFRESH,
+                "Refresh Snapshot",
+                self._refresh_selected_dock,
+            ),
+            (OperatorAction.EXIT, "Exit Application", self._request_exit),
         )
-        for row, (label, callback) in enumerate(buttons, start=5):
-            tk.Button(actions, text=label, command=callback).grid(
+        for row, (action, label, callback) in enumerate(callbacks, start=5):
+            button = tk.Button(actions, text=label, command=callback)
+            button.grid(
                 row=row,
                 column=0,
                 columnspan=2,
                 sticky="ew",
                 pady=2,
             )
+            self._buttons[action] = button
 
         totals = tk.LabelFrame(self._root, text="Totals")
         totals.grid(row=2, column=0, sticky="ew", padx=8, pady=8)
@@ -239,7 +353,7 @@ class TkOperatorView:
             column=0,
             sticky="ew",
         )
-        tk.Label(self._root, textvariable=self._message_value, anchor="w").grid(
+        tk.Label(self._root, textvariable=self._status_value, anchor="w").grid(
             row=3,
             column=0,
             sticky="ew",
@@ -249,19 +363,30 @@ class TkOperatorView:
 
     def _register_truck(self) -> None:
         try:
-            command = RegisterTruckCommand(
-                dock_id=self._dock(),
-                operation_id=self._operation_value.get().strip(),
-                sessions=parse_session_plan(self._session_plan_widget.get("1.0", "end")),
+            command = parse_register_truck_form(
+                self._dock(),
+                self._operation_value.get(),
+                self._session_plan_widget.get("1.0", "end"),
             )
-            self._presenter.register_truck(command)
+            self._require_presenter().register_truck(command)
         except OperatorInputError as exc:
             self.show_error(str(exc))
         except ExpectedOperatorError:
             pass
 
+    def _refresh_selected_dock(self) -> None:
+        self._invoke(self._require_presenter().refresh, self._dock())
+
+    def _request_exit(self) -> None:
+        self._invoke(self._require_presenter().request_exit, self._dock())
+
     def _dock(self) -> DockId:
         return DockId.parse(self._dock_value.get())
+
+    def _require_presenter(self) -> OperatorPresenter:
+        if self._presenter is None:
+            raise RuntimeError("Desktop presenter must be bound before use.")
+        return self._presenter
 
     @staticmethod
     def _invoke(action: Callable[..., Any], *args: Any) -> None:
@@ -271,13 +396,27 @@ class TkOperatorView:
             pass
 
 
-def run_operator_desktop(application: OperatorApplication) -> None:
-    """Run the local desktop adapter for an explicitly composed application."""
+def create_tk_operator_view() -> TkOperatorView:
+    """Create the local Tk adapter without composing business dependencies."""
 
     import tkinter as tk
 
-    root = tk.Tk()
-    TkOperatorView(root, tk, application).start()
+    return TkOperatorView(tk.Tk(), tk)
 
 
-__all__ = ["TkOperatorView", "parse_session_plan", "run_operator_desktop"]
+def run_operator_desktop(application: OperatorApplication) -> None:
+    """Compatibility composition for callers that already own an application."""
+
+    view = create_tk_operator_view()
+    presenter = OperatorPresenter(application, view)
+    view.bind_presenter(presenter)
+    view.start()
+
+
+__all__ = [
+    "TkOperatorView",
+    "create_tk_operator_view",
+    "parse_register_truck_form",
+    "parse_session_plan",
+    "run_operator_desktop",
+]

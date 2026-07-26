@@ -18,7 +18,7 @@ class OperatorApplicationService:
 
     The service owns no business state and no snapshot cache. Phase 8 remains
     the only source of truth. A future camera composition root must provide the
-    crossing-lifecycle identity factory; Phase 9.1 does not open a camera.
+    crossing-lifecycle identity factory; Phase 9.2 does not open a camera.
     """
 
     def __init__(
@@ -91,6 +91,12 @@ class OperatorApplicationService:
         """Cancel one operation through Phase 8.1."""
 
         self._coordinator.cancel_operation(dock_id, self._clock())
+        return self.snapshot()
+
+    def shutdown(self) -> MultiDockRuntimeSnapshot:
+        """Close the shared counter and cancel only an active lane binding."""
+
+        self._coordinator.close()
         return self.snapshot()
 
 

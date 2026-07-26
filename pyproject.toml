@@ -15,6 +15,9 @@ dependencies = [
     "ultralytics>=8.4.92,<9",
 ]
 
+[project.scripts]
+hogflow = "hogflow.__main__:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8,<9",

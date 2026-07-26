@@ -37,5 +37,8 @@ class OperatorApplication(Protocol):
     def cancel_truck(self, dock_id: DockId) -> MultiDockRuntimeSnapshot:
         """Cancel one truck operation."""
 
+    def shutdown(self) -> MultiDockRuntimeSnapshot:
+        """Close the shared runtime safely and return its terminal snapshot."""
+
 
 __all__ = ["OperatorApplication"]

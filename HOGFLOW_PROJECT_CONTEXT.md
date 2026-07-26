@@ -10,11 +10,12 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 9.1 Operator MVP application/presentation
-implemented. Four operational dock records and one shared lane are rendered
-from immutable Phase 8 snapshots, and operator actions delegate through public
-coordinator methods. This does not implement camera ingestion, persistence,
-API, networking, or production UI validation.
+Current repository status: Phase 9.2 Operator MVP workflow safety and
+executable composition implemented. Four operational dock records and one
+shared lane are rendered from immutable Phase 8 snapshots; operator actions
+delegate through public coordinator methods and their availability is derived
+from authoritative read projections. This does not implement camera ingestion,
+persistence, API, networking, or production UI validation.
 
 ## Project identity
 
@@ -469,12 +470,28 @@ IMPLEMENTED Phase 9.1 operator MVP presentation:
 * Headless synthetic tests exercise operation/session workflow, lane
   ownership/release, live/finalized totals, errors, and dependencies.
 
-NOT IMPLEMENTED in Phase 9.1:
+IMPLEMENTED Phase 9.2 operator workflow safety and composition:
+
+* `python -m hogflow` and `hogflow run` wire the one shared Phase 7 counter and
+  lane through the Phase 8 coordinator, application service, presenter, and
+  lazy Tkinter view.
+* `DockRuntimeSnapshot` exposes read-only next-session and completion
+  eligibility so presentation does not recreate Phase 8 transition rules.
+* Button availability is selected-dock and snapshot driven; session start is
+  also blocked globally while the shared lane is occupied.
+* Destructive session/truck cancellation and exit with active work require
+  explicit confirmation with discard consequences.
+* Status messages, lane-owner text, pre-application form validation, and
+  coordinated shutdown make the manual workflow explicit.
+* The composition uses no camera, frames, detector, tracker, crossing pipeline,
+  polling, worker, thread, persistence, or network.
+
+NOT IMPLEMENTED in Phase 9.1–9.2:
 
 * camera acquisition, preview, video rendering, or automatic live ingestion
 * polling, timers, threads, async execution, scheduling, or multiple windows
 * persistence, SQLite, filesystem output, API, networking, or authentication
-* review-event, confirmation, or manual count-override workflow
+* review-event or manual count-override workflow
 * Phase 10
 
 NOT IMPLEMENTED in Phase 8.3:
@@ -566,11 +583,13 @@ must be serialized by the caller.
 
 ## Operator MVP User Interface
 
-IMPLEMENTED first subset in Phase 9.1:
+IMPLEMENTED through Phase 9.2:
 
 The Operator MVP desktop exposes the authorized truck/session actions, four
 dock panels, shared-lane ownership/live count, and finalized totals using
-manual snapshot refresh. It owns no business state and does not increment
+manual snapshot refresh. Its executable composition provides snapshot-derived
+button safety, destructive-action confirmations, status messages, validated
+forms, and safe shutdown. It owns no business state and does not increment
 counts.
 
 Broader planned Phase 9 information remains:
@@ -588,8 +607,9 @@ Broader planned Phase 9 information remains:
 
 The UI must consume project modules and must not duplicate counting logic or directly increment the AI count.
 
-Camera/video preview, last-event review, confirmation, and review-recommended
-workflow are not part of Phase 9.1 and remain unimplemented.
+Camera/video preview, last-event review, and review-recommended workflow remain
+unimplemented. Phase 9.2 confirmations guard destructive commands; they are
+not a persisted review workflow.
 
 ## SQLite conceptual data model
 
@@ -750,9 +770,9 @@ synthetic evidence only; representative reverse/duplicate validation and RTSP
 production validation remain pending. Phase 8.1 pure unloading-domain
 infrastructure, Phase 8.2 sequential session/counting integration, and Phase
 8.3 synchronous multi-dock coordination are implemented with synthetic
-evidence. Phase 9.1 adds a synthetic/headless-validated operator
-application/presentation over Phase 8 snapshots. Concurrent camera ingestion
-has not started.
+evidence. Phase 9.2 adds a synthetic/headless-validated executable operator
+application with snapshot-derived workflow safety over Phase 8. Concurrent
+camera ingestion has not started.
 
 ## Pilot readiness phase
 
@@ -883,10 +903,15 @@ IMPLEMENTED at repository level:
 * mutually exclusive lane ownership, exact routing, isolation, and terminal replacement
 * separated live and finalized totals with deterministic Dock 1-4 aggregate views
 * shared-lane shutdown cancellation, recovery-safe close failure, and architecture tests
-* stateless Phase 9.1 operator application commands and coordinator delegation
+* stateless Phase 9.1–9.2 operator application commands and coordinator
+  delegation
 * immutable operator screen models and snapshot-driven presenter
-* lazy local Tkinter desktop with four docks, one lane, actions, and totals
-* synthetic Phase 9.1 workflow, error-display, import, and architecture tests
+* lazy local Tkinter desktop with four docks, one lane, guarded actions, status,
+  confirmations, and totals
+* executable no-camera composition, pre-application form validation, and safe
+  shutdown
+* synthetic Phase 9.1–9.2 workflow, error-display, bootstrap, desktop, import,
+  and architecture tests
 
 Not yet implemented:
 
@@ -904,8 +929,8 @@ Not yet implemented:
 * camera/video preview and representative operator validation
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 9.1 Operator MVP application/presentation
-implemented with synthetic headless evidence. Representative pig validation,
-cross-reconnect session policy, physical camera integration, persistence,
-camera preview, and broader operator workflow remain pending. Phase 10 has not
-started.
+Current roadmap status: Phase 9.2 Operator MVP workflow safety and executable
+composition implemented with synthetic headless evidence. Representative pig
+validation, cross-reconnect session policy, physical camera integration,
+persistence, camera preview, and broader review workflow remain pending. Phase
+10 has not started.

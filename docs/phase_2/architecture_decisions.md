@@ -1311,3 +1311,48 @@ The Phase 9.1 desktop cannot acquire frames, update live counts by itself,
 poll, persist, or recover across restart. A future explicitly authorized
 composition must connect camera lifecycle provenance without weakening this
 boundary.
+
+## ADR-056 - Derive operator safety from snapshots and compose resources once
+
+Status: Accepted
+
+### Context
+
+Phase 9.1 exposed valid commands but left every Tkinter button enabled and
+required callers to construct the full runtime. That allowed avoidable
+operator mistakes and meant `python -m hogflow` was not executable. Copying
+Phase 8 rules into presentation or retaining a mutable UI mirror would violate
+ADR-055. Camera composition remains explicitly out of scope.
+
+### Decision
+
+Keep Phase 8 authoritative and add only read-only workflow projections to
+`DockRuntimeSnapshot`: the next planned session/pig type and booleans stating
+whether the operation may start a session or complete. Derive all selected-dock
+button states from the latest `MultiDockRuntimeSnapshot`; never cache the
+snapshot or duplicate transitions in Tkinter.
+
+Require presentation confirmations before cancelling a session, cancelling a
+truck, or exiting with non-terminal work. The presenter requests confirmation,
+then delegates the transition to `OperatorApplicationService`. Shutdown uses
+the existing coordinator close contract: an active session is cancelled and
+its unfinished live count discarded; a truck is not fabricated as complete.
+
+Add one uppermost `hogflow.bootstrap` composition root. It creates one enabled
+Phase 7 counter, one shared lane, the coordinator, application, presenter, and
+one Tkinter view. Because camera integration is forbidden in Phase 9.2, the
+executable uses an explicitly named no-camera crossing fingerprint and local
+opaque lifecycle IDs. They are not camera provenance and cannot support real
+crossing input. A future camera composition must replace both explicitly.
+
+### Consequences
+
+`python -m hogflow` and `hogflow run` launch a complete manual-refresh desktop.
+Controls communicate the next valid selected-dock action; destructive actions
+explain discarded state; lane ownership is textual and not color-only.
+
+The composition root may import inward from counting, sessions, application,
+and presentation, but lower layers do not import it. No camera, CV framework,
+polling, timer, thread, network, persistence, authentication, scheduling, or
+hardware dependency is introduced. Executable operation remains in-memory and
+does not validate plant usability or pig-count accuracy.

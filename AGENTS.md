@@ -202,6 +202,7 @@ Build Operator MVP User Interface.
 Authorized Phase 9 subphase:
 
 * Phase 9.1 — Operator MVP User Interface.
+* Phase 9.2 — Operator Workflow Safety & Executable Composition.
 
 Phase 9.1 introduces a snapshot-driven presentation and application boundary
 over the public Phase 8 coordinator. It may register/start/cancel/complete
@@ -210,6 +211,18 @@ single shared-lane owner and live lifecycle count, and display finalized
 totals. It must not store business state, increment counts, access private
 coordinator members, poll, open cameras, persist data, use networking, or
 start Phase 10.
+
+Phase 9.2 adds the executable local composition root, snapshot-derived control
+availability, explicit next-session guidance, destructive-action
+confirmations, operator status feedback, and safe application shutdown.
+`python -m hogflow` and `hogflow run` compose one no-camera shared counter/lane,
+the Phase 8 coordinator, application service, presenter, and Tkinter view.
+This executable does not fabricate camera input: its local lifecycle and
+crossing fingerprint are technical placeholders until a future authorized
+camera composition replaces them. Phase 9.2 must remain manual-refresh and
+must not add camera acquisition, OpenCV preview, YOLO, polling, timers,
+threads, networking, persistence, authentication, scheduling, hardware, or
+Phase 10.
 
 ### Phase 10
 
@@ -494,7 +507,8 @@ The UI must not duplicate counting logic.
 
 The UI must not directly increment the AI count.
 
-Phase 9.1 is the authorized first subset. It uses manual refresh and the
+Phase 9.1 is the authorized first subset. Phase 9.2 adds executable composition
+and workflow safety while preserving manual refresh and the
 existing `MultiDockRuntimeCoordinator.snapshot()` read model. It contains no
 camera/video preview, last-event/review workflow, persistence, polling, timer,
 thread, or network integration. Those broader Phase 9 concepts remain planned

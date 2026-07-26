@@ -44,7 +44,7 @@ def operator_application() -> tuple[
 ]:
     counter = LifecycleDirectionalCounter(counting_configuration())
     lane = SharedCountingLane(counter, source_id=SOURCE_ID)
-    coordinator = MultiDockRuntimeCoordinator(lane, clock=StepClock())
+    coordinator = MultiDockRuntimeCoordinator(lane, clock=StepClock(seconds_per_step=100))
     application = OperatorApplicationService(
         coordinator,
         crossing_lifecycle_id_factory=LifecycleIdFactory(),

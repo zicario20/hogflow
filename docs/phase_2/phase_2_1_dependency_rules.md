@@ -225,6 +225,15 @@ is imported only when explicitly run; it creates no display at module import,
 uses no timer or polling, and owns no counting/session rule. Phase 7, `domain`,
 and `sessions` do not import Phase 9 packages.
 
+Phase 9.2 adds `hogflow.bootstrap` and `hogflow.__main__` as the uppermost local
+composition boundary. Bootstrap may instantiate the public Phase 7 counter,
+Phase 8 shared lane/coordinator, Phase 9 application service, presenter, and
+desktop view. Neither `application` nor `presentation` may import bootstrap.
+Presentation continues to depend only on the public application boundary and
+immutable presentation models. Button availability, confirmations, and status
+messages do not authorize direct domain mutation. No background execution,
+camera, adapter, storage, network, or database dependency is permitted.
+
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on
 contracts and HogFlow models.

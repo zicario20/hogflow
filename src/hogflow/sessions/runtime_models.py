@@ -44,6 +44,10 @@ class DockRuntimeSnapshot:
     counting_lifecycle_id: str | None
     last_processed_frame: int | None
     finalized_lifecycle_count: int
+    next_planned_session_id: str | None = None
+    next_planned_pig_type: PigType | None = None
+    operation_can_start_session: bool = False
+    operation_can_complete: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.dock_id, DockId):
@@ -66,6 +70,25 @@ class DockRuntimeSnapshot:
             PigType,
         ):
             raise SessionCountingIntegrationError("Active pig type must be explicit.")
+        if self.next_planned_session_id is not None:
+            validate_session_counting_id(
+                self.next_planned_session_id,
+                "Next planned session ID",
+            )
+        if self.next_planned_pig_type is not None and not isinstance(
+            self.next_planned_pig_type,
+            PigType,
+        ):
+            raise SessionCountingIntegrationError("Next planned pig type must be explicit.")
+        if (self.next_planned_session_id is None) != (self.next_planned_pig_type is None):
+            raise SessionCountingIntegrationError(
+                "Next planned session identity and pig type must be present together."
+            )
+        if not isinstance(self.operation_can_start_session, bool) or not isinstance(
+            self.operation_can_complete,
+            bool,
+        ):
+            raise SessionCountingIntegrationError("Operation workflow eligibility must be boolean.")
         if self.source_id is not None:
             validate_session_source_id(self.source_id)
         for lifecycle_id, label in (
@@ -128,6 +151,9 @@ class DockRuntimeSnapshot:
                 self.operation_status is not None
                 or self.runtime_status is not DockRuntimeStatus.AVAILABLE
                 or not self.available
+                or self.next_planned_session_id is not None
+                or self.operation_can_start_session
+                or self.operation_can_complete
             ):
                 raise SessionCountingIntegrationError(
                     "An empty dock snapshot must be available without operation provenance."
@@ -141,6 +167,14 @@ class DockRuntimeSnapshot:
                 raise SessionCountingIntegrationError(
                     "A terminal operation must expose an available terminal runtime."
                 )
+            if (
+                self.next_planned_session_id is not None
+                or self.operation_can_start_session
+                or self.operation_can_complete
+            ):
+                raise SessionCountingIntegrationError(
+                    "A terminal operation cannot expose workflow actions."
+                )
         elif self.operation_status is TruckOperationStatus.PLANNED:
             if self.runtime_status is not DockRuntimeStatus.PLANNED or self.available:
                 raise SessionCountingIntegrationError(
@@ -153,6 +187,20 @@ class DockRuntimeSnapshot:
         ):
             raise SessionCountingIntegrationError(
                 "An active operation must occupy an active runtime."
+            )
+        if self.operation_can_start_session and (
+            self.runtime_status is not DockRuntimeStatus.OPERATION_ACTIVE
+            or self.next_planned_session_id is None
+        ):
+            raise SessionCountingIntegrationError(
+                "Starting a session requires an active idle operation and a planned session."
+            )
+        if (
+            self.operation_can_complete
+            and self.runtime_status is not DockRuntimeStatus.OPERATION_ACTIVE
+        ):
+            raise SessionCountingIntegrationError(
+                "Completing an operation requires an active operation without a live session."
             )
 
 

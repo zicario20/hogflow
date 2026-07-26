@@ -983,3 +983,69 @@ def test_phase_7_and_phase_8_do_not_depend_on_phase_9() -> None:
     ]
 
     assert not violations
+
+
+def test_phase_9_composition_is_the_only_layer_wiring_counting_to_presentation() -> None:
+    bootstrap = (SOURCE_ROOT / "bootstrap.py").read_text(encoding="utf-8").lower()
+    main_module = (SOURCE_ROOT / "__main__.py").read_text(encoding="utf-8").lower()
+
+    for required in (
+        "hogflow.application",
+        "hogflow.counting",
+        "hogflow.presentation",
+        "hogflow.sessions",
+    ):
+        assert required in bootstrap
+    assert "hogflow.bootstrap" in main_module
+    assert "hogflow.counting" not in main_module
+    assert "hogflow.sessions" not in main_module
+
+
+def test_phase_9_composition_has_no_camera_network_storage_or_concurrency() -> None:
+    files = (
+        SOURCE_ROOT / "__main__.py",
+        SOURCE_ROOT / "bootstrap.py",
+    )
+    forbidden_tokens = (
+        "hogflow.adapters",
+        "hogflow.detection",
+        "hogflow.pipeline",
+        "hogflow.storage",
+        "hogflow.streaming",
+        "hogflow.tracking",
+        "cv2",
+        "numpy",
+        "supervision",
+        "ultralytics",
+        "sqlite",
+        "threading",
+        "asyncio",
+        "socket",
+        "requests",
+        "http://",
+        "https://",
+    )
+
+    violations = [
+        f"{source_file.name}: {token}"
+        for source_file in files
+        for token in forbidden_tokens
+        if token in source_file.read_text(encoding="utf-8").lower()
+    ]
+
+    assert not violations
+
+
+def test_phase_9_desktop_has_no_polling_timer_or_business_counter() -> None:
+    desktop = (SOURCE_ROOT / "presentation" / "desktop.py").read_text(encoding="utf-8").lower()
+
+    for forbidden in (
+        ".after(",
+        "threading",
+        "asyncio",
+        "sleep(",
+        "lifecycle_directional_count",
+        "counted_tracker",
+        "process_counting_result",
+    ):
+        assert forbidden not in desktop
