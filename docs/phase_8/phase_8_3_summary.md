@@ -4,6 +4,10 @@
 
 IMPLEMENTED as synchronous multi-dock runtime coordination.
 
+The original per-dock counter/source ownership documented here was superseded
+by Phase 8.4 after the physical counting location was clarified as one shared
+corridor. Phase 8.3 remains the historical coordinator foundation.
+
 Phase 8.3 composes four independent current dock records using Phase 8.1
 aggregates, one Phase 8.2 service per started operation, and one injected Phase
 7 counter per occupied runtime.

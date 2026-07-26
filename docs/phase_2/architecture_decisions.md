@@ -1218,3 +1218,57 @@ In-memory terminal history is bounded to one current record per dock, and
 shutdown of active work is a cancellation boundary requiring external recovery.
 UI, persistence, camera orchestration, and true concurrent ingestion remain
 later phases.
+
+## ADR-054 - Align four operational docks to one shared counting lane
+
+Status: Accepted; supersedes ADR-053 counter/source ownership
+
+### Context
+
+Phase 8.3 was correct under its original assumption that each unloading dock
+was also a counting location. Updated operational information establishes a
+different physical topology: four docks feed one approximately 1.5-metre-wide,
+20-metre-long corridor, and one camera near the scale entrance performs all
+automatic counting. Dock state remains independent, but counter state is a
+mutually exclusive physical resource rather than a per-dock resource.
+
+Keeping one counter per dock would model cameras and simultaneous counting
+that do not exist. Moving counting state into the domain would break the
+Phase 8.1/8.2/7 dependency boundaries.
+
+### Decision
+
+Introduce `SharedCountingLane` in the `hogflow.sessions` application layer.
+It owns one explicit source, one injected public `LiveDirectionalCounter`, and
+at most one active dock/operation/session binding. `MultiDockRuntimeCoordinator`
+continues to own four current dock operations but no dock-owned counter,
+source, or service. Starting a session binds the idle lane; completing or
+cancelling it releases the lane.
+
+Create a short-lived `UnloadingSessionCountingService` for each binding. Permit
+that service to adopt a strictly validated tuple of prior terminal lifecycle
+provenance so earlier session totals and lifecycle reuse protection survive
+release. The same shared Phase 7 counter starts a fresh lifecycle for each
+session and therefore resets temporary counted identities.
+
+Keep coordination synchronous and caller-serialized. Preserve the
+`register_operation(..., source_id=...)` argument only as an optional migration
+check against the shared source; it no longer creates dock source ownership.
+
+### Consequences
+
+Exactly one active unloading session can receive automatic counts. Four truck
+operations may remain planned or active independently, but a second session
+cannot take the occupied lane or silently change its dock. Live count,
+crossing/counting lifecycle, source, and temporary tracker identity state have
+one owner.
+
+Completion/cancellation/shutdown release the lane without fabricating counts.
+A counter-close failure preserves the active binding and immutable domain
+state for explicit recovery. Current snapshots expose zero or one active
+session globally and keep live count separate from finalized totals.
+
+ADR-053 remains historical documentation of Phase 8.3 but its per-dock
+counter/source factory is no longer the current architecture. Multiple
+physical lanes, camera acquisition, concurrency, scheduling, persistence, and
+UI remain outside Phase 8.4.

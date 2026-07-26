@@ -8,15 +8,26 @@ from hogflow.sessions.errors import (
     SessionCountingLifecycleReuseError,
     SessionCountingTransferError,
 )
+from hogflow.sessions.lane_errors import (
+    CountingLaneClosedError,
+    CountingLaneConfigurationError,
+    CountingLaneNotBoundError,
+    CountingLaneOccupiedError,
+    CountingLaneOwnershipError,
+    CountingLaneShutdownError,
+    CountingLaneTransitionError,
+    SharedCountingLaneError,
+)
+from hogflow.sessions.lane_models import (
+    CountingLaneSessionRelease,
+    SharedCountingLaneSnapshot,
+)
 from hogflow.sessions.models import (
     FinalizedSessionCountingLifecycle,
     SessionCountingLifecycle,
     SessionCountingOutcome,
 )
-from hogflow.sessions.runtime_coordinator import (
-    CounterFactory,
-    MultiDockRuntimeCoordinator,
-)
+from hogflow.sessions.runtime_coordinator import MultiDockRuntimeCoordinator
 from hogflow.sessions.runtime_errors import (
     DockLifecycleConflictError,
     DockOperationMismatchError,
@@ -36,9 +47,17 @@ from hogflow.sessions.runtime_models import (
     MultiDockRuntimeSnapshot,
     MultiDockShutdownResult,
 )
+from hogflow.sessions.shared_counting_lane import SharedCountingLane
 
 __all__ = [
-    "CounterFactory",
+    "CountingLaneClosedError",
+    "CountingLaneConfigurationError",
+    "CountingLaneNotBoundError",
+    "CountingLaneOccupiedError",
+    "CountingLaneOwnershipError",
+    "CountingLaneSessionRelease",
+    "CountingLaneShutdownError",
+    "CountingLaneTransitionError",
     "DockLifecycleConflictError",
     "DockOperationMismatchError",
     "DockRuntimeClosedError",
@@ -63,5 +82,8 @@ __all__ = [
     "SessionCountingLifecycleReuseError",
     "SessionCountingOutcome",
     "SessionCountingTransferError",
+    "SharedCountingLane",
+    "SharedCountingLaneError",
+    "SharedCountingLaneSnapshot",
     "UnloadingSessionCountingService",
 ]

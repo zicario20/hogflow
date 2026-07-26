@@ -16,11 +16,11 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 8.3 synchronous multi-dock runtime coordination
-implemented. The coordinator can maintain four logically active dock runtimes,
-each with an isolated truck operation, Phase 8.2 service, source, and Phase 7
-counter. This is in-memory application infrastructure, not concurrent camera
-execution or production validation.
+Current roadmap status: Phase 8.4 shared counting-lane alignment implemented.
+The coordinator maintains four independent dock operations while one shared
+corridor/source/counter may belong to exactly one active unloading session.
+This is in-memory application infrastructure, not camera execution or
+production validation.
 
 ## Official project memory
 
@@ -123,12 +123,12 @@ lifecycle reuse, resets temporary identity state between sessions, transfers
 the latest validated positive total exactly once on completion, and discards an
 unfinished total on cancellation. Domain and counting remain independent.
 
-Phase 8.3 adds a synchronous `MultiDockRuntimeCoordinator` in the same
-application layer. It routes explicit dock commands, owns one injected counter
-per current runtime, validates source and lifecycle uniqueness across docks,
-keeps live counts separate from finalized totals, and exposes immutable Dock
-1–4 snapshots. Calls must be serialized by the caller; no camera orchestration,
-threading, async execution, persistence, API, networking, or UI is added.
+Phase 8.3 added a synchronous `MultiDockRuntimeCoordinator`. Phase 8.4 corrects
+its counting-location topology: docks retain truck/session business state, but
+one `SharedCountingLane` owns the sole source and Phase 7 counter. At most one
+session binds the lane; completion/cancellation releases it. Calls must be
+serialized by the caller; no camera acquisition, threading, async execution,
+persistence, API, networking, or UI is added.
 
 ## Phase 0 documentation
 
@@ -361,17 +361,29 @@ Phase 8.2 supplies the sequential application integration:
 
 Phase 8.3 supplies synchronous four-dock runtime coordination:
 
-* one private Phase 8.2 service and injected Phase 7 counter per occupied dock;
-* explicit source ownership and global lifecycle collision checks;
-* exact dock routing with local failure isolation;
+* four independent current dock operations and explicit command routing;
 * immutable Dock 1–4 snapshots and finalized aggregate totals;
-* active-session cancellation and aggregated errors during global shutdown;
+* historical per-dock counter/source ownership superseded by Phase 8.4;
 * no camera acquisition, true concurrent ingestion, persistence, API, UI,
   threading, async work, or automatic scheduling.
 
 * [Phase 8.3 multi-dock runtime](docs/phase_8/phase_8_3_multi_dock_runtime.md)
 * [Phase 8.3 validation](docs/phase_8/phase_8_3_validation.md)
 * [Phase 8.3 summary](docs/phase_8/phase_8_3_summary.md)
+
+Phase 8.4 aligns the runtime with one physical counting corridor:
+
+* one shared source, Phase 7 counter, and active Phase 8.2 service binding;
+* exactly one dock/session may own the lane;
+* completion, cancellation, truck cancellation, and shutdown release it;
+* fresh session lifecycles reset counted temporary identities;
+* exact dock routing with local failure isolation;
+* no camera capture, multiple lanes/cameras, UI, persistence, networking,
+  threads, async work, or scheduling.
+
+* [Phase 8.4 shared counting lane](docs/phase_8/phase_8_4_shared_counting_lane.md)
+* [Phase 8.4 validation](docs/phase_8/phase_8_4_validation.md)
+* [Phase 8.4 summary](docs/phase_8/phase_8_4_summary.md)
 
 ## High-level pipeline
 
@@ -391,11 +403,10 @@ LIVE CAMERA
 → DIRECTIONAL CROSSING EVENTS
 → LIFECYCLE DIRECTIONAL DECISIONS / LOCAL TELEMETRY
 
-Session totals, biological re-identification, persistence, and operator UI are
-not implemented in the live camera pipeline. Phase 8.2 can transfer a
-controlled Phase 7 lifecycle total into one unloading session, but it does not
-orchestrate that camera pipeline. Phase 8.3 coordinates four such application
-runtimes synchronously, but still does not acquire or schedule camera streams.
+Session totals are connected at the pure application boundary but camera
+acquisition, biological re-identification, persistence, and operator UI are
+not integrated. Phase 8.4 coordinates four dock operations through one shared
+counting resource; it still does not open or schedule the physical camera.
 
 Implemented generic Phase 2.3 development/video flow:
 
@@ -433,7 +444,8 @@ TRACKING REPLAY
 * Phase 7: lifecycle-aware directional counting infrastructure implemented; representative duplicate/reverse validation remains pending
 * Phase 8.1: multi-dock unloading domain infrastructure implemented
 * Phase 8.2: sequential unloading-session/Phase 7 lifecycle integration implemented
-* Phase 8.3: synchronous multi-dock runtime coordination implemented; concurrent camera execution remains unimplemented
+* Phase 8.3: synchronous multi-dock runtime foundation implemented
+* Phase 8.4: one shared counting-lane ownership aligned; camera execution remains unimplemented
 * Phase 9 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
@@ -472,13 +484,13 @@ implementation. Phase 3 motion estimates use bounded samples and can be wrong
 when moving animals dominate image features. HogFlow has no pig-specific
 tracking evaluation, camera-to-session runtime integration, SQLite persistence,
 operator UI, live counting ground-truth comparison, analytics, or pilot
-workflow. The Phase 8.1 domain, Phase 8.2 lifecycle integration, and Phase 8.3
-four-dock coordinator are synthetic and in-memory only. The coordinator is
-synchronous and caller-serialized; it does not run four cameras concurrently.
+workflow. The Phase 8.1 domain, Phase 8.2 lifecycle integration, and Phase
+8.3–8.4 coordinator/lane are synthetic and in-memory only. The coordinator is
+synchronous and caller-serialized; it does not open the shared camera.
 A reconnect changing the crossing lifecycle during one unloading session is
-rejected rather than merged. Phase 8.3 terminal records are current read views,
-not persistent history, and its counter factory must provide globally
-distinguishable lifecycle IDs.
+rejected rather than merged. Terminal records are current read views, not
+persistent history. Only one session can own the lane, so this version does not
+model simultaneous counting through multiple physical corridors.
 Tracker ID switches and fragmentation remain count risks. OpenCV backend support, timeouts, and camera
 setting compliance vary by platform. Synthetic CI, training, and streaming
 tests do not prove real pig-video, model, camera, tracking, or counting quality.

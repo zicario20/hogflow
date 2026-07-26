@@ -10,10 +10,10 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 8.3 synchronous multi-dock runtime
-coordination implemented. Four logically active dock runtimes can retain
-isolated operations, sources, Phase 8.2 services, and Phase 7 counters. This
-does not implement concurrent camera ingestion, persistence, API, or UI.
+Current repository status: Phase 8.4 shared counting-lane alignment
+implemented. Four operational dock records remain isolated, while one shared
+corridor/source/Phase 7 counter can be bound to exactly one active unloading
+session. This does not implement camera ingestion, persistence, API, or UI.
 
 ## Project identity
 
@@ -421,6 +421,38 @@ IMPLEMENTED Phase 8.3 multi-dock runtime coordination:
   or cancels a truck automatically.
 * Dock snapshots are immutable and always ordered Dock 1 through Dock 4.
 
+The original Phase 8.3 per-dock source/counter ownership assumption is
+historical and was superseded by Phase 8.4 after the physical counting
+location was clarified.
+
+IMPLEMENTED Phase 8.4 shared counting-lane alignment:
+
+* Four docks remain operational origins for truck, session, pig type, totals,
+  and lifecycle transitions.
+* One `SharedCountingLane` owns the only source and injected Phase 7 counter.
+* At most one active session binds dock, operation, session, crossing
+  lifecycle, and counting lifecycle to that lane.
+* A second dock cannot bind or route results while the lane is occupied.
+* Completion transfers the final total exactly once and releases the lane.
+* Cancellation discards unfinished counting and releases the lane.
+* A fresh binding starts a fresh Phase 7 lifecycle and clears counted temporary
+  identities, including when the same numeric tracker ID appears later.
+* Phase 8.2 may adopt strictly validated prior terminal lifecycle provenance so
+  the short-lived lane service does not lose earlier session evidence.
+* Immutable snapshots expose one lane plus Dock 1 through Dock 4 and enforce
+  zero or one active session globally.
+* Shutdown closes the one counter; when bound it cancels only the active
+  session without completing the truck or fabricating a count.
+
+NOT IMPLEMENTED in Phase 8.4:
+
+* camera capture, OpenCV, RTSP, or hardware validation
+* multiple cameras or multiple physical counting lanes
+* thread safety, async execution, workers, queues, or scheduling
+* persistence/history, SQLite, API, networking, or UI
+* automatic lane ownership selection
+* Phase 9 or Phase 10
+
 NOT IMPLEMENTED in Phase 8.3:
 
 * camera acquisition or four concurrent camera streams
@@ -458,8 +490,8 @@ When uncertainty cannot be resolved by a validated rule, the project preference 
 
 ## Multi-dock unloading workflow and session model
 
-IMPLEMENTED Phase 8.1 pure domain, Phase 8.2 application integration, and
-Phase 8.3 synchronous runtime coordination:
+IMPLEMENTED Phase 8.1 pure domain, Phase 8.2 application integration, Phase
+8.3 synchronous runtime coordination, and Phase 8.4 shared-lane correction:
 
 The operational reference commonly uses three gate sections and approximately
 60 pigs per section, but neither value is a domain rule. Phase 8.1 models
@@ -480,7 +512,8 @@ IDLE
 Session constraints:
 
 * Only one session may be active within one truck operation.
-* Different docks may operate independently at the same time.
+* Different docks may retain planned/active operations independently.
+* Only one unloading session may own the shared physical counting lane.
 * Each session has one explicit pig type; one truck may contain several types.
 * Sessions are added only while an operation is planned.
 * The operator will eventually start and end sessions through later layers.
@@ -502,9 +535,10 @@ Phase 8.2 starts that session and its counter lifecycle together, delegates
 crossing results to Phase 7, and transfers the final positive-direction total
 only when completion closes the lifecycle successfully. Cancellation closes
 the lifecycle without transferring its unfinished total.
-Phase 8.3 composes one such service per occupied dock, preserves cross-dock
-source/lifecycle isolation, and derives read-only combined finalized totals.
-Calls remain synchronous and must be serialized by the caller.
+Phase 8.4 composes four dock records with one such service binding and one
+shared counter/source. It derives read-only combined finalized totals while
+only the lane-owning dock exposes a live total. Calls remain synchronous and
+must be serialized by the caller.
 
 ## Operator MVP User Interface
 
@@ -813,10 +847,10 @@ IMPLEMENTED at repository level:
 * fresh Phase 7 current gauges and identity state for sequential sessions
 * synthetic Phase 8.2 lifecycle, transfer, reuse, cancellation, failure, and architecture tests
 * synchronous Phase 8.3 four-dock runtime coordinator and immutable snapshots
-* one injected Phase 7 counter and Phase 8.2 service per current dock runtime
-* cross-dock source/lifecycle uniqueness, routing, isolation, and terminal replacement
+* Phase 8.4 one shared source/counter/lane and one active Phase 8.2 binding
+* mutually exclusive lane ownership, exact routing, isolation, and terminal replacement
 * separated live and finalized totals with deterministic Dock 1-4 aggregate views
-* Phase 8.3 shutdown cancellation, partial-close reporting, and architecture tests
+* shared-lane shutdown cancellation, recovery-safe close failure, and architecture tests
 
 Not yet implemented:
 
@@ -827,14 +861,14 @@ Not yet implemented:
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
 * pig-specific tracking evaluation
-* true concurrent camera ingestion for several docks
+* shared physical camera acquisition or real concurrent ingestion
 * receiving batches or groups
 * exception-event management
 * SQLite event storage
 * operator UI
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 8.3 synchronous multi-dock runtime coordination
-implemented with synthetic evidence. Representative pig validation,
-cross-reconnect session policy, concurrent camera ingestion, persistence, and
-operator UI remain pending. Phase 9 and Phase 10 have not started.
+Current roadmap status: Phase 8.4 shared counting-lane alignment implemented
+with synthetic evidence. Representative pig validation, cross-reconnect
+session policy, physical camera integration, persistence, and operator UI
+remain pending. Phase 9 and Phase 10 have not started.

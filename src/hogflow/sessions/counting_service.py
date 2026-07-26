@@ -12,6 +12,7 @@ from hogflow.counting import (
     LiveDirectionalCounter,
 )
 from hogflow.domain import (
+    SessionNotFoundError,
     TruckOperation,
     TruckOperationStatus,
     UnloadingSessionStatus,
@@ -46,6 +47,7 @@ class UnloadingSessionCountingService:
         counter: LiveDirectionalCounter,
         *,
         source_id: str,
+        finalized_lifecycles: tuple[FinalizedSessionCountingLifecycle, ...] = (),
     ) -> None:
         if not isinstance(operation, TruckOperation):
             raise SessionCountingConfigurationError(
@@ -59,12 +61,6 @@ class UnloadingSessionCountingService:
             raise SessionCountingConfigurationError(
                 "An existing active session cannot be adopted without lifecycle provenance."
             )
-        if any(
-            session.status is UnloadingSessionStatus.COMPLETED for session in operation.sessions
-        ):
-            raise SessionCountingConfigurationError(
-                "Session counting must own the operation before its first completed session."
-            )
         validate_session_source_id(source_id)
         if not counter.configuration.enabled:
             raise SessionCountingConfigurationError(
@@ -74,11 +70,17 @@ class UnloadingSessionCountingService:
             raise SessionCountingConfigurationError(
                 "Session counting cannot adopt an already-started counter."
             )
+        adopted_finalizations = self._validate_adopted_finalizations(
+            operation,
+            counter,
+            source_id,
+            finalized_lifecycles,
+        )
         self._operation = operation
         self._counter = counter
         self._source_id = source_id
         self._active_lifecycle: SessionCountingLifecycle | None = None
-        self._finalized_lifecycles: tuple[FinalizedSessionCountingLifecycle, ...] = ()
+        self._finalized_lifecycles = adopted_finalizations
         self._current_count = 0
         self._latest_counted_at: datetime | None = None
 
@@ -277,6 +279,89 @@ class UnloadingSessionCountingService:
                 "No unloading session owns an active counting lifecycle."
             )
         return self._active_lifecycle
+
+    @staticmethod
+    def _validate_adopted_finalizations(
+        operation: TruckOperation,
+        counter: LiveDirectionalCounter,
+        source_id: str,
+        finalized_lifecycles: tuple[FinalizedSessionCountingLifecycle, ...],
+    ) -> tuple[FinalizedSessionCountingLifecycle, ...]:
+        if not isinstance(finalized_lifecycles, tuple) or not all(
+            isinstance(item, FinalizedSessionCountingLifecycle) for item in finalized_lifecycles
+        ):
+            raise SessionCountingConfigurationError(
+                "Adopted session lifecycle provenance must be an immutable tuple."
+            )
+        if not finalized_lifecycles:
+            if any(session.status.is_terminal for session in operation.sessions):
+                raise SessionCountingConfigurationError(
+                    "Terminal sessions require matching counting lifecycle provenance."
+                )
+            return ()
+
+        session_ids = tuple(item.lifecycle.session_id for item in finalized_lifecycles)
+        crossing_ids = tuple(item.lifecycle.crossing_lifecycle_id for item in finalized_lifecycles)
+        counting_ids = tuple(item.lifecycle.counting_lifecycle_id for item in finalized_lifecycles)
+        if any(
+            len(values) != len(set(values)) for values in (session_ids, crossing_ids, counting_ids)
+        ):
+            raise SessionCountingConfigurationError(
+                "Adopted lifecycle provenance cannot contain reused identities."
+            )
+
+        sequence_numbers: list[int] = []
+        finalized_by_session: dict[str, FinalizedSessionCountingLifecycle] = {}
+        for item in finalized_lifecycles:
+            lifecycle = item.lifecycle
+            if (
+                lifecycle.operation_id != operation.operation_id
+                or lifecycle.dock_id is not operation.dock_id
+                or lifecycle.source_id != source_id
+                or lifecycle.counting_configuration_fingerprint != counter.configuration.fingerprint
+            ):
+                raise SessionCountingConfigurationError(
+                    "Adopted lifecycle provenance does not match the operation or shared source."
+                )
+            try:
+                session = operation.session(lifecycle.session_id)
+            except SessionNotFoundError as exc:
+                raise SessionCountingConfigurationError(
+                    "Adopted lifecycle provenance references an unknown session."
+                ) from exc
+            if item.outcome is SessionCountingOutcome.COMPLETED:
+                if (
+                    session.status is not UnloadingSessionStatus.COMPLETED
+                    or item.finalized_count != session.actual_count
+                ):
+                    raise SessionCountingConfigurationError(
+                        "Completed lifecycle provenance does not match its finalized session."
+                    )
+            elif session.status is not UnloadingSessionStatus.CANCELLED:
+                raise SessionCountingConfigurationError(
+                    "Cancelled lifecycle provenance does not match its terminal session."
+                )
+            sequence_numbers.append(session.sequence_number)
+            finalized_by_session[session.session_id] = item
+
+        if sequence_numbers != sorted(sequence_numbers):
+            raise SessionCountingConfigurationError(
+                "Adopted lifecycle provenance must follow session sequence order."
+            )
+        terminal_ids = {
+            session.session_id
+            for session in operation.sessions
+            if session.status
+            in (
+                UnloadingSessionStatus.COMPLETED,
+                UnloadingSessionStatus.CANCELLED,
+            )
+        }
+        if terminal_ids != set(finalized_by_session):
+            raise SessionCountingConfigurationError(
+                "Every terminal session requires exactly one matching lifecycle finalization."
+            )
+        return finalized_lifecycles
 
     def _close_after_failed_start(self) -> None:
         if not self._counter.is_started:

@@ -26,11 +26,11 @@ class DockRuntimeClosedError(MultiDockRuntimeError):
 
 
 class DockSourceConflictError(MultiDockRuntimeError):
-    """Raised when source ownership is invalid or conflicts across docks."""
+    """Raised when an input does not belong to the shared counting source."""
 
 
 class DockLifecycleConflictError(MultiDockRuntimeError):
-    """Raised when lifecycle provenance conflicts across dock runtimes."""
+    """Raised when lifecycle provenance conflicts with the shared lane."""
 
 
 class DockOperationMismatchError(MultiDockRuntimeError):
@@ -46,18 +46,12 @@ class DockRuntimeTransitionError(MultiDockRuntimeError):
 
 
 class MultiDockShutdownError(MultiDockRuntimeError):
-    """Raised after shutdown attempts every dock but one or more closes fail."""
+    """Raised when the one shared counting resource cannot close."""
 
-    def __init__(
-        self,
-        *,
-        closed_dock_values: tuple[str, ...],
-        failed_dock_values: tuple[str, ...],
-    ) -> None:
-        self.closed_dock_values = closed_dock_values
-        self.failed_dock_values = failed_dock_values
-        failed = ", ".join(failed_dock_values)
-        super().__init__(f"Multi-dock shutdown could not close: {failed}.")
+    def __init__(self, *, bound_dock_value: str | None) -> None:
+        self.bound_dock_value = bound_dock_value
+        suffix = "" if bound_dock_value is None else f" while bound to {bound_dock_value}"
+        super().__init__(f"Shared counting lane could not close{suffix}.")
 
 
 __all__ = [

@@ -4,6 +4,12 @@
 
 IMPLEMENTED as synchronous, in-memory application infrastructure.
 
+> Historical note: Phase 8.4 supersedes the per-dock counter/source ownership
+> described below. The current architecture preserves four dock operations but
+> uses one `SharedCountingLane`, source, and counter. See
+> `phase_8_4_shared_counting_lane.md`. This document preserves the Phase 8.3
+> implementation decision as historical context.
+
 This phase does not prove concurrent camera operation, pig-count accuracy, or
 production readiness.
 

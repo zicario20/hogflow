@@ -28,9 +28,10 @@ Phase 8.2 adds one sequential application coordinator in `sessions`; it may
 consume the Phase 8.1 domain and Phase 7 public counting interfaces, while
 neither dependency imports back from `sessions`.
 Phase 8.3 adds a synchronous four-dock coordinator in the same application
-layer. It composes one Phase 8.2 service and injected Phase 7 counter per dock
-without adding camera, framework, persistence, networking, UI, threading, or
-async dependencies.
+layer. Phase 8.4 corrects its resource topology: the coordinator composes four
+operational dock records with one `SharedCountingLane`, source, Phase 8.2
+service binding, and injected Phase 7 counter. No camera, framework,
+persistence, networking, UI, threading, or async dependency is added.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -94,7 +95,7 @@ modules may consume immutable tracking-domain models but never tracker adapters.
 | `streaming` | Framework-neutral live-frame contracts, immutable packets, source configuration, bounded buffering, health, lifecycle, reconnect policy, and synthetic source. | `core` and Python standard library | `adapters`, OpenCV, NumPy, Torch, Ultralytics, Supervision, detection, tracking, counting, pipeline, sessions, storage, UI logic |
 | `pipeline` | Synchronous generic counting and serial live detector/tracker/crossing orchestration with immutable results. | `video`, `detection`, `tracking`, `streaming`, `models`, `counting`; `core/config` when needed | Data inventory, concrete adapters, CV frameworks, persistence, UI logic, sessions, duplicated crossing geometry |
 | `video` | Framework-neutral source contract plus CLI/output and OpenCV metadata infrastructure. | `models` for contract; `adapters`, `pipeline`, `counting`, `core`, `config` for generic entrypoint/output; `data` models/validation for metadata inspection | Sessions, storage, UI business logic, duplicated counting rules |
-| `sessions` | Phase 8.2 one-session lifecycle integration and Phase 8.3 synchronous four-dock runtime coordination. | `core`, `domain`, public `counting` interfaces/models | Adapters, video, detection/tracking implementations, pipeline, streaming, UI, persistence, networking, camera acquisition, threading/async orchestration |
+| `sessions` | Phase 8.2 one-session lifecycle integration plus Phase 8.3/8.4 synchronous four-dock coordination through one shared counting lane. | `core`, `domain`, public `counting` interfaces/models | Adapters, video, detection/tracking implementations, pipeline, streaming, UI, persistence, networking, camera acquisition, threading/async orchestration |
 | `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | Video, detection, tracking, pipeline, direct UI code |
 | `domain` | Phase 8.1 immutable docks, pig types, unloading sessions, truck aggregate, and dock occupancy rules. | `core` only when necessary | Adapters, CV frameworks, video, detection, tracking, counting, pipeline, sessions, storage, networking, UI |
 
@@ -198,12 +199,14 @@ successfully. Completion transfers the last validated lifecycle total once;
 cancellation transfers none. No live pipeline, camera, framework, queue,
 thread, persistence, network, or UI dependency is introduced.
 
-Phase 8.3 composes one Phase 8.2 service and one injected counter per current
-dock in `sessions`. The coordinator routes commands by typed `DockId`, validates
-source and lifecycle ownership globally, and exposes immutable snapshots. It
-does not change Phase 8.1 aggregates or Phase 7 counting rules. Calls are
-synchronous and must be serialized by the caller; no camera, worker, thread,
-async task, queue, persistence, network, API, or UI dependency is introduced.
+Phase 8.4 supersedes Phase 8.3's original per-dock resource assumption.
+`SharedCountingLane` owns one source and one injected counter; it creates one
+short-lived Phase 8.2 service binding for the active dock/session. The
+coordinator routes commands by typed `DockId`, rejects a second owner, and
+exposes immutable dock plus lane snapshots. It does not change Phase 8.1
+aggregates or Phase 7 counting rules. Calls are synchronous and must be
+serialized by the caller; no camera, worker, thread, async task, queue,
+persistence, network, API, or UI dependency is introduced.
 
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on

@@ -398,3 +398,44 @@ def test_failed_counter_close_does_not_transfer_or_partially_complete_session() 
     assert service.operation.session("session-1").status is UnloadingSessionStatus.ACTIVE
     assert service.operation.session("session-1").actual_count == 0
     assert service.finalized_lifecycles == ()
+
+
+def test_service_can_adopt_verified_terminal_provenance_for_shared_lane_rebinding() -> None:
+    service, shared_counter = service_for((PigType.OPG, PigType.REGULAR))
+    service.start_session("session-1", "crossing-session-1", at(1))
+    update(
+        service,
+        1,
+        (7,),
+        lifecycle_id="crossing-session-1",
+        captured_at=at(2),
+    )
+    service.complete_session(at(3))
+    rebound = UnloadingSessionCountingService(
+        service.operation,
+        shared_counter,
+        source_id="camera",
+        finalized_lifecycles=service.finalized_lifecycles,
+    )
+    lifecycle = rebound.start_session(
+        "session-2",
+        "crossing-session-2",
+        at(4),
+    )
+
+    assert lifecycle.session_id == "session-2"
+    assert rebound.finalized_lifecycles == service.finalized_lifecycles
+    assert shared_counter.is_started
+
+
+def test_service_rejects_terminal_sessions_without_matching_provenance() -> None:
+    service, _counter = service_for((PigType.OPG, PigType.REGULAR))
+    service.start_session("session-1", "crossing-session-1", at(1))
+    service.complete_session(at(2))
+
+    with pytest.raises(SessionCountingConfigurationError, match="provenance"):
+        UnloadingSessionCountingService(
+            service.operation,
+            LifecycleDirectionalCounter(counting_configuration()),
+            source_id="camera",
+        )

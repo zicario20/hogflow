@@ -7,6 +7,9 @@ coordination and isolation only. It does not validate simultaneous physical
 cameras, real pigs, detector/tracker quality, operational throughput, or
 production concurrency.
 
+This report records the original Phase 8.3 baseline. Phase 8.4 supersedes its
+per-dock counter/source assumption and provides the current validation.
+
 ## Baseline
 
 - branch: `main`
