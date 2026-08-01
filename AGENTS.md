@@ -258,6 +258,8 @@ Authorized Phase 10 subphase:
 
 * Phase 10.1 — Production Runtime Foundation.
 
+* Phase 10.2 — Pig Detector Integration and Model Runtime Boundary.
+
 Phase 10.1 adds a synchronous, bounded supervision boundary over the existing
 single shared camera/counting runtime. It may expose immutable heartbeats,
 component health, process-memory samples, aggregate diagnostics, explicit
@@ -268,6 +270,16 @@ while the shared counting lane is occupied by default; preview restart remains
 isolated. Thresholds are engineering configuration, not evidence of
 production readiness. Phase 10.1 adds no SQLite persistence, detector, model,
 training, pig validation, UI redesign, networking, Phase 10.2, or Phase 11.
+
+Phase 10.2 adds an opt-in, explicitly configured local pig-model runtime over
+the existing `LiveDetector` contract and one-worker shared-lane pipeline. Model
+paths and weights remain local and ignored; public snapshots expose only
+sanitized provenance and bounded scalar detector metrics. Concrete
+Ultralytics/Torch/NumPy/OpenCV values remain inside adapters, target classes are
+explicit, empty mode remains the default, and no model may download silently.
+Phase 10.2 does not train a model, create a dataset, validate pig accuracy,
+change Phase 7/8 rules, redesign Phase 9 UI, add workers/queues, persist data,
+or begin Phase 10.3 or Phase 11.
 
 ### Phase 11
 

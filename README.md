@@ -16,13 +16,14 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 10.1 production runtime foundation implemented
-over the completed Phase 9 technical scope. Caller-driven immutable heartbeats,
-component health, bounded lifetime diagnostics, process-memory samples, and
-controlled restart operations observe the existing one-worker shared-lane
-runtime. No monitor thread, queue, detector, UI redesign, or persistence was
-added. Representative multi-shift, physical-camera, and pig validation remain
-absent, so this does not establish production readiness.
+Current roadmap status: Phase 10.2 local pig-detector runtime integration
+implemented over the Phase 10.1 runtime foundation. The existing one-worker
+shared-lane pipeline can opt into one explicit local model with validated class,
+threshold, device, lifecycle, provenance, and bounded telemetry policies; empty
+mode remains the default. No model was trained, downloaded, committed, or
+available for real inference validation. Representative pig accuracy,
+physical-camera performance, multi-shift validation, persistence, and
+production readiness remain absent.
 
 ## Official project memory
 
@@ -166,6 +167,18 @@ failure/restart/latency diagnostics. Camera/pipeline restart reuses the same
 single worker and is blocked while the lane is occupied by default; preview
 restart remains isolated. The evidence is synthetic and does not validate
 multi-shift operation, hardware recovery, pig detection, or count accuracy.
+
+Phase 10.2 formalizes a framework-neutral `PigDetectorConfiguration`, safe
+model provenance, bounded detector telemetry, and explicit detector error and
+device policies. The existing local-file `UltralyticsLiveDetector` now loads
+and hashes one artifact once per lifecycle, validates target class mappings,
+filters immutable detections, rejects malformed output, and distinguishes a
+recoverable timeout from fatal backend corruption. An infrastructure-only
+factory composes that adapter with the existing ByteTrack tracker without
+putting framework names in bootstrap. The operator CLI is opt-in; no model is
+downloaded and no absolute model path enters public snapshots. No compatible
+local model was available during implementation, so real pig inference and all
+accuracy claims remain pending.
 
 ## Phase 0 documentation
 
@@ -474,6 +487,9 @@ detections or count evidence.
 * [Phase 10.1 runtime foundation](docs/phase_10/phase_10_1_runtime_foundation.md)
 * [Phase 10.1 validation](docs/phase_10/phase_10_1_validation.md)
 * [Phase 10.1 summary](docs/phase_10/phase_10_1_summary.md)
+* [Phase 10.2 pig detector integration](docs/phase_10/phase_10_2_pig_detector_integration.md)
+* [Phase 10.2 validation](docs/phase_10/phase_10_2_validation.md)
+* [Phase 10.2 summary](docs/phase_10/phase_10_2_summary.md)
 
 Technical launch examples:
 
@@ -553,7 +569,8 @@ TRACKING REPLAY
 * Phase 9.3: one shared camera/file acquisition and counting-pipeline integration implemented
 * Phase 9.4: latest-frame operator preview, diagnostics, and bounded USB recovery implemented; physical/pig validation pending
 * Phase 10.1: bounded production-runtime supervision foundation implemented; production endurance/hardware validation pending
-* Phase 10 persistence and Phase 10.2 through Phase 16: not started
+* Phase 10.2: explicit local pig-detector runtime boundary implemented; real model/pig validation pending
+* Phase 10 persistence, Phase 10.3, and Phase 11 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
 The source-controlled repository contains no real pig video and makes no claim

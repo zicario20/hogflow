@@ -14,16 +14,26 @@ from time import monotonic
 from types import ModuleType
 from typing import Any, Callable
 
-from hogflow.core import ConfigurationError, DependencyUnavailableError, InputDataError
+from hogflow.core import DependencyUnavailableError
 from hogflow.detection.errors import (
+    DetectorConfigurationError,
     DetectorLifecycleError,
     DetectorLoadError,
     FatalInferenceError,
     InvalidClassMappingError,
+    InvalidDetectorInputError,
     InvalidModelArtifactError,
     MalformedDetectorOutputError,
+    TemporaryInferenceError,
+    UnsupportedDetectorDeviceError,
 )
 from hogflow.detection.inference import FrameDetections, ModelArtifactMetadata
+from hogflow.detection.runtime import (
+    DetectorBackend,
+    DetectorModelFormat,
+    DetectorModelProvenance,
+    PigDetectorConfiguration,
+)
 from hogflow.models import BoundingBox, Detection
 from hogflow.streaming.models import FramePacket
 
@@ -71,43 +81,101 @@ class UltralyticsLiveDetector:
         device: str = "cpu",
         permitted_class_ids: tuple[int, ...] | None = None,
         required_class_name: str = "pig",
+        maximum_detections: int = 300,
+        half_precision: bool = False,
         monotonic_clock: Callable[[], float] = monotonic,
         wall_clock: Callable[[], datetime] | None = None,
     ) -> None:
-        self._model_path = _local_file(model_path, "Local detector model")
-        self._provenance_path = (
-            None
-            if provenance_path is None
-            else _local_file(provenance_path, "Local model provenance")
+        self._initialize(
+            PigDetectorConfiguration.ultralytics(
+                model_path,
+                provenance_path=provenance_path,
+                confidence_threshold=confidence_threshold,
+                iou_threshold=iou_threshold,
+                inference_image_size=image_size,
+                device=device,
+                target_class_ids=permitted_class_ids,
+                target_class_name=required_class_name,
+                maximum_detections=maximum_detections,
+                half_precision=half_precision,
+            ),
+            monotonic_clock=monotonic_clock,
+            wall_clock=wall_clock,
         )
-        self._confidence = _probability(confidence_threshold, "confidence_threshold")
-        self._iou = _probability(iou_threshold, "iou_threshold")
-        if not isinstance(image_size, int) or isinstance(image_size, bool) or image_size <= 0:
-            raise ConfigurationError("image_size must be a positive integer.")
-        if not isinstance(device, str) or not device.strip():
-            raise ConfigurationError("device must be non-empty text.")
-        if not isinstance(required_class_name, str) or not required_class_name.strip():
-            raise ConfigurationError("required_class_name must be non-empty text.")
-        if permitted_class_ids is not None:
-            if not isinstance(permitted_class_ids, tuple) or not all(
-                isinstance(value, int) and not isinstance(value, bool) and value >= 0
-                for value in permitted_class_ids
-            ):
-                raise ConfigurationError("permitted_class_ids must be non-negative integers.")
-            if tuple(sorted(set(permitted_class_ids))) != permitted_class_ids:
-                raise ConfigurationError("permitted_class_ids must be unique and sorted.")
-        self._image_size = image_size
-        self._device = device.strip()
-        self._requested_class_ids = permitted_class_ids
-        self._required_class_name = required_class_name.strip()
+
+    @classmethod
+    def from_configuration(
+        cls,
+        configuration: PigDetectorConfiguration,
+        *,
+        monotonic_clock: Callable[[], float] = monotonic,
+        wall_clock: Callable[[], datetime] | None = None,
+    ) -> UltralyticsLiveDetector:
+        """Create an adapter from the framework-neutral production configuration."""
+
+        if (
+            not isinstance(configuration, PigDetectorConfiguration)
+            or configuration.backend is not DetectorBackend.ULTRALYTICS
+        ):
+            raise DetectorConfigurationError(
+                "Ultralytics adapter requires an Ultralytics detector configuration."
+            )
+        instance = cls.__new__(cls)
+        instance._initialize(
+            configuration,
+            monotonic_clock=monotonic_clock,
+            wall_clock=wall_clock,
+        )
+        return instance
+
+    def _initialize(
+        self,
+        configuration: PigDetectorConfiguration,
+        *,
+        monotonic_clock: Callable[[], float],
+        wall_clock: Callable[[], datetime] | None,
+    ) -> None:
+        assert isinstance(configuration.model_path, Path)
+        assert configuration.provenance_path is None or isinstance(
+            configuration.provenance_path, Path
+        )
+        self._configuration = configuration
+        self._model_path = configuration.model_path
+        self._provenance_path = configuration.provenance_path
+        self._confidence = configuration.confidence_threshold
+        self._iou = configuration.iou_threshold
+        self._image_size = configuration.inference_image_size
+        self._requested_device = configuration.device
+        self._resolved_device: str | None = None
+        self._requested_class_ids = configuration.target_class_ids
+        self._required_class_name = configuration.target_class_name
+        self._maximum_detections = configuration.maximum_detections
+        self._half_precision = configuration.half_precision
         self._monotonic = monotonic_clock
         self._wall_clock = wall_clock or (lambda: datetime.now(timezone.utc))
         self._model: Any | None = None
         self._metadata: ModelArtifactMetadata | None = None
+        self._runtime_provenance: DetectorModelProvenance | None = None
         self._permitted_class_ids: tuple[int, ...] = ()
         self._cv2: ModuleType | Any | None = None
         self._np: ModuleType | Any | None = None
         self._framework_version = "unknown"
+
+    @property
+    def configuration(self) -> PigDetectorConfiguration:
+        """Return the immutable path-redacting runtime configuration."""
+
+        return self._configuration
+
+    @property
+    def runtime_provenance(self) -> DetectorModelProvenance:
+        """Return sanitized loaded-model provenance without a local path."""
+
+        if self._runtime_provenance is None:
+            raise DetectorLifecycleError(
+                "Detector runtime provenance is available only after loading."
+            )
+        return self._runtime_provenance
 
     @property
     def metadata(self) -> ModelArtifactMetadata:
@@ -124,8 +192,22 @@ class UltralyticsLiveDetector:
 
         if self.is_loaded:
             return
-        cv2, np, yolo_factory, framework_version, torch = _load_runtime()
-        _validate_requested_device(self._device, torch)
+        try:
+            cv2, np, yolo_factory, framework_version, torch = _load_runtime()
+        except DependencyUnavailableError as exc:
+            raise DetectorLoadError("Local detector runtime dependencies are unavailable.") from exc
+        resolved_device = _resolve_device(self._requested_device, torch)
+        if self._half_precision and not resolved_device.startswith("cuda"):
+            raise UnsupportedDetectorDeviceError(
+                "Half precision requires an explicitly available CUDA device."
+            )
+        if (
+            self._configuration.model_format is DetectorModelFormat.TENSORRT
+            and not resolved_device.startswith("cuda")
+        ):
+            raise UnsupportedDetectorDeviceError(
+                "TensorRT detector artifacts require an available CUDA device."
+            )
         fingerprint = _sha256(self._model_path)
         try:
             model = yolo_factory(str(self._model_path))
@@ -153,6 +235,7 @@ class UltralyticsLiveDetector:
         self._cv2 = cv2
         self._np = np
         self._framework_version = framework_version
+        self._resolved_device = resolved_device
         self._permitted_class_ids = permitted
         self._metadata = ModelArtifactMetadata(
             model_id=f"ultralytics-yolo-{fingerprint[:16]}",
@@ -167,6 +250,20 @@ class UltralyticsLiveDetector:
             evaluation_reference=provenance.get("evaluation_reference"),
             pig_detection_provenance_complete=bool(provenance.get("complete", False)),
         )
+        loaded_at = self._wall_clock()
+        self._runtime_provenance = DetectorModelProvenance(
+            backend_family=DetectorBackend.ULTRALYTICS,
+            model_format=self._configuration.model_format,
+            sanitized_model_name=f"ultralytics-{fingerprint[:16]}",
+            artifact_fingerprint=fingerprint,
+            target_class_name=self._required_class_name,
+            target_class_ids=permitted,
+            loaded_at=loaded_at,
+            runtime_device=resolved_device,
+            configuration_fingerprint=self._configuration.fingerprint,
+            framework_version=framework_version,
+            provenance_complete=bool(provenance.get("complete", False)),
+        )
         self._model = model
 
     def infer(self, frame: FramePacket) -> FrameDetections:
@@ -175,7 +272,7 @@ class UltralyticsLiveDetector:
         if not self.is_loaded or self._model is None or self._cv2 is None or self._np is None:
             raise DetectorLifecycleError("Detector must be loaded before live inference.")
         if not isinstance(frame, FramePacket):
-            raise InputDataError("Live detector input must be a FramePacket.")
+            raise InvalidDetectorInputError("Live detector input must be a FramePacket.")
         started_monotonic = float(self._monotonic())
         started_at = self._wall_clock()
         try:
@@ -185,32 +282,56 @@ class UltralyticsLiveDetector:
                 frame.dimensions.channels,
             )
             bgr_frame = self._cv2.cvtColor(rgb_frame, self._cv2.COLOR_RGB2BGR)
+        except Exception as exc:
+            raise InvalidDetectorInputError(
+                "Detector frame payload cannot become a valid RGB image."
+            ) from exc
+        try:
             results = self._model.predict(
                 source=bgr_frame,
                 classes=list(self._permitted_class_ids),
                 conf=self._confidence,
                 iou=self._iou,
                 imgsz=self._image_size,
-                device=self._device,
+                device=self._resolved_device,
+                max_det=self._maximum_detections,
+                half=self._half_precision,
                 save=False,
+                stream=False,
                 verbose=False,
             )
-        except (DetectorLifecycleError, MalformedDetectorOutputError):
+        except TemporaryInferenceError:
             raise
+        except TimeoutError as exc:
+            raise TemporaryInferenceError("Ultralytics inference timed out for one frame.") from exc
         except Exception as exc:
             raise FatalInferenceError("Ultralytics live detector inference failed.") from exc
         completed_monotonic = float(self._monotonic())
         completed_at = self._wall_clock()
-        if not results:
-            raise MalformedDetectorOutputError("Detector returned no result container.")
-        detections = _convert_detections(
-            getattr(results[0], "boxes", None),
-            width=frame.dimensions.width,
-            height=frame.dimensions.height,
-            confidence_threshold=self._confidence,
-            permitted_class_ids=self._permitted_class_ids,
-            class_mapping=dict(self.metadata.class_mapping),
-        )
+        if (
+            not isinstance(results, Sequence)
+            or isinstance(results, (str, bytes))
+            or len(results) != 1
+        ):
+            raise MalformedDetectorOutputError(
+                "Detector must return exactly one result container per frame."
+            )
+        try:
+            detections = _convert_detections(
+                getattr(results[0], "boxes", None),
+                width=frame.dimensions.width,
+                height=frame.dimensions.height,
+                confidence_threshold=self._confidence,
+                permitted_class_ids=self._permitted_class_ids,
+                class_mapping=dict(self.metadata.class_mapping),
+                maximum_detections=self._maximum_detections,
+            )
+        except MalformedDetectorOutputError:
+            raise
+        except Exception as exc:
+            raise MalformedDetectorOutputError(
+                "Detector output cannot be converted safely."
+            ) from exc
         return FrameDetections(
             source_id=frame.stream.stream_id,
             frame_sequence=frame.sequence_number,
@@ -240,36 +361,39 @@ class UltralyticsLiveDetector:
                     raise DetectorLifecycleError("Detector resource cleanup failed.") from exc
 
 
-def _local_file(value: str | Path, name: str) -> Path:
-    if not isinstance(value, (str, Path)):
-        raise InvalidModelArtifactError(f"{name} must be a local file path.")
-    path = Path(value)
-    if not path.exists() or not path.is_file():
-        raise InvalidModelArtifactError(f"{name} is missing or is not a file.")
-    return path
-
-
-def _probability(value: object, name: str) -> float:
-    if (
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or not isfinite(value)
-        or not 0 < float(value) <= 1
-    ):
-        raise ConfigurationError(f"{name} must be greater than 0 and at most 1.")
-    return float(value)
-
-
-def _validate_requested_device(device: str, torch: Any) -> None:
-    normalized = device.lower()
-    requests_cuda = normalized.startswith("cuda") or normalized.isdigit()
-    if requests_cuda and not bool(torch.cuda.is_available()):
-        raise ConfigurationError("CUDA was requested explicitly but is unavailable.")
+def _resolve_device(device: str, torch: Any) -> str:
+    normalized = device.casefold()
+    cuda_available = bool(torch.cuda.is_available())
+    if normalized == "auto":
+        return "cuda:0" if cuda_available else "cpu"
+    if normalized == "cpu":
+        return "cpu"
+    if not cuda_available:
+        raise UnsupportedDetectorDeviceError("CUDA was requested explicitly but is unavailable.")
+    index = 0 if normalized == "cuda" else int(normalized.split(":", maxsplit=1)[1])
+    device_count = getattr(torch.cuda, "device_count", None)
+    if callable(device_count) and index >= int(device_count()):
+        raise UnsupportedDetectorDeviceError("The requested CUDA device index is unavailable.")
+    return f"cuda:{index}"
 
 
 def _class_mapping(names: Mapping[Any, Any] | Sequence[Any] | None) -> tuple[tuple[int, str], ...]:
     if isinstance(names, Mapping):
-        values = tuple(sorted((int(key), str(value)) for key, value in names.items()))
+        resolved: dict[int, str] = {}
+        try:
+            entries = tuple((int(key), str(value)) for key, value in names.items())
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise InvalidClassMappingError(
+                "Detector artifact class mapping contains invalid identifiers."
+            ) from exc
+        for class_id, name in entries:
+            previous = resolved.get(class_id)
+            if previous is not None and previous != name:
+                raise InvalidClassMappingError(
+                    "Detector artifact maps one class ID to conflicting class names."
+                )
+            resolved[class_id] = name
+        values = tuple(sorted(resolved.items()))
     elif isinstance(names, Sequence) and not isinstance(names, (str, bytes)):
         values = tuple((index, str(value)) for index, value in enumerate(names))
     else:
@@ -367,6 +491,7 @@ def _convert_detections(
     confidence_threshold: float,
     permitted_class_ids: tuple[int, ...],
     class_mapping: dict[int, str],
+    maximum_detections: int,
 ) -> tuple[Detection, ...]:
     if boxes is None or len(boxes) == 0:
         return ()
@@ -375,6 +500,10 @@ def _convert_detections(
     class_values = _to_rows(boxes.cls)
     if not (len(coordinates) == len(confidence_values) == len(class_values)):
         raise MalformedDetectorOutputError("Detector output arrays have inconsistent lengths.")
+    if len(coordinates) > maximum_detections:
+        raise MalformedDetectorOutputError(
+            "Detector output exceeds the configured maximum detections."
+        )
     detections: list[Detection] = []
     for row, confidence, class_id in zip(
         coordinates,

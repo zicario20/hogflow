@@ -14,9 +14,16 @@ from hogflow.counting import (
     representative_point,
 )
 from hogflow.detection import (
+    DetectionInferenceError,
+    DetectorModelProvenance,
+    DetectorRuntimeSnapshot,
+    DetectorRuntimeTelemetry,
+    FatalInferenceError,
     FrameDetections,
     LiveDetector,
     MalformedDetectorOutputError,
+    PigDetectorConfiguration,
+    TemporaryInferenceError,
 )
 from hogflow.streaming import FramePacket
 from hogflow.tracking import (
@@ -46,6 +53,7 @@ class DetectorTrackingCrossingProcessor:
         *,
         preview_publisher: PreviewFramePublisher | None = None,
         preview_configuration: LiveCrossingConfiguration | None = None,
+        detector_configuration: PigDetectorConfiguration | None = None,
     ) -> None:
         if not callable(crossing_detector_factory):
             raise TypeError("Crossing detector factory must be callable.")
@@ -64,6 +72,13 @@ class DetectorTrackingCrossingProcessor:
             raise TypeError("Preview requires enabled crossing configuration with a line.")
         self._preview_publisher = preview_publisher
         self._preview_configuration = preview_configuration
+        inferred_configuration = getattr(detector, "configuration", None)
+        configuration = detector_configuration or (
+            inferred_configuration
+            if isinstance(inferred_configuration, PigDetectorConfiguration)
+            else PigDetectorConfiguration.empty()
+        )
+        self._detector_telemetry = DetectorRuntimeTelemetry(configuration)
         self._crossing_detector: LiveCrossingDetector | None = None
         self._active_crossing_lifecycle_id: str | None = None
         self._source_id: str | None = None
@@ -71,6 +86,12 @@ class DetectorTrackingCrossingProcessor:
     @property
     def is_started(self) -> bool:
         return self._source_id is not None
+
+    @property
+    def detector_snapshot(self) -> DetectorRuntimeSnapshot:
+        """Return bounded detector diagnostics without framework objects or paths."""
+
+        return self._detector_telemetry.snapshot()
 
     def start(self, source_id: str) -> None:
         """Load one detector and start one tracker for the shared source."""
@@ -85,12 +106,20 @@ class DetectorTrackingCrossingProcessor:
         try:
             self._detector.load()
             detector_loaded = True
+            provenance = getattr(self._detector, "runtime_provenance", None)
+            self._detector_telemetry.record_loaded(
+                self._detector.metadata,
+                provenance if isinstance(provenance, DetectorModelProvenance) else None,
+            )
             self._tracker.start(source_id)
         except Exception:
+            if not detector_loaded:
+                self._detector_telemetry.record_load_failure()
             if self._tracker.is_started:
                 self._tracker.close()
             if detector_loaded:
                 self._detector.close()
+                self._detector_telemetry.record_closed()
             raise
         self._source_id = source_id
 
@@ -103,8 +132,29 @@ class DetectorTrackingCrossingProcessor:
 
         self._require_frame(frame)
         self._select_crossing_lifecycle(crossing_lifecycle_id)
-        detections = self._detector.infer(frame)
-        self._validate_detections(frame, detections)
+        self._detector_telemetry.record_inference_attempt()
+        try:
+            detections = self._detector.infer(frame)
+        except TemporaryInferenceError:
+            self._detector_telemetry.record_temporary_failure()
+            raise
+        except MalformedDetectorOutputError:
+            self._detector_telemetry.record_fatal_failure(malformed_output=True)
+            raise
+        except DetectionInferenceError:
+            self._detector_telemetry.record_fatal_failure()
+            raise
+        except Exception as exc:
+            self._detector_telemetry.record_fatal_failure()
+            raise FatalInferenceError(
+                "Detector failed outside its declared inference contract."
+            ) from exc
+        try:
+            self._validate_detections(frame, detections)
+        except MalformedDetectorOutputError:
+            self._detector_telemetry.record_fatal_failure(malformed_output=True)
+            raise
+        self._detector_telemetry.record_success(detections)
         request = TrackingRequest(
             source_id=detections.source_id,
             frame_sequence=detections.frame_sequence,
@@ -170,6 +220,7 @@ class DetectorTrackingCrossingProcessor:
             except BaseException as exc:
                 if pending is None:
                     pending = exc
+        self._detector_telemetry.record_closed()
         self._source_id = None
         if pending is not None:
             raise CameraPipelineProcessingError(

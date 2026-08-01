@@ -8,6 +8,7 @@ from typing import Callable
 from uuid import uuid4
 
 from hogflow.adapters.camera_source_factory import create_camera_source
+from hogflow.adapters.live_detector_factory import create_live_detector_and_tracker
 from hogflow.application import (
     Clock,
     CrossingLifecycleIdFactory,
@@ -34,7 +35,7 @@ from hogflow.counting import (
     NormalizedPoint,
     VirtualLineCrossingDetector,
 )
-from hogflow.detection import EmptyDetector
+from hogflow.detection import LiveDetector, PigDetectorConfiguration
 from hogflow.presentation import (
     OperatorDesktopView,
     OperatorPresenter,
@@ -46,7 +47,7 @@ from hogflow.runtime import (
     RuntimeHealthManager,
 )
 from hogflow.sessions import MultiDockRuntimeCoordinator, SharedCountingLane
-from hogflow.tracking import EmptyTracker
+from hogflow.tracking import LiveTracker
 
 OPERATOR_LANE_SOURCE_ID = "shared_operator_lane"
 DEFAULT_CAMERA_CROSSING_CONFIGURATION = LiveCrossingConfiguration(
@@ -107,18 +108,24 @@ class OperatorDesktopComposition:
 
 def _default_processor_factory(
     preview_channel: LatestPreviewFrameChannel,
+    detector_configuration: PigDetectorConfiguration,
 ) -> DetectorTrackingCrossingProcessor:
-    """Build a framework-free no-detection processor for safe local composition."""
+    """Build one fresh serial detector/tracker composition for a pipeline run."""
+
+    detector: LiveDetector
+    tracker: LiveTracker
+    detector, tracker = create_live_detector_and_tracker(detector_configuration)
 
     return DetectorTrackingCrossingProcessor(
-        EmptyDetector(),
-        EmptyTracker(),
+        detector,
+        tracker,
         lambda lifecycle_id: VirtualLineCrossingDetector(
             DEFAULT_CAMERA_CROSSING_CONFIGURATION,
             lifecycle_id_factory=lambda _generation: lifecycle_id,
         ),
         preview_publisher=preview_channel,
         preview_configuration=DEFAULT_CAMERA_CROSSING_CONFIGURATION,
+        detector_configuration=detector_configuration,
     )
 
 
@@ -132,6 +139,7 @@ def build_operator_runtime(
     recovery_configuration: CameraRecoveryConfiguration = CameraRecoveryConfiguration(),
     runtime_configuration: ProductionRuntimeConfiguration = ProductionRuntimeConfiguration(),
     runtime_health_manager: RuntimeHealthManager | None = None,
+    detector_configuration: PigDetectorConfiguration = PigDetectorConfiguration.empty(),
 ) -> OperatorRuntimeComposition:
     """Build one shared lane, source controller, and operator application."""
 
@@ -148,10 +156,12 @@ def build_operator_runtime(
     counting_pipeline = CountingPipelineController(
         runtime_access,
         source_factory or create_camera_source,
-        processor_factory or (lambda: _default_processor_factory(preview_channel)),
+        processor_factory
+        or (lambda: _default_processor_factory(preview_channel, detector_configuration)),
         clock=clock,
         recovery_configuration=recovery_configuration,
         preview_channel=preview_channel,
+        detector_configuration=detector_configuration,
     )
     application = OperatorApplicationService(
         coordinator,
@@ -193,6 +203,7 @@ def compose_operator_desktop(
     recovery_configuration: CameraRecoveryConfiguration = CameraRecoveryConfiguration(),
     runtime_configuration: ProductionRuntimeConfiguration = ProductionRuntimeConfiguration(),
     runtime_health_manager: RuntimeHealthManager | None = None,
+    detector_configuration: PigDetectorConfiguration = PigDetectorConfiguration.empty(),
 ) -> OperatorDesktopComposition:
     """Create and wire lane → coordinator → application → presenter → view."""
 
@@ -205,6 +216,7 @@ def compose_operator_desktop(
         recovery_configuration=recovery_configuration,
         runtime_configuration=runtime_configuration,
         runtime_health_manager=runtime_health_manager,
+        detector_configuration=detector_configuration,
     )
     try:
         if video_source is not None:

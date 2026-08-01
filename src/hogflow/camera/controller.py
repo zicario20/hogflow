@@ -35,6 +35,8 @@ from hogflow.counting import LiveCrossingError
 from hogflow.detection import (
     DetectionInferenceError,
     DetectorLoadError,
+    DetectorRuntimeSnapshot,
+    PigDetectorConfiguration,
     TemporaryInferenceError,
 )
 from hogflow.streaming import (
@@ -72,6 +74,7 @@ class CountingPipelineController:
         startup_wait_seconds: float = 1.0,
         recovery_configuration: CameraRecoveryConfiguration = CameraRecoveryConfiguration(),
         preview_channel: LatestPreviewFrameChannel | None = None,
+        detector_configuration: PigDetectorConfiguration = PigDetectorConfiguration.empty(),
     ) -> None:
         if not callable(source_factory) or not callable(processor_factory):
             raise TypeError("Camera pipeline factories must be callable.")
@@ -85,6 +88,10 @@ class CountingPipelineController:
             raise CameraPipelineConfigurationError(
                 "Camera pipeline recovery configuration is invalid."
             )
+        if not isinstance(detector_configuration, PigDetectorConfiguration):
+            raise CameraPipelineConfigurationError(
+                "Camera pipeline detector configuration is invalid."
+            )
         self._runtime = runtime
         self._source_factory = source_factory
         self._processor_factory = processor_factory
@@ -93,6 +100,8 @@ class CountingPipelineController:
         self._join_timeout = float(worker_join_timeout_seconds)
         self._startup_wait = float(startup_wait_seconds)
         self._recovery_configuration = recovery_configuration
+        self._detector_configuration = detector_configuration
+        self._detector_snapshot = DetectorRuntimeSnapshot.for_configuration(detector_configuration)
         self._preview = preview_channel or LatestPreviewFrameChannel(
             PreviewConfiguration(enabled=False),
             monotonic_clock=monotonic_clock,
@@ -210,6 +219,7 @@ class CountingPipelineController:
                     "Counting frame processor could not be created."
                 ) from exc
             self._processor = processor
+            self._refresh_detector_snapshot(processor)
             self._stop_requested.clear()
             self._startup_complete.clear()
             self._pipeline_status = CountingPipelineStatus.STARTING
@@ -559,6 +569,8 @@ class CountingPipelineController:
         )
 
     def _snapshot_locked(self) -> CountingPipelineSnapshot:
+        if self._processor is not None:
+            self._refresh_detector_snapshot(self._processor)
         configuration = self._configuration
         binding = self._runtime.active_binding()
         camera = CameraSnapshot(
@@ -607,6 +619,7 @@ class CountingPipelineController:
             maximum_processing_latency_ms=self._maximum_processing_latency_ms,
             consecutive_camera_failures=self._consecutive_camera_failures,
             consecutive_detector_failures=self._consecutive_detector_failures,
+            detector=self._detector_snapshot,
         )
 
     def _record_failure(
@@ -653,6 +666,9 @@ class CountingPipelineController:
         self._maximum_processing_latency_ms = 0.0
         self._consecutive_camera_failures = 0
         self._consecutive_detector_failures = 0
+        self._detector_snapshot = DetectorRuntimeSnapshot.for_configuration(
+            self._detector_configuration
+        )
 
     def _close_configured_source(self) -> None:
         source = self._source
@@ -676,6 +692,11 @@ class CountingPipelineController:
             self._maximum_processing_latency_ms,
             latency_ms,
         )
+
+    def _refresh_detector_snapshot(self, processor: object) -> None:
+        candidate = getattr(processor, "detector_snapshot", None)
+        if isinstance(candidate, DetectorRuntimeSnapshot):
+            self._detector_snapshot = candidate
 
     def _effective_fps(self) -> float:
         if (

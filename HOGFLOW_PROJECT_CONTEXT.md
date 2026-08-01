@@ -10,14 +10,15 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 10.1 production runtime foundation
-implemented over the completed Phase 9.4 runtime. Synchronous caller-driven
-heartbeats expose uptime, exact processing progress, component health, process
-memory, fixed-capacity warnings, aggregate latency/FPS/failure/restart metrics,
-and the existing single worker/source/preview/lane state. Controlled restart
-does not create workers and is blocked during active lane ownership by default.
-Persistence, API, networking, multi-shift/physical-camera validation,
-pig-specific evidence, and production readiness remain absent.
+Current repository status: Phase 10.2 pig-detector runtime integration
+implemented over the Phase 10.1 foundation. One explicit local model can be
+configured through framework-neutral immutable values and the existing serial
+source/detector/tracker/crossing pipeline. Artifact paths remain local, the
+adapter loads and hashes once per lifecycle, target classes are explicit, and
+bounded detector diagnostics flow through existing pipeline/runtime snapshots.
+Empty mode remains the default. No compatible model was available for real
+inference, so pig-specific accuracy, physical-camera/model performance,
+persistence, multi-shift validation, and production readiness remain absent.
 
 ## Project identity
 
@@ -559,6 +560,41 @@ NOT VALIDATED by Phase 10.1:
 * empirically tuned health/restart thresholds;
 * continuity-safe automatic restart during an active counting session.
 
+IMPLEMENTED Phase 10.2 pig detector integration:
+
+* Frozen `PigDetectorConfiguration` validates an explicit existing local
+  `.pt`, `.onnx`, or `.engine` artifact, optional JSON provenance, pig target
+  name/IDs, confidence/IoU, image size, device, maximum detections, and explicit
+  half precision without exposing local paths in representations or
+  fingerprints.
+* `DetectorModelProvenance` and `DetectorRuntimeSnapshot` expose safe model
+  identity, format, artifact/configuration fingerprints, resolved device,
+  lifecycle state, scalar inference/failure/detection/latency metrics, and no
+  frame/result/error history.
+* The existing `UltralyticsLiveDetector` validates installed API use, computes
+  artifact SHA-256 once per load, loads once, rejects conflicting class maps and
+  malformed/non-finite output, filters explicit target classes, and keeps all
+  framework objects inside the adapter.
+* Timeout-class failures are temporary; arbitrary backend, malformed output,
+  load, lifecycle, input, device, and precision failures remain fatal or
+  category-specific. No failure fabricates detections or counts.
+* `adapters.live_detector_factory` creates either the explicit empty pair or
+  one local detector plus the existing ByteTrack adapter per pipeline run.
+  Bootstrap remains framework-neutral; no second worker/queue/source/counter is
+  introduced.
+* Operator and technical CLIs support explicit local configuration and perform
+  validation before composition where feasible. No model download exists.
+
+NOT VALIDATED by Phase 10.2:
+
+* any real pig-model load or inference, because no compatible local artifact
+  was available during implementation;
+* pig precision, recall, F1, mAP, generalization, tracking, crossing, or count
+  accuracy;
+* representative CPU/CUDA/ONNX/TensorRT throughput, first-inference latency,
+  sustained memory, or hardware recovery;
+* production readiness or multi-shift operation.
+
 NOT IMPLEMENTED in Phase 8.3:
 
 * camera acquisition or four concurrent camera streams
@@ -799,7 +835,7 @@ The roadmap currently spans Phase 0 through Phase 16.
 | Phase 7 | Handle reverse movement and duplicate counting. |
 | Phase 8 | Build three-section session manager. |
 | Phase 9 | Build Operator MVP User Interface. |
-| Phase 10 | Phase 10.1 runtime foundation implemented; SQLite session/event storage remains planned. |
+| Phase 10 | Phase 10.1 runtime foundation and Phase 10.2 local detector integration implemented; SQLite session/event storage remains planned. |
 | Phase 11 | Evaluate HogFlow against human-verified ground truth. |
 | Phase 12 | Build error analysis and analytics dashboard. |
 | Phase 13 | Create failure review system and review clips. |
@@ -840,8 +876,10 @@ evidence. Phase 9.4 completes the authorized technical Operator MVP with a
 synthetic/headless-validated executable, one shared source worker, one-slot
 preview, UI-thread overlays, bounded diagnostics, and bounded USB reopen over
 Phase 8. Phase 10.1 adds bounded synchronous runtime supervision without
-another execution thread or persistence. Physical-camera, real GUI,
-representative pig ingestion, and multi-shift endurance have not been validated.
+another execution thread or persistence. Phase 10.2 adds the explicit local
+model boundary without supplying or validating a model. Physical-camera, real
+GUI, representative pig ingestion, and multi-shift endurance have not been
+validated.
 
 ## Pilot readiness phase
 
@@ -989,7 +1027,7 @@ Not yet implemented:
 
 * representative pig line-position evaluation and calibrated line selection
 * representative pig reverse-movement and duplicate-counting validation
-* Phase 10 persistence, Phase 10.2, and Phase 11 through Phase 16
+* Phase 10 persistence, Phase 10.3, and Phase 11 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
@@ -1001,8 +1039,8 @@ Not yet implemented:
 * representative physical-camera, GUI-performance, and operator validation
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 10.1 bounded runtime supervision implemented with
-synthetic/headless evidence over the completed Phase 9 technical scope.
-Representative pig validation, cross-reconnect identity policy,
-physical-camera/GUI and multi-shift validation, persistence, and broader review
-workflow remain pending. Phase 10.2 and Phase 11 have not started.
+Current roadmap status: Phase 10.2 local detector runtime integration
+implemented with synthetic/fake-backend evidence over Phase 10.1. No compatible
+pig model was executed. Representative pig validation, cross-reconnect identity
+policy, physical-camera/GUI and multi-shift validation, persistence, and broader
+review workflow remain pending. Phase 10.3 and Phase 11 have not started.

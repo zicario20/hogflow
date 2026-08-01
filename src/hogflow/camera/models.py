@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from math import isfinite
 from re import fullmatch
 
 from hogflow.core import ConfigurationError
+from hogflow.detection import DetectorRuntimeSnapshot
 from hogflow.domain import DockId
 from hogflow.streaming import SourceType
 
@@ -194,12 +195,15 @@ class CountingPipelineSnapshot:
     maximum_processing_latency_ms: float = 0.0
     consecutive_camera_failures: int = 0
     consecutive_detector_failures: int = 0
+    detector: DetectorRuntimeSnapshot = field(default_factory=DetectorRuntimeSnapshot.empty)
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, CountingPipelineStatus):
             raise ValueError("Counting pipeline status must be explicit.")
         if not isinstance(self.camera, CameraSnapshot):
             raise ValueError("Counting pipeline snapshot requires a camera snapshot.")
+        if not isinstance(self.detector, DetectorRuntimeSnapshot):
+            raise ValueError("Counting pipeline snapshot requires detector diagnostics.")
         for value, label in (
             (self.frames_processed, "processed frames"),
             (self.temporary_processing_failures, "temporary processing failures"),

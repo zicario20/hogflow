@@ -36,6 +36,7 @@ from hogflow.detection import (
     LiveDetectionStats,
     LiveDetector,
     LiveInferenceConfiguration,
+    PigDetectorConfiguration,
     SyntheticMovingBoxDetector,
 )
 from hogflow.pipeline import (
@@ -117,6 +118,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--permitted-class-ids", type=_class_ids)
+    parser.add_argument("--target-class-name", default="pig")
+    parser.add_argument("--max-detections", type=int, default=300)
+    parser.add_argument("--half-precision", action="store_true")
 
     parser.add_argument(
         "--tracker",
@@ -351,15 +355,19 @@ def _detector(arguments: argparse.Namespace) -> LiveDetector:
         return SyntheticMovingBoxDetector()
     if arguments.model_path is None:
         raise ValueError("YOLO detector requires an explicit existing --model-path.")
-    return UltralyticsLiveDetector(
+    configuration = PigDetectorConfiguration.ultralytics(
         arguments.model_path,
         provenance_path=arguments.model_provenance,
         confidence_threshold=arguments.confidence,
         iou_threshold=arguments.iou_threshold,
-        image_size=arguments.image_size,
+        inference_image_size=arguments.image_size,
         device=arguments.device,
-        permitted_class_ids=arguments.permitted_class_ids,
+        target_class_ids=arguments.permitted_class_ids,
+        target_class_name=arguments.target_class_name,
+        maximum_detections=arguments.max_detections,
+        half_precision=arguments.half_precision,
     )
+    return UltralyticsLiveDetector.from_configuration(configuration)
 
 
 def _tracker(arguments: argparse.Namespace) -> LiveTracker | None:

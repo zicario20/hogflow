@@ -1497,3 +1497,51 @@ readiness evidence. Thresholds, memory-probe portability, shift-length
 endurance, physical camera recovery, pig inference, and operator response still
 require representative validation. Active-session automatic recovery remains
 blocked rather than risking silent count corruption.
+
+## ADR-060 - Configure local detector artifacts through a framework-neutral runtime boundary
+
+Status: Accepted
+
+### Context
+
+Phase 5.2 already defines `LiveDetector` and an isolated local-file
+Ultralytics adapter, while Phase 9.3 owns the one serial camera worker and Phase
+10.1 observes bounded detector failures. The executable still composes an empty
+detector/tracker. Adding a local model must not leak its path or framework
+objects, trigger downloads, reload per frame, add a worker, or let detector
+failure fabricate crossing/counting evidence. The Phase 9.3 composition root
+must also remain free of concrete framework names.
+
+### Decision
+
+Add frozen framework-neutral `PigDetectorConfiguration`, sanitized
+`DetectorModelProvenance`, and scalar-only `DetectorRuntimeTelemetry` under
+`hogflow.detection`. Keep local paths redacted from representations,
+fingerprints, public snapshots, and errors. Hash the configured artifact once
+per controlled load and use its digest as safe identity.
+
+Extend the existing `UltralyticsLiveDetector` rather than create another live
+contract. It validates model format, class ID/name consistency, target policy,
+device/precision, one result container, finite boxes/scores, and maximum
+detections. Only explicit timeout-class failures are temporary; unknown backend
+failures, malformed output, load, lifecycle, input, and device failures remain
+fatal or category-specific.
+
+Put concrete detector/tracker selection in
+`hogflow.adapters.live_detector_factory`. Bootstrap and CLI pass only the
+framework-neutral configuration. Empty mode stays the default; local-model
+mode creates one adapter and the existing ByteTrack tracker per pipeline run.
+The existing worker, source, crossing, counter, lane, and restart boundaries do
+not change.
+
+### Consequences
+
+The serial runtime can opt into an explicit local pig-model artifact without
+download or framework leakage. Restart creates a fresh detector/tracker
+lifecycle; reconnect reset does not reload the model. Detector metrics are
+available as bounded immutable pipeline diagnostics and existing Phase 10.1
+health counters continue to classify detector degradation/failure.
+
+This is integration evidence only. No compatible model was available during
+implementation, so real pig inference, device performance, tracking, crossing,
+count accuracy, and production readiness remain unvalidated.

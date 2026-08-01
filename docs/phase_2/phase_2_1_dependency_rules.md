@@ -280,6 +280,33 @@ fixed-capacity warning deque only. Camera/pipeline restart recreates the same
 single worker/source composition and is blocked while the lane is occupied by
 default; preview restart touches only the one-slot visual channel.
 
+Phase 10.2 extends the existing inward dependency direction without adding a
+new layer. `detection` owns immutable path-redacting detector configuration,
+provenance, runtime snapshots, and scalar telemetry; it still cannot import
+adapters or CV frameworks. `adapters.live_detector_factory` may select the
+concrete local detector and tracker because it is infrastructure. Bootstrap may
+call that generic factory but remains free of concrete framework names. The
+camera processor may publish only `DetectorRuntimeSnapshot`, never a model,
+tensor, array, image, device object, or local path. `runtime` continues to
+observe the public camera snapshot and does not import the detector adapter.
+
+The Phase 10.2 direction is therefore:
+
+```text
+bootstrap
+  -> adapters.live_detector_factory
+  -> detection/tracking public contracts and concrete adapters
+
+camera
+  -> detection/tracking public contracts and immutable snapshots
+
+runtime
+  -> camera public snapshot
+```
+
+Counting, domain, sessions, application, and presentation do not gain a
+detector-framework dependency. No model artifact is part of the source tree.
+
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on
 contracts and HogFlow models.
