@@ -16,13 +16,13 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 10.2 local pig-detector runtime integration
-implemented over the Phase 10.1 runtime foundation. The existing one-worker
-shared-lane pipeline can opt into one explicit local model with validated class,
-threshold, device, lifecycle, provenance, and bounded telemetry policies; empty
-mode remains the default. No model was trained, downloaded, committed, or
-available for real inference validation. Representative pig accuracy,
-physical-camera performance, multi-shift validation, persistence, and
+Current roadmap status: Phase 10.3 controlled real-video validation
+infrastructure implemented over the Phase 10.2 detector boundary. Three exact
+authorized ignored local videos were metadata-inspected, but no compatible
+local model or manual ground truth was available. The hard gate therefore ran
+no detector, tracker, crossing, or counting inference and reported `REAL
+DETECTOR VALIDATION COULD NOT BE COMPLETED`. Representative pig accuracy,
+physical-camera/model performance, multi-shift validation, persistence, and
 production readiness remain absent.
 
 ## Official project memory
@@ -179,6 +179,15 @@ putting framework names in bootstrap. The operator CLI is opt-in; no model is
 downloaded and no absolute model path enters public snapshots. No compatible
 local model was available during implementation, so real pig inference and all
 accuracy claims remain pending.
+
+Phase 10.3 adds a strict local authorization/model gate, immutable path-free
+evidence models, per-video calibration candidates that reuse Phase 6, exact
+Video 1 → Video 2 → Video 3 ordering, explicit measured/manual/derived/unknown/
+not-applicable values, and deterministic sanitized JSON/Markdown reports. The
+three authorized files were readable and remained ignored; no sidecars, model,
+or ground truth were found. Video 3 is diagnostic only and is always labeled
+`NOT VALID FOR COUNTING ACCURACY`. No real inference or accuracy result was
+created.
 
 ## Phase 0 documentation
 
@@ -490,6 +499,9 @@ detections or count evidence.
 * [Phase 10.2 pig detector integration](docs/phase_10/phase_10_2_pig_detector_integration.md)
 * [Phase 10.2 validation](docs/phase_10/phase_10_2_validation.md)
 * [Phase 10.2 summary](docs/phase_10/phase_10_2_summary.md)
+* [Phase 10.3 real-world validation](docs/phase_10/phase_10_3_real_world_validation.md)
+* [Phase 10.3 validation](docs/phase_10/phase_10_3_validation.md)
+* [Phase 10.3 summary](docs/phase_10/phase_10_3_summary.md)
 
 Technical launch examples:
 
@@ -570,7 +582,8 @@ TRACKING REPLAY
 * Phase 9.4: latest-frame operator preview, diagnostics, and bounded USB recovery implemented; physical/pig validation pending
 * Phase 10.1: bounded production-runtime supervision foundation implemented; production endurance/hardware validation pending
 * Phase 10.2: explicit local pig-detector runtime boundary implemented; real model/pig validation pending
-* Phase 10 persistence, Phase 10.3, and Phase 11 through Phase 16: not started
+* Phase 10.3: controlled local validation infrastructure implemented; empirical run blocked by missing compatible model and ground truth
+* Phase 10 persistence, Phase 10.4, and Phase 11 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
 The source-controlled repository contains no real pig video and makes no claim

@@ -4,13 +4,13 @@
 > `AGENTS.md`, no en sustitución de sus reglas normativas.
 
 Última reconstrucción integral: 25 de julio de 2026.
-Última actualización incremental: Phase 10.2, 1 de agosto de 2026.
+Última actualización incremental: Phase 10.3, 1 de agosto de 2026.
 
-Línea base técnica de Phase 10.2:
-`8c2cf4950a14ba4ae03cbc25338f8ee60c2fc35e`
-(`Implement Phase 10.1 production runtime foundation`). Phase 10.2 se
+Línea base técnica de Phase 10.3:
+`e14bf5b5d73b886ff9834b606787ca58872c65b2`
+(`Implement Phase 10.2 pig detector integration`). Phase 10.3 se
 publica mediante el commit
-`Implement Phase 10.2 pig detector integration`; su SHA final
+`Implement Phase 10.3 real-world validation workflow`; su SHA final
 debe consultarse con Git porque un documento no puede incluir de forma
 autorreferencial el SHA del mismo commit que lo contiene.
 
@@ -86,6 +86,12 @@ pig-targeted dentro del adapter existente. El modo vacío sigue siendo el
 default y no se descargan pesos. No había un modelo compatible disponible para
 inferencia local, por lo que la integración no aporta evidencia de detección de
 cerdos ni de exactitud de conteo.
+Phase 10.3 añade autorización estricta de tres videos locales, gate de modelo,
+modelos de evidencia path-free, calibración offline por video y reportes
+sanitizados. Los tres videos fueron legibles en inspección metadata-only, pero
+no existían sidecars, modelo compatible ni ground truth manual; por ello no se
+ejecutó detector/tracker/crossing/counting y el veredicto empírico fue `REAL
+DETECTOR VALIDATION COULD NOT BE COMPLETED`.
 
 ### 1.3 Usuarios previstos
 
@@ -429,13 +435,13 @@ controlados mediante el contrato público Phase 7 y finaliza una sesión.
 | `.github/workflows/ci.yml` | CI source-only/synthetic en Ubuntu/Python 3.12. |
 | `docs/phase_0/` | Problema, proceso, solución conceptual, supuestos y resumen. |
 | `docs/phase_1/` | Diseño, uso y evidencia del contador genérico. |
-| `docs/phase_2/` | Foundation, contratos, integración, reglas y ADR-001–048. |
+| `docs/phase_2/` | Foundation, contratos, integración, reglas y ADR-001–061. |
 | `docs/phase_3/` | Adquisición autorizada, inventario y uso local. |
 | `docs/phase_4/` | Evaluación, anotación, splitting, extracción y training baseline. |
 | `docs/phase_5/` | Streaming, hardware, detección live y tracking live. |
 | `docs/phase_6/` | Evaluación offline de posiciones de línea. |
 | `docs/phase_7/` | Política lifecycle de positivos, duplicates y reversos. |
-| `docs/phase_10/` | Runtime foundation Phase 10.1 y boundary de detector local Phase 10.2, con validación sintética y limitaciones. |
+| `docs/phase_10/` | Runtime Phase 10.1, detector local Phase 10.2 y workflow/gates Phase 10.3, con evidencia y limitaciones explícitas. |
 | `src/hogflow/core/` | Excepciones, logging e identificadores comunes. |
 | `src/hogflow/config/` | Configuración mínima inmutable. |
 | `src/hogflow/models.py` | Modelos canónicos de frame/detección/track finitos. |
@@ -456,6 +462,7 @@ controlados mediante el contrato público Phase 7 y finaliza una sesión.
 | `src/hogflow/application/` | Workflow Phase 9.1–9.4 y gateway serializado que traduce intentos/evidencia en comandos públicos Phase 8 y expone preview sin infraestructura directa. |
 | `src/hogflow/presentation/` | Read models, presenter, overlay renderer puro y adapter desktop Tkinter lazy con seguridad, health y preview Phase 9.4. |
 | `src/hogflow/runtime/` | Supervisión Phase 10.1: configuration, heartbeat, health, memoria, diagnostics, ports y restart controlado sin hilo propio. |
+| `src/hogflow/validation/` | Phase 10.3: catálogo autorizado, gates locales, modelos path-free, calibración, workflow serial y reportes sanitizados. |
 | `src/hogflow/detection/runtime.py` | Configuración, provenance y telemetría inmutables/acotadas Phase 10.2. |
 | `src/hogflow/adapters/ultralytics_live_detector.py`, `live_detector_factory.py` | Boundary framework del detector local y factory de composición; carga única por lifecycle y conversión estricta a modelos HogFlow. |
 | `src/hogflow/bootstrap.py`, `src/hogflow/__main__.py` | Composition root de una fuente/pipeline/canal visual, supervisor Phase 10.1 y selección detector Phase 10.2 validada antes de abrir source. |
@@ -468,6 +475,7 @@ CLIs relevantes:
 - `python -m hogflow.video.generic_counter`: video finito genérico con conteo;
 - `python -m hogflow.data.inventory`: inventario local Phase 3;
 - `python -m hogflow.evaluation.dataset_selection`: selección local Phase 4.1;
+- `python -m hogflow.video.real_world_validation_cli`: metadata/gate/reporte local Phase 10.3 sin UI ni retención de media;
 - módulos de splitting, selección de frames, extracción y validación de
   anotaciones en `hogflow.data`/`hogflow.annotation`;
 - `python -m hogflow.adapters.camera_stream_cli`: diagnóstico de stream;
@@ -962,16 +970,42 @@ Resumen de madurez:
   rendimiento, memoria, device y lifecycle con modelo/hardware real permanecen
   sin validar.
 
-### 5.26 Estado de las fases posteriores
+### 5.26 Phase 10.3 — Real-World Detector, Tracking and Counting Validation
+
+- **Objetivo:** ejecutar evidencia controlada y separada sobre tres videos
+  locales exactos, con hard gate de modelo y ground truth, sin retener media ni
+  fabricar métricas.
+- **Entregado:** paquete `hogflow.validation`; catálogo exacto y ordenado;
+  inspección de ignore/tracked/sidecar/model; estados `MEASURED`, `PROVIDED
+  MANUAL GROUND TRUTH`, `DERIVED`, `UNKNOWN` y `NOT APPLICABLE`; candidatos y
+  planes de calibración que reutilizan Phase 6; backend model-present inyectable;
+  reportes JSON/Markdown deterministas; CLI headless y tests sintéticos.
+- **Decisiones:** ADR-061; Video 1 primero, Video 2 solo tras éxito estructural,
+  Video 3 solo stress; un modelo distinto de `AVAILABLE` impide invocar backend;
+  manual total no produce precision/recall/F1; outputs solo en roots ignorados.
+- **Evidencia local:** los tres videos exactos existían, estaban ignorados y
+  eran legibles. Metadata: `video_1` 971 frames, 848×384, 60.0185 FPS nominal;
+  `video_2` 333 frames, 1248×576, 27.3324 FPS nominal; `video_3` 575 frames,
+  848×384, 59.8854 FPS nominal. No había sidecars, modelo compatible ni ground
+  truth. No se ejecutó inferencia.
+- **Veredicto:** `REAL DETECTOR VALIDATION COULD NOT BE COMPLETED`.
+- **Commit:** `Implement Phase 10.3 real-world validation workflow` (consultar
+  SHA final en Git por autorreferencia).
+- **Estado:** infraestructura técnica implementada; validación empírica del
+  detector/tracking/counting bloqueada por modelo y ground truth ausentes.
+
+### 5.27 Estado de las fases posteriores
 
 Phase 9 está técnicamente completada según sus subfases autorizadas; Phase
-10.1 implementa runtime supervision y Phase 10.2 integra el boundary local de
-detector. Persistencia Phase 10, Phase 10.3 y Phase 11–16 no están iniciadas:
+10.1 implementa runtime supervision, Phase 10.2 integra el boundary local de
+detector y Phase 10.3 implementa el workflow de validación sin completar la
+evidencia empírica. Persistencia Phase 10, Phase 10.4 y Phase 11–16 no están
+iniciadas:
 
 | Fase | Alcance normativo | Estado |
 | --- | --- | --- |
 | 9 | Operator MVP UI. | 9.1–9.4 IMPLEMENTED; validación operacional/review persistente pendientes |
-| 10 | Runtime foundation, detector runtime y SQLite para sesiones/eventos. | 10.1–10.2 IMPLEMENTED; persistence/10.3 NOT STARTED |
+| 10 | Runtime, detector, validación controlada y SQLite para sesiones/eventos. | 10.1–10.3 IMPLEMENTED según infraestructura; real validation BLOCKED; persistence/10.4 NOT STARTED |
 | 11 | Evaluación contra ground truth humano. | NOT STARTED |
 | 12 | Error analysis y analytics dashboard. | NOT STARTED |
 | 13 | Failure review y review clips. | NOT STARTED |
@@ -1143,6 +1177,9 @@ tabla preserva su razonamiento operativo.
 | Línea base técnica de Phase 10.2 | `8c2cf4950a14ba4ae03cbc25338f8ee60c2fc35e` |
 | `origin/main` al iniciar Phase 10.2 | Mismo SHA que la línea base |
 | Working tree al iniciar Phase 10.2 | Limpio; `.agents/` ignorado localmente y media `data/raw/` ignorada |
+| Línea base técnica de Phase 10.3 | `e14bf5b5d73b886ff9834b606787ca58872c65b2` |
+| `origin/main` al iniciar Phase 10.3 | Mismo SHA que la línea base |
+| Working tree al iniciar Phase 10.3 | Limpio; `.agents/`, media local y outputs de evaluación ignorados |
 | Remote | `https://github.com/zicario20/hogflow.git` |
 | CI baseline Phase 8.1 | GitHub Actions `CI`, run `30167025451`, conclusión `success` para `cc7e1304105a35c0a3a2d8421ffa172cf9c73153` |
 | CI baseline Phase 8.2 | GitHub Actions `CI`, run `30170287436`, conclusión `success` para `8e8ddda23ab8360848fa3b639284e61087ce3fb6` |
@@ -1168,6 +1205,11 @@ tabla preserva su razonamiento operativo.
 | Suite enfocada Phase 10.2 | 43 passed para config, adapter, integración y arquitectura |
 | Suite local Phase 10.2 | 941 passed; 1 warning heredado de ByteTrack deprecated |
 | Quality gates Phase 10.2 | Focused 213 passed; Ruff check/format, compileall, pip check, import/CLI/composition smoke y diff check pasan |
+| Suite baseline Phase 10.3 | 941 passed; 1 warning heredado de ByteTrack deprecated |
+| Suite enfocada Phase 10.3 | 64 passed para modelos, workspace, workflow, reporting y arquitectura |
+| Regresión enfocada Phase 10.3 | 216 passed para detector, cámara/pipeline, runtime health y límites arquitectónicos |
+| Suite local Phase 10.3 | 985 passed; 1 warning heredado de ByteTrack deprecated |
+| Evidencia local Phase 10.3 | Tres videos metadata-only; 0 sidecars; 0 modelos compatibles; inference/counting no ejecutados |
 | Python local verificado | 3.12.13; proyecto declara `>=3.10` |
 | Python CI | 3.12 en Ubuntu latest |
 
@@ -1305,6 +1347,8 @@ demás deudas permanecen explícitas.
 | HF-D045 | Alta para detector | **LIMITACIÓN DE EVIDENCIA** | Phase 10.2 local audit | No había un artefacto detector compatible en los directorios locales aprobados; carga, target mapping e inferencia real no se ejercitaron. | Proporcionar un modelo pig-specific autorizado y ejecutar smoke estructural local antes de cualquier evaluación. | Abierta; tests de adapter usan backend fake. |
 | HF-D046 | Alta para calidad | **LIMITACIÓN DE EVIDENCIA** | `PigDetectorConfiguration`; adapter Ultralytics | Filtrado por nombre/ID evita clases no configuradas, pero no demuestra que el modelo detecte cerdos ni que el mapping sea semánticamente correcto. | Verificar metadata del artefacto y evaluar contra ground truth representativo en Phase 11. | Abierta; ninguna accuracy claim. |
 | HF-D047 | Media para performance/device | **INFERENCIA respaldada por diseño** | resolución device/half; telemetría detector | CPU/CUDA/half y latencia se validaron mediante fakes; first inference, steady-state FPS, memoria CUDA y compatibilidad hardware no se midieron. | Smoke/benchmark autorizado por artefacto y target hardware, separando primera inferencia de steady state. | Abierta; sin promesa de FPS. |
+| HF-D048 | Alta para evidencia Phase 10.3 | **LIMITACIÓN DE EVIDENCIA** | gate/model report Phase 10.3 | Los tres videos autorizados son legibles, pero no hay modelo compatible ni manual/frame ground truth; todo detector/tracking/crossing/counting real permanece sin ejecutar. | Proveer artefacto pig-specific autorizado, ignorado y compatible; declarar candidatos por video y ground truth independiente antes de ejecutar. | Infraestructura completa; evidencia empírica bloqueada. |
+| HF-D049 | Alta para count accuracy | **DECISIÓN DE SEGURIDAD** | `video_3`; ADR-061 | Video 3 contiene movimiento multidireccional y no está autorizado como counting candidate. | Mantener count/error `NOT_APPLICABLE`; usar solo para stress detector/tracker. | Enforced por modelo y tests. |
 
 ---
 
@@ -1417,26 +1461,28 @@ de estas métricas de conteo tiene todavía resultado empírico con cerdos.
 
 ### 12.1 Siguiente trabajo confirmado
 
-**HECHO VERIFICADO:** Phase 10.2 añade un boundary runtime de detector local
-opt-in sobre el único worker/source/lane de Phase 9.4, observado por Phase 10.1.
-El modo vacío continúa como default; el adapter real carga una vez, filtra solo
-targets explícitos y no publica el path del artefacto.
+**HECHO VERIFICADO:** Phase 10.3 implementa un workflow offline que verifica
+tres videos exactos, sus sidecars/ignore rules, un modelo local compatible,
+calibración independiente y reportes path-free antes de permitir inferencia.
+La ejecución local encontró cero modelos compatibles y cero ground truth, no
+invocó el backend y emitió tres resultados separados bloqueados.
 
-**Recomendación actual:** auditar Phase 10.2 antes de comenzar Phase 10.3. La
-falta de modelo compatible, inferencia real, soak multi-turno, hardware real,
-thresholds calibrados y evaluación Phase 6/7/8 debe permanecer explícita.
+**Recomendación actual:** auditar Phase 10.3 antes de comenzar Phase 10.4. Para
+reanudar evidencia empírica se requiere un modelo pig-specific autorizado y
+compatible más ground truth independiente; no sustituirlos con fakes ni totals
+inferidos.
 
 ### 12.2 Siguiente fase normativa
 
 Phase 9.1–9.4 implementan el workflow desktop, Phase 10.1 implementa runtime
-supervision y Phase 10.2 implementa el boundary detector autorizado. El
-siguiente trabajo debe ser una auditoría de Phase 10.2. Phase 10.3 y Phase 11
-no están iniciadas.
+supervision, Phase 10.2 implementa el detector boundary y Phase 10.3 el
+workflow de validación controlada. El siguiente trabajo debe ser una auditoría
+de Phase 10.3. Phase 10.4 y Phase 11 no están iniciadas.
 
 Fuera del siguiente trabajo salvo aprobación expresa:
 
-- SQLite/storage o Phase 10.3;
-- ampliar Phase 9/10.1/10.2 sin prompt explícito;
+- SQLite/storage o Phase 10.4;
+- ampliar Phase 9/10.1/10.2/10.3 sin prompt explícito;
 - re-identificación, net count o decremento por reverso;
 - combinar cámaras o reconnects sin regla validada;
 - más workers, async o cámaras sin una necesidad y política explícitas;
@@ -1444,16 +1490,16 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 
 ### 12.3 Condiciones de inicio del siguiente trabajo
 
-- auditoría técnica y CI de Phase 10.2 verificados;
+- auditoría técnica y CI de Phase 10.3 verificados;
 - cualquier alcance posterior especificado sin business logic duplicada;
 - riesgos de reconnect, ID switch, fragmentación, total parcial y shutdown
   visibles al operador;
-- ninguna dependencia de storage/Phase 10.3 adelantada;
+- ninguna dependencia de storage/Phase 10.4 adelantada;
 - subfase siguiente autorizada explícitamente.
 
 ### 12.4 Criterios mínimos del siguiente cierre
 
-- ninguna regresión Phase 0–10.2;
+- ninguna regresión Phase 0–10.3;
 - siguiente fase limitada al alcance autorizado;
 - operation/session de cada dock y ownership del carril compartido siguen
   separados;
@@ -1470,8 +1516,8 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 
 - **CONFIRMADO / implementado:** Phase 0, Phase 1, Phase 2.1–2.3, tooling Phase
   3, tooling Phase 4.1–4.3, Phase 5.1–5.4, tooling Phase 6, Phase 7 y Phase
-  8.1–8.4, Phase 9.1–9.4 y Phase 10.1–10.2 según sus alcances.
-- **CONFIRMADO / no iniciado:** persistencia Phase 10, Phase 10.3 y Phase
+  8.1–8.4, Phase 9.1–9.4 y Phase 10.1–10.3 según sus alcances.
+- **CONFIRMADO / no iniciado:** persistencia Phase 10, Phase 10.4 y Phase
   11–16 con límites definidos en `AGENTS.md`.
 
 ### 13.2 Cierre técnico inmediato
@@ -1490,10 +1536,12 @@ Fuera del siguiente trabajo salvo aprobación expresa:
 12. **COMPLETADO:** preview latest-only y diagnósticos Phase 9.4.
 13. **COMPLETADO:** runtime foundation bounded y supervisión Phase 10.1.
 14. **COMPLETADO:** boundary runtime local de detector pig-targeted Phase 10.2.
-15. **PENDIENTE:** auditar Phase 10.2 y ejecutar evaluación representativa Phase
-   6/7/8.
-16. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
-17. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
+15. **COMPLETADO CON BLOQUEO EMPÍRICO:** workflow y reportes Phase 10.3; no
+   hubo modelo compatible ni ground truth, por lo que no se ejecutó inferencia.
+16. **PENDIENTE:** auditar Phase 10.3 y aportar prerequisites autorizados para
+   evaluación representativa Phase 6/7/8.
+17. **PENDIENTE:** triage de deuda del tracker y plan de migración Supervision.
+18. **PENDIENTE:** asegurar backup privado/reproducible de datos locales.
 
 ### 13.3 Validación técnica
 
@@ -1654,6 +1702,10 @@ Checklist mínimo antes de commit:
 | `PigDetectorConfiguration` | Configuración Phase 10.2 inmutable/fingerprinted de backend, artefacto local privado, targets, thresholds y device; no prueba calidad del modelo. |
 | `DetectorModelProvenance` | Metadata segura del modelo cargado: backend/formato/nombre sanitizado/checksum/target/device/fingerprint, nunca path absoluto. |
 | `DetectorRuntimeSnapshot` | Proyección escalar y acotada de load/inferencias/fallos/detecciones/latencias sin guardar frames, boxes ni respuestas framework. |
+| `EvidenceValue` | Valor escalar Phase 10.3 con provenance explícita: medido, manual proporcionado, derivado, unknown o not applicable. |
+| `CalibrationCandidate` | Configuración offline fingerprinted y scoped a un video que combina thresholds detector/tracker con un `LineCandidate` Phase 6; no cambia defaults live. |
+| `VideoValidationResult` | Resultado path-free, agregado y separado para un video autorizado; no contiene frames, paths, tensores ni historia ilimitada. |
+| `ModelPresentValidationBackend` | Puerto inyectable Phase 10.3 para ejecutar un candidato usando contratos públicos existentes cuando un modelo local supera el gate. |
 | Recoverable runtime issue | Condición observable que puede admitir intervención/restart controlado sin afirmar que la continuidad activa se conserva. |
 | Fatal runtime issue | Condición como worker muerto o estado tracker/crossing no confiable que no debe ocultarse como éxito. |
 | Session | Grupo operativo ordenado dentro de un truck; Phase 8.2 le asigna un lifecycle counting aislado sin acoplar el aggregate a Phase 7. |

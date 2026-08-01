@@ -1545,3 +1545,47 @@ health counters continue to classify detector degradation/failure.
 This is integration evidence only. No compatible model was available during
 implementation, so real pig inference, device performance, tracking, crossing,
 count accuracy, and production readiness remain unvalidated.
+
+## ADR-061 - Hard-gate controlled real-video validation on local model and evidence provenance
+
+Status: Accepted
+
+### Context
+
+Phase 10.2 can load one explicit local detector, while Phase 3 has local-media
+governance and Phase 6 has deterministic line-candidate evaluation. Phase 10.3
+authorizes exactly three local videos with different roles, but no compatible
+model or independent ground truth is present. Running empty/fake detections on
+real media as though they were empirical evidence, discovering unrelated local
+files, publishing paths, combining all videos, or treating Video 3 as count
+evidence would create false or unsafe claims.
+
+### Decision
+
+Add a framework-neutral `hogflow.validation` boundary with an exact authorized
+catalog, ignored/untracked media and model checks, explicit evidence states,
+per-video immutable results, deterministic calibration candidates, and
+sanitized aggregate reports. Keep media/model paths inside the local workspace
+and pass them only as ephemeral composition inputs to a dependency-injected
+model-present backend. Reuse Phase 6 `LineCandidate` and force
+`NO_AUTOMATIC_RECOMMENDATION` for calibration plans without sufficient truth.
+
+Process Video 1 first, Video 2 only after Video 1 is structurally complete, and
+Video 3 only as detection/tracking stress evidence. A model gate other than one
+available ignored/untracked compatible artifact prevents backend invocation.
+Missing values are `UNKNOWN`, Video 3 count fields are `NOT_APPLICABLE`, and a
+manual total can derive count error but never detector precision/recall/F1.
+Write no frames or media; local JSON/Markdown stays in ignored output roots.
+
+### Consequences
+
+CI can verify order, hard gates, provenance, reports, ground-truth policy, and
+failure behavior using fakes without a GPU, model, or real media. No new worker,
+queue, framework dependency, UI, persistence, counting rule, or production
+default is introduced. The present local run can truthfully report metadata
+and a blocked empirical verdict while preserving all unknown detector,
+tracking, crossing, count, and performance values.
+
+The boundary is not empirical validation by itself. A compatible authorized
+local pig detector, independently calibrated per-video geometry, and suitable
+manual/frame ground truth are still required before accuracy can be measured.

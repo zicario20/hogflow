@@ -64,3 +64,9 @@ pig detector, real pig tracking, or count-accuracy result was produced.
 At the Phase 6 completion boundary, the recommendation was to audit Phase 6
 and perform an explicitly authorized representative evaluation before Phase 7.
 The later Phase 7 implementation does not change Phase 6 metrics or evidence.
+
+Phase 10.3 later reuses `LineCandidate` and `LineEvaluationPlan` for independent
+per-video offline calibration provenance. It forces
+`NO_AUTOMATIC_RECOMMENDATION` without sufficient ground truth and never changes
+live defaults. The first local run stopped at the missing-model gate, so no
+candidate geometry was empirically evaluated.

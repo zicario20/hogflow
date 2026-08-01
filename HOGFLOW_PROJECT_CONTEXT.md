@@ -10,15 +10,14 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 10.2 pig-detector runtime integration
-implemented over the Phase 10.1 foundation. One explicit local model can be
-configured through framework-neutral immutable values and the existing serial
-source/detector/tracker/crossing pipeline. Artifact paths remain local, the
-adapter loads and hashes once per lifecycle, target classes are explicit, and
-bounded detector diagnostics flow through existing pipeline/runtime snapshots.
-Empty mode remains the default. No compatible model was available for real
-inference, so pig-specific accuracy, physical-camera/model performance,
-persistence, multi-shift validation, and production readiness remain absent.
+Current repository status: Phase 10.3 controlled real-video validation
+infrastructure implemented over Phase 10.2. The three explicitly authorized
+ignored local videos were verified and metadata-inspected without retaining
+frames. No review sidecar, compatible local model, or manual ground truth was
+available, so the hard gate ran no inference and reported `REAL DETECTOR
+VALIDATION COULD NOT BE COMPLETED`. Pig-specific accuracy, physical-camera/
+model performance, persistence, multi-shift validation, and production
+readiness remain absent.
 
 ## Project identity
 
@@ -595,6 +594,33 @@ NOT VALIDATED by Phase 10.2:
   sustained memory, or hardware recovery;
 * production readiness or multi-shift operation.
 
+IMPLEMENTED Phase 10.3 controlled validation infrastructure:
+
+* `hogflow.validation` defines immutable path-free evidence values, authorized
+  video roles, calibration candidates/plans, detector/tracking/crossing/counting
+  diagnostics, per-video results, and deterministic reports.
+* The local workspace accepts only the three owner-authorized basenames,
+  requires ignored/untracked media, recovers exact Phase 3 sidecars when
+  present, and searches only approved ignored model roots and formats.
+* A missing/ambiguous/rejected model is a hard gate. Runtime metrics remain
+  `UNKNOWN`; Video 3 count fields remain `NOT_APPLICABLE` with `NOT VALID FOR
+  COUNTING ACCURACY`.
+* Model-present execution is dependency-injected behind a port that must use
+  existing public pipeline contracts. CI uses fakes and no media/model/GPU.
+* Calibration remains per-video, deterministic, offline, fingerprinted, and
+  converts to Phase 6 with `NO_AUTOMATIC_RECOMMENDATION`.
+* Reports are separate per video, sanitized, deterministic, aggregate-only,
+  and written only to ignored local output roots.
+
+NOT VALIDATED by Phase 10.3:
+
+* real model load/inference, because no compatible local artifact existed;
+* real pig detection, tracking, crossing, or counting behavior;
+* detector precision/recall/F1 or count error, because independent ground truth
+  was absent;
+* line geometry, positive direction, thresholds, hardware throughput, ID
+  switches, fragmentation, occlusion, or production readiness.
+
 NOT IMPLEMENTED in Phase 8.3:
 
 * camera acquisition or four concurrent camera streams
@@ -835,7 +861,7 @@ The roadmap currently spans Phase 0 through Phase 16.
 | Phase 7 | Handle reverse movement and duplicate counting. |
 | Phase 8 | Build three-section session manager. |
 | Phase 9 | Build Operator MVP User Interface. |
-| Phase 10 | Phase 10.1 runtime foundation and Phase 10.2 local detector integration implemented; SQLite session/event storage remains planned. |
+| Phase 10 | Phase 10.1 runtime foundation, Phase 10.2 local detector integration, and Phase 10.3 validation infrastructure implemented; empirical validation is blocked and SQLite storage remains planned. |
 | Phase 11 | Evaluate HogFlow against human-verified ground truth. |
 | Phase 12 | Build error analysis and analytics dashboard. |
 | Phase 13 | Create failure review system and review clips. |
@@ -1027,7 +1053,7 @@ Not yet implemented:
 
 * representative pig line-position evaluation and calibrated line selection
 * representative pig reverse-movement and duplicate-counting validation
-* Phase 10 persistence, Phase 10.3, and Phase 11 through Phase 16
+* Phase 10 persistence, Phase 10.4, and Phase 11 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
@@ -1039,8 +1065,10 @@ Not yet implemented:
 * representative physical-camera, GUI-performance, and operator validation
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 10.2 local detector runtime integration
-implemented with synthetic/fake-backend evidence over Phase 10.1. No compatible
-pig model was executed. Representative pig validation, cross-reconnect identity
-policy, physical-camera/GUI and multi-shift validation, persistence, and broader
-review workflow remain pending. Phase 10.3 and Phase 11 have not started.
+Current roadmap status: Phase 10.3 controlled validation infrastructure
+implemented with synthetic/fake-backend tests and metadata-only inspection of
+three authorized local videos. No compatible pig model or manual ground truth
+was available; no inference or accuracy result was produced. Representative
+pig validation, cross-reconnect identity policy, physical-camera/GUI and
+multi-shift validation, persistence, and broader review workflow remain
+pending. Phase 10.4 and Phase 11 have not started.

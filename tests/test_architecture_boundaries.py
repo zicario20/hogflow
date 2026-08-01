@@ -21,6 +21,7 @@ INTERNAL_PACKAGES = {
     "streaming",
     "training",
     "tracking",
+    "validation",
     "video",
 }
 FORBIDDEN_IMPORTS = {
@@ -236,6 +237,18 @@ FORBIDDEN_IMPORTS = {
         "training",
         "video",
     },
+    "validation": {
+        "adapters",
+        "annotation",
+        "application",
+        "config",
+        "domain",
+        "pipeline",
+        "presentation",
+        "sessions",
+        "storage",
+        "training",
+    },
 }
 CONTRACT_LAYER_FILES = (
     SOURCE_ROOT / "models.py",
@@ -335,6 +348,13 @@ FRAMEWORK_INDEPENDENT_FILES = (
     SOURCE_ROOT / "pipeline" / "live_tracking_pipeline.py",
     SOURCE_ROOT / "pipeline" / "live_crossing_pipeline.py",
     SOURCE_ROOT / "pipeline" / "live_counting_pipeline.py",
+    SOURCE_ROOT / "validation" / "catalog.py",
+    SOURCE_ROOT / "validation" / "errors.py",
+    SOURCE_ROOT / "validation" / "models.py",
+    SOURCE_ROOT / "validation" / "ports.py",
+    SOURCE_ROOT / "validation" / "reporting.py",
+    SOURCE_ROOT / "validation" / "workflow.py",
+    SOURCE_ROOT / "validation" / "workspace.py",
 )
 
 
@@ -584,6 +604,14 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.video",
         "hogflow.video.contracts",
         "hogflow.video.metadata",
+        "hogflow.validation",
+        "hogflow.validation.catalog",
+        "hogflow.validation.errors",
+        "hogflow.validation.models",
+        "hogflow.validation.ports",
+        "hogflow.validation.reporting",
+        "hogflow.validation.workflow",
+        "hogflow.validation.workspace",
         "hogflow.adapters",
         "hogflow.adapters.yolo_baseline_trainer",
         "hogflow.adapters.yolo_training",
@@ -605,6 +633,7 @@ def test_foundation_package_imports_do_not_write_to_stdout_or_stderr() -> None:
         "hogflow.pipeline.live_crossing_pipeline",
         "hogflow.pipeline.live_counting_pipeline",
         "hogflow.video.live_detection_cli",
+        "hogflow.video.real_world_validation_cli",
         "hogflow.sessions",
         "hogflow.sessions.counting_service",
         "hogflow.sessions.errors",

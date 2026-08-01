@@ -40,6 +40,10 @@ Phase 9.3 adds one shared camera worker. Phase 9.4 adds one framework-neutral
 visual slot in `camera` and UI-thread rendering in `presentation`; the visual
 slot carries no business snapshot and creates no dependency from camera to
 presentation.
+Phase 10.3 adds a headless `validation` layer that may consume immutable public
+data, evaluation, detection, tracking, crossing, counting, streaming, and video
+metadata contracts. It may not import concrete CV adapters, UI, domain/session
+business logic, storage, training, workers, threading, or async execution.
 An arrow means that the module on the left may depend on the module on the
 right.
 
@@ -110,6 +114,7 @@ modules may consume immutable tracking-domain models but never tracker adapters.
 | `application` | Phase 9 operator commands, serialized runtime access, and delegation to the public Phase 8/camera/preview boundaries. | `core`, `domain`, public `sessions` and `camera` interfaces/models | Adapters, concrete video/detection/tracking implementations, presentation, persistence, networking, direct OpenCV, Tkinter |
 | `presentation` | Phase 9 immutable display/preview plans, presenter, and lazy local desktop adapter. | public `application` interfaces/models and Python standard-library UI adapter | Domain/session/counting internals, adapters, CV frameworks, camera implementation, pipeline, streaming, storage, filesystem, networking, worker mutation |
 | `runtime` | Phase 10.1 immutable heartbeat, bounded diagnostics, health classification, process-memory sampling, and explicit restart supervision. | Public `camera` snapshots/controller port, public `sessions` runtime snapshots, `core` expected errors, Python standard library | Presentation/Tkinter, adapters, CV frameworks, storage, networking, detector/tracker implementations, business-rule mutation, extra workers or queues |
+| `validation` | Phase 10.3 exact-video authorization, artifact gates, path-free evidence/calibration models, serial run orchestration, and sanitized reports. | Public `core`, `data`, `evaluation`, `detection`, `tracking`, `counting`, `streaming`, and video-metadata contracts | Concrete adapters/CV frameworks, application/presentation, domain/sessions, storage, training, networking, workers, threading, async, duplicated counting rules |
 | `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | Video, detection, tracking, pipeline, direct UI code |
 | `domain` | Phase 8.1 immutable docks, pig types, unloading sessions, truck aggregate, and dock occupancy rules. | `core` only when necessary | Adapters, CV frameworks, video, detection, tracking, counting, pipeline, sessions, storage, networking, UI |
 
@@ -306,6 +311,28 @@ runtime
 
 Counting, domain, sessions, application, and presentation do not gain a
 detector-framework dependency. No model artifact is part of the source tree.
+
+Phase 10.3 introduces `hogflow.validation` above existing public evidence
+contracts. Its models contain no paths; the local workspace holds paths only as
+ephemeral composition inputs and publishes sanitized IDs, aggregate metadata,
+states, and fingerprints. The headless `video.real_world_validation_cli`
+composes the OpenCV metadata reader because `video` is already an
+infrastructure-facing entrypoint. A model-present backend must reuse Phase 10.2
+and Phase 5–7 public interfaces; the validation package does not create a
+parallel detector/tracker/counter implementation.
+
+```text
+video.real_world_validation_cli
+  -> video metadata infrastructure
+  -> validation workspace/workflow/reporting
+
+validation
+  -> data/evaluation/detection/tracking/counting public contracts
+```
+
+The model gate is evaluated before backend invocation. It adds no worker,
+queue, frame history, media output, persistence, or UI dependency. Local JSON
+and Markdown reports remain under ignored roots.
 
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on

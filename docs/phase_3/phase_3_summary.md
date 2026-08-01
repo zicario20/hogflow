@@ -51,3 +51,12 @@ usable virtual-line location.
 
 Phase 3 adds data-acquisition and inventory infrastructure only. Phase 4, the pig detection
 baseline, has not started.
+
+## Later Phase 10.3 local evidence
+
+Phase 10.3 later received explicit owner authorization for three exact ignored
+local videos and verified them without modifying or committing media. No Phase 3
+review sidecars were present beside those files, so Phase 10.3 preserved the
+owner-supplied candidate classifications rather than fabricating historical
+records. Bounded metadata inspection succeeded; no compatible local model or
+manual ground truth existed, and no inference or accuracy result was produced.

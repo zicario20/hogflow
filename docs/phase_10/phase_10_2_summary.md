@@ -35,3 +35,9 @@ Not implemented or claimed:
 No compatible local model artifact was available for the optional smoke test.
 Phase 10.2 therefore completes detector integration infrastructure only;
 representative detector validation remains pending.
+
+Phase 10.3 subsequently added the authorized-video/model gate and sanitized
+offline reporting boundary. It again found no compatible model, did not invoke
+real inference, and preserved every detector/tracking/counting metric as
+unknown or not applicable. This does not change the Phase 10.2 adapter or its
+evidence level.

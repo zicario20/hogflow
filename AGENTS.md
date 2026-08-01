@@ -260,6 +260,8 @@ Authorized Phase 10 subphase:
 
 * Phase 10.2 — Pig Detector Integration and Model Runtime Boundary.
 
+* Phase 10.3 — Real-World Detector, Tracking and Counting Validation.
+
 Phase 10.1 adds a synchronous, bounded supervision boundary over the existing
 single shared camera/counting runtime. It may expose immutable heartbeats,
 component health, process-memory samples, aggregate diagnostics, explicit
@@ -280,6 +282,16 @@ explicit, empty mode remains the default, and no model may download silently.
 Phase 10.2 does not train a model, create a dataset, validate pig accuracy,
 change Phase 7/8 rules, redesign Phase 9 UI, add workers/queues, persist data,
 or begin Phase 10.3 or Phase 11.
+
+Phase 10.3 authorizes only the three exact local videos listed in its phase
+documentation and processes them in Video 1, Video 2, Video 3 order. It adds a
+headless, offline, path-free validation/reporting boundary and reuses Phase 6
+line candidates plus public Phase 10.2/Phase 5–7 contracts. Real inference is
+hard-gated on one compatible ignored and untracked local model. Missing model
+or ground truth must remain explicit `UNKNOWN` evidence; Video 3 is detection/
+tracking stress only and is never counting-accuracy evidence. Phase 10.3 adds
+no download, training, dataset, frame/media retention, UI, worker, queue,
+storage, counting-rule change, Phase 10.4, or Phase 11 work.
 
 ### Phase 11
 
