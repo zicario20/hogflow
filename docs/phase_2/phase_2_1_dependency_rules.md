@@ -109,6 +109,7 @@ modules may consume immutable tracking-domain models but never tracker adapters.
 | `camera` | Phase 9.3 one-source/one-worker acquisition and detector→tracker→crossing orchestration plus Phase 9.4 one-slot visual publication and bounded USB recovery. | Public `streaming`, `detection`, `tracking`, `counting`, and application runtime-access ports | Presentation/Tkinter, storage, networking, concrete CV frameworks, duplicated counting rules |
 | `application` | Phase 9 operator commands, serialized runtime access, and delegation to the public Phase 8/camera/preview boundaries. | `core`, `domain`, public `sessions` and `camera` interfaces/models | Adapters, concrete video/detection/tracking implementations, presentation, persistence, networking, direct OpenCV, Tkinter |
 | `presentation` | Phase 9 immutable display/preview plans, presenter, and lazy local desktop adapter. | public `application` interfaces/models and Python standard-library UI adapter | Domain/session/counting internals, adapters, CV frameworks, camera implementation, pipeline, streaming, storage, filesystem, networking, worker mutation |
+| `runtime` | Phase 10.1 immutable heartbeat, bounded diagnostics, health classification, process-memory sampling, and explicit restart supervision. | Public `camera` snapshots/controller port, public `sessions` runtime snapshots, `core` expected errors, Python standard library | Presentation/Tkinter, adapters, CV frameworks, storage, networking, detector/tracker implementations, business-rule mutation, extra workers or queues |
 | `storage` | Future persistence implementations. | `core`, `domain`, `sessions` | Video, detection, tracking, pipeline, direct UI code |
 | `domain` | Phase 8.1 immutable docks, pig types, unloading sessions, truck aggregate, and dock occupancy rules. | `core` only when necessary | Adapters, CV frameworks, video, detection, tracking, counting, pipeline, sessions, storage, networking, UI |
 
@@ -268,6 +269,16 @@ Bounded USB recovery remains inside `camera`: it may close/reopen the one
 source and invoke the public processor reset contract. It may not create
 another source, worker, queue, counter, or Phase 8 lifecycle. Normal file EOF
 is terminal and never reconnects.
+
+Phase 10.1 adds `hogflow.runtime` above the existing camera and shared-lane
+public snapshots. It observes immutable state and may invoke only explicit
+restart operations on the existing `CountingPipelineController`; it never
+processes frames, counts, mutates dock/session rules, or accesses presentation.
+Heartbeat cadence is caller-owned, so the package adds no timer, worker,
+polling loop, async task, or queue. Diagnostics retain scalar aggregates and a
+fixed-capacity warning deque only. Camera/pipeline restart recreates the same
+single worker/source composition and is blocked while the lane is occupied by
+default; preview restart touches only the one-slot visual channel.
 
 No framework object may appear in a contract signature or escape an adapter.
 Video entrypoints choose concrete implementations; pipelines depend only on

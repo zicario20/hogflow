@@ -16,13 +16,13 @@ This is a research hypothesis, not a validated result.
 
 ## Current project status
 
-Current roadmap status: Phase 9.4 live operator preview and diagnostics
-implemented, completing the authorized Phase 9 technical scope. One
-configurable local camera or video file feeds one controlled shared-lane
-worker. A latest-frame-only visual slot supplies UI-thread overlays and bounded
-health metrics without slowing or owning counting. Existing detector, tracker,
-crossing, Phase 7 counting, and Phase 8 lane contracts remain authoritative.
-Persistence and representative physical-camera/pig validation remain absent.
+Current roadmap status: Phase 10.1 production runtime foundation implemented
+over the completed Phase 9 technical scope. Caller-driven immutable heartbeats,
+component health, bounded lifetime diagnostics, process-memory samples, and
+controlled restart operations observe the existing one-worker shared-lane
+runtime. No monitor thread, queue, detector, UI redesign, or persistence was
+added. Representative multi-shift, physical-camera, and pig validation remain
+absent, so this does not establish production readiness.
 
 ## Official project memory
 
@@ -157,6 +157,15 @@ direction, dimensions, source/pipeline status, FPS, failures, lane ownership,
 and current snapshot-derived totals. Preview failures do not affect counting.
 USB reopen is bounded per run and resets tracker/crossing state before resume;
 it does not solve identity continuity or establish count accuracy.
+
+Phase 10.1 adds `hogflow.runtime`, a synchronous supervision layer over the
+public camera/pipeline and four-dock/shared-lane snapshots. It produces
+immutable heartbeats with uptime, exact processed-frame provenance, current
+FPS, memory, bounded queue/slot capacities, component health, and aggregate
+failure/restart/latency diagnostics. Camera/pipeline restart reuses the same
+single worker and is blocked while the lane is occupied by default; preview
+restart remains isolated. The evidence is synthetic and does not validate
+multi-shift operation, hardware recovery, pig detection, or count accuracy.
 
 ## Phase 0 documentation
 
@@ -462,6 +471,9 @@ detections or count evidence.
 * [Phase 9.4 live operator diagnostics](docs/phase_9/phase_9_4_live_operator_diagnostics.md)
 * [Phase 9.4 validation](docs/phase_9/phase_9_4_validation.md)
 * [Phase 9.4 summary](docs/phase_9/phase_9_4_summary.md)
+* [Phase 10.1 runtime foundation](docs/phase_10/phase_10_1_runtime_foundation.md)
+* [Phase 10.1 validation](docs/phase_10/phase_10_1_validation.md)
+* [Phase 10.1 summary](docs/phase_10/phase_10_1_summary.md)
 
 Technical launch examples:
 
@@ -540,7 +552,8 @@ TRACKING REPLAY
 * Phase 9.2: executable composition and operator workflow safety implemented
 * Phase 9.3: one shared camera/file acquisition and counting-pipeline integration implemented
 * Phase 9.4: latest-frame operator preview, diagnostics, and bounded USB recovery implemented; physical/pig validation pending
-* Phase 10 through Phase 16: not started
+* Phase 10.1: bounded production-runtime supervision foundation implemented; production endurance/hardware validation pending
+* Phase 10 persistence and Phase 10.2 through Phase 16: not started
 
 Phase 3 infrastructure works with an empty directory and synthetic test videos.
 The source-controlled repository contains no real pig video and makes no claim

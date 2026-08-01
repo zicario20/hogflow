@@ -40,6 +40,11 @@ from hogflow.presentation import (
     OperatorPresenter,
     create_tk_operator_view,
 )
+from hogflow.runtime import (
+    ProductionRuntimeConfiguration,
+    ProductionRuntimeSupervisor,
+    RuntimeHealthManager,
+)
 from hogflow.sessions import MultiDockRuntimeCoordinator, SharedCountingLane
 from hogflow.tracking import EmptyTracker
 
@@ -79,6 +84,7 @@ class OperatorRuntimeComposition:
     counting_pipeline: CountingPipelineController
     preview_channel: LatestPreviewFrameChannel
     application: OperatorApplicationService
+    runtime_supervisor: ProductionRuntimeSupervisor
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +130,8 @@ def build_operator_runtime(
     processor_factory: CountingFrameProcessorFactory | None = None,
     preview_configuration: PreviewConfiguration = PreviewConfiguration(),
     recovery_configuration: CameraRecoveryConfiguration = CameraRecoveryConfiguration(),
+    runtime_configuration: ProductionRuntimeConfiguration = ProductionRuntimeConfiguration(),
+    runtime_health_manager: RuntimeHealthManager | None = None,
 ) -> OperatorRuntimeComposition:
     """Build one shared lane, source controller, and operator application."""
 
@@ -152,6 +160,15 @@ def build_operator_runtime(
         runtime_access=runtime_access,
         counting_pipeline=counting_pipeline,
     )
+    health_manager = runtime_health_manager or RuntimeHealthManager(
+        runtime_configuration,
+        clock=clock,
+    )
+    runtime_supervisor = ProductionRuntimeSupervisor(
+        counting_pipeline,
+        runtime_access,
+        health_manager,
+    )
     return OperatorRuntimeComposition(
         counter=counter,
         counting_lane=lane,
@@ -160,6 +177,7 @@ def build_operator_runtime(
         counting_pipeline=counting_pipeline,
         preview_channel=preview_channel,
         application=application,
+        runtime_supervisor=runtime_supervisor,
     )
 
 
@@ -173,6 +191,8 @@ def compose_operator_desktop(
     processor_factory: CountingFrameProcessorFactory | None = None,
     preview_configuration: PreviewConfiguration = PreviewConfiguration(),
     recovery_configuration: CameraRecoveryConfiguration = CameraRecoveryConfiguration(),
+    runtime_configuration: ProductionRuntimeConfiguration = ProductionRuntimeConfiguration(),
+    runtime_health_manager: RuntimeHealthManager | None = None,
 ) -> OperatorDesktopComposition:
     """Create and wire lane → coordinator → application → presenter → view."""
 
@@ -183,6 +203,8 @@ def compose_operator_desktop(
         processor_factory=processor_factory,
         preview_configuration=preview_configuration,
         recovery_configuration=recovery_configuration,
+        runtime_configuration=runtime_configuration,
+        runtime_health_manager=runtime_health_manager,
     )
     try:
         if video_source is not None:

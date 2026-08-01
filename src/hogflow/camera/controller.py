@@ -111,6 +111,7 @@ class CountingPipelineController:
         self._temporary_processing_failures = 0
         self._stale_results_rejected = 0
         self._last_frame_index: int | None = None
+        self._last_processed_frame_index: int | None = None
         self._last_successful_frame_at: datetime | None = None
         self._source_exhausted = False
         self._failure_category = PipelineFailureCategory.NONE
@@ -121,6 +122,16 @@ class CountingPipelineController:
         self._last_frame_monotonic: float | None = None
         self._recovery_attempts = 0
         self._recovery_successes = 0
+        self._camera_failures = 0
+        self._detector_failures = 0
+        self._tracker_failures = 0
+        self._crossing_failures = 0
+        self._frames_dropped = 0
+        self._processing_samples = 0
+        self._total_processing_latency_ms = 0.0
+        self._maximum_processing_latency_ms = 0.0
+        self._consecutive_camera_failures = 0
+        self._consecutive_detector_failures = 0
 
     def configure(self, configuration: StreamConfiguration) -> CountingPipelineSnapshot:
         """Configure one unopened camera or local-file source."""
@@ -262,6 +273,29 @@ class CountingPipelineController:
         self._preview.close()
         return snapshot
 
+    def restart(self) -> CountingPipelineSnapshot:
+        """Recreate the configured source and worker without changing lane state.
+
+        Callers that own counting lifecycles must enforce their restart safety
+        policy before invoking this low-level operation.
+        """
+
+        with self._lock:
+            configuration = self._configuration
+        if configuration is None:
+            raise CameraPipelineLifecycleError(
+                "Configure a video source before restarting the counting pipeline."
+            )
+        self.stop()
+        self.configure(configuration)
+        return self.start()
+
+    def restart_preview(self) -> PreviewSnapshot:
+        """Clear and re-enable the optional visual slot for the current run."""
+
+        self._preview.reset()
+        return self._preview.snapshot()
+
     def snapshot(self) -> CountingPipelineSnapshot:
         """Return one immutable bounded camera/pipeline projection."""
 
@@ -310,6 +344,9 @@ class CountingPipelineController:
                 try:
                     result = source.read()
                 except StreamFatalReadError:
+                    with self._lock:
+                        self._camera_failures += 1
+                        self._consecutive_camera_failures += 1
                     if self._recover_source(source, processor):
                         temporary_source_failures = 0
                         continue
@@ -335,6 +372,8 @@ class CountingPipelineController:
                     )
                     with self._lock:
                         self._frames_acquired += 1
+                        self._frames_dropped += packet.dropped_since_previous
+                        self._consecutive_camera_failures = 0
                         self._last_frame_index = sequence
                         self._last_successful_frame_at = acquired_at
                         self._camera_status = CameraStatus.RUNNING
@@ -342,16 +381,38 @@ class CountingPipelineController:
                     temporary_source_failures = 0
                     binding = self._runtime.active_binding()
                     lifecycle_id = None if binding is None else binding.crossing_lifecycle_id
+                    processing_started = float(self._monotonic())
                     try:
                         crossing = processor.process(packet, lifecycle_id)
-                    except (TemporaryInferenceError, TemporaryTrackingError):
+                    except TemporaryInferenceError:
                         with self._lock:
                             self._frames_processed += 1
+                            self._last_processed_frame_index = sequence
                             self._temporary_processing_failures += 1
+                            self._detector_failures += 1
+                            self._consecutive_detector_failures += 1
+                            self._record_processing_latency(processing_started)
                         sequence += 1
                         continue
+                    except TemporaryTrackingError:
+                        with self._lock:
+                            self._frames_processed += 1
+                            self._last_processed_frame_index = sequence
+                            self._temporary_processing_failures += 1
+                            self._tracker_failures += 1
+                            self._consecutive_detector_failures = 0
+                            self._record_processing_latency(processing_started)
+                        sequence += 1
+                        continue
+                    except Exception:
+                        with self._lock:
+                            self._record_processing_latency(processing_started)
+                        raise
                     with self._lock:
                         self._frames_processed += 1
+                        self._last_processed_frame_index = sequence
+                        self._consecutive_detector_failures = 0
+                        self._record_processing_latency(processing_started)
                     if crossing is not None and binding is not None:
                         try:
                             self._runtime.route_crossing(binding, crossing)
@@ -365,6 +426,8 @@ class CountingPipelineController:
                 if result.status is StreamReadStatus.TEMPORARY_UNAVAILABLE:
                     temporary_source_failures += 1
                     with self._lock:
+                        self._camera_failures += 1
+                        self._consecutive_camera_failures += 1
                         self._camera_status = CameraStatus.DISCONNECTED
                     threshold = self._recovery_configuration.temporary_failures_before_reopen
                     if (
@@ -429,6 +492,9 @@ class CountingPipelineController:
             source.open()
             return True
         except StreamOpenError:
+            with self._lock:
+                self._camera_failures += 1
+                self._consecutive_camera_failures += 1
             if not self._can_recover(source):
                 raise
         while self._can_recover(source):
@@ -440,9 +506,13 @@ class CountingPipelineController:
             try:
                 source.open()
             except StreamOpenError:
+                with self._lock:
+                    self._camera_failures += 1
+                    self._consecutive_camera_failures += 1
                 continue
             with self._lock:
                 self._recovery_successes += 1
+                self._consecutive_camera_failures = 0
             return True
         raise StreamOpenError("Configured source exhausted bounded open recovery.")
 
@@ -466,10 +536,14 @@ class CountingPipelineController:
             try:
                 source.open()
             except StreamOpenError:
+                with self._lock:
+                    self._camera_failures += 1
+                    self._consecutive_camera_failures += 1
                 continue
             with self._lock:
                 self._recovery_successes += 1
                 self._camera_status = CameraStatus.RUNNING
+                self._consecutive_camera_failures = 0
             return True
         return False
 
@@ -518,6 +592,21 @@ class CountingPipelineController:
             effective_fps=self._effective_fps(),
             recovery_attempts=self._recovery_attempts,
             recovery_successes=self._recovery_successes,
+            last_processed_frame_index=self._last_processed_frame_index,
+            camera_failures=self._camera_failures,
+            detector_failures=self._detector_failures,
+            tracker_failures=self._tracker_failures,
+            crossing_failures=self._crossing_failures,
+            frames_dropped=self._frames_dropped,
+            processing_samples=self._processing_samples,
+            average_processing_latency_ms=(
+                self._total_processing_latency_ms / self._processing_samples
+                if self._processing_samples
+                else 0.0
+            ),
+            maximum_processing_latency_ms=self._maximum_processing_latency_ms,
+            consecutive_camera_failures=self._consecutive_camera_failures,
+            consecutive_detector_failures=self._consecutive_detector_failures,
         )
 
     def _record_failure(
@@ -525,6 +614,13 @@ class CountingPipelineController:
         category: PipelineFailureCategory,
         message: str,
     ) -> None:
+        if category is PipelineFailureCategory.DETECTOR:
+            self._detector_failures += 1
+            self._consecutive_detector_failures += 1
+        elif category is PipelineFailureCategory.TRACKER:
+            self._tracker_failures += 1
+        elif category is PipelineFailureCategory.CROSSING:
+            self._crossing_failures += 1
         self._failure_category = category
         self._failure_message = message
         self._pipeline_status = CountingPipelineStatus.FAILED
@@ -536,6 +632,7 @@ class CountingPipelineController:
         self._temporary_processing_failures = 0
         self._stale_results_rejected = 0
         self._last_frame_index = None
+        self._last_processed_frame_index = None
         self._last_successful_frame_at = None
         self._source_exhausted = False
         self._failure_category = PipelineFailureCategory.NONE
@@ -546,6 +643,16 @@ class CountingPipelineController:
         self._last_frame_monotonic = None
         self._recovery_attempts = 0
         self._recovery_successes = 0
+        self._camera_failures = 0
+        self._detector_failures = 0
+        self._tracker_failures = 0
+        self._crossing_failures = 0
+        self._frames_dropped = 0
+        self._processing_samples = 0
+        self._total_processing_latency_ms = 0.0
+        self._maximum_processing_latency_ms = 0.0
+        self._consecutive_camera_failures = 0
+        self._consecutive_detector_failures = 0
 
     def _close_configured_source(self) -> None:
         source = self._source
@@ -560,6 +667,15 @@ class CountingPipelineController:
             timestamp if self._first_frame_monotonic is None else self._first_frame_monotonic
         )
         self._last_frame_monotonic = timestamp
+
+    def _record_processing_latency(self, started_at: float) -> None:
+        latency_ms = max(0.0, (float(self._monotonic()) - started_at) * 1000.0)
+        self._processing_samples += 1
+        self._total_processing_latency_ms += latency_ms
+        self._maximum_processing_latency_ms = max(
+            self._maximum_processing_latency_ms,
+            latency_ms,
+        )
 
     def _effective_fps(self) -> float:
         if (

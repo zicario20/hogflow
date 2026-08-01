@@ -254,6 +254,21 @@ calibration UI, Phase 10, or production-readiness claim.
 
 Store sessions and events in SQLite.
 
+Authorized Phase 10 subphase:
+
+* Phase 10.1 — Production Runtime Foundation.
+
+Phase 10.1 adds a synchronous, bounded supervision boundary over the existing
+single shared camera/counting runtime. It may expose immutable heartbeats,
+component health, process-memory samples, aggregate diagnostics, explicit
+recoverable/fatal issues, and controlled camera/pipeline/preview restart. It
+must not create another worker, queue, polling loop, camera, counter, detector,
+or presentation state. Identity-resetting camera/pipeline restart is blocked
+while the shared counting lane is occupied by default; preview restart remains
+isolated. Thresholds are engineering configuration, not evidence of
+production readiness. Phase 10.1 adds no SQLite persistence, detector, model,
+training, pig validation, UI redesign, networking, Phase 10.2, or Phase 11.
+
 ### Phase 11
 
 Evaluate HogFlow against human-verified ground truth.

@@ -10,14 +10,14 @@ Status labels used here:
 * PLANNED: a capability or phase that is part of the roadmap but not yet implemented
 * OPTIONAL: a capability that is explicitly secondary or conditional in the roadmap
 
-Current repository status: Phase 9.4 live operator preview and diagnostics
-implemented. One configurable local camera/file source feeds one controlled
-worker and the existing detector, tracker, crossing, shared-lane, and Phase 7
-contracts. Exact dock/source/lifecycle validation rejects delayed evidence.
-One replaceable visual slot exposes only the newest local frame to UI-thread
-overlays, while bounded USB recovery resets tracker/crossing state and cannot
-loop indefinitely. Persistence, API, networking, physical-camera validation,
-pig-specific evidence, and production UI validation remain absent.
+Current repository status: Phase 10.1 production runtime foundation
+implemented over the completed Phase 9.4 runtime. Synchronous caller-driven
+heartbeats expose uptime, exact processing progress, component health, process
+memory, fixed-capacity warnings, aggregate latency/FPS/failure/restart metrics,
+and the existing single worker/source/preview/lane state. Controlled restart
+does not create workers and is blocked during active lane ownership by default.
+Persistence, API, networking, multi-shift/physical-camera validation,
+pig-specific evidence, and production readiness remain absent.
 
 ## Project identity
 
@@ -531,7 +531,33 @@ NOT IMPLEMENTED in Phase 9.1–9.4:
 * unbounded reconnect loops, async execution, scheduling, multiple workers, or multiple cameras
 * persistence, SQLite, filesystem output, API, networking, or authentication
 * review-event or manual count-override workflow
-* Phase 10
+* Phase 10 persistence and runtime supervision (implemented separately in 10.1)
+
+IMPLEMENTED Phase 10.1 production runtime foundation:
+
+* `hogflow.runtime` observes only immutable camera/pipeline and Phase 8 runtime
+  snapshots and exposes immutable heartbeats and component health.
+* The heartbeat includes uptime, exact last processed frame, last observed
+  successful count, FPS, current/peak process memory, bounded queue/slot sizes,
+  worker state, and constant-memory diagnostics.
+* Failure classification distinguishes pipeline stalls, dead workers, stale
+  frames, bounded repeated camera/detector failures, tracker/crossing failures,
+  preview failure, and lane inconsistency as recoverable or fatal.
+* Diagnostics use scalar aggregates and one fixed-capacity warning deque; no
+  frame, image, heartbeat, event, or allocation history is retained.
+* Camera and pipeline restart reuse the existing single worker/source
+  composition and are rejected during active lane ownership by default.
+  Preview restart resets only the optional visual slot.
+* No monitor worker, polling loop, async task, UI component, detector, storage,
+  network service, Phase 10.2, or Phase 11 capability was added.
+
+NOT VALIDATED by Phase 10.1:
+
+* representative multi-shift runtime endurance;
+* physical source/recovery behavior;
+* pig-specific inference, tracking, crossing, or count accuracy;
+* empirically tuned health/restart thresholds;
+* continuity-safe automatic restart during an active counting session.
 
 NOT IMPLEMENTED in Phase 8.3:
 
@@ -622,7 +648,7 @@ must be serialized by the caller.
 
 ## Operator MVP User Interface
 
-IMPLEMENTED through Phase 9.4:
+IMPLEMENTED through Phase 9.4 (presentation) and Phase 10.1 (runtime supervision):
 
 The Operator MVP desktop exposes the authorized truck/session actions, four
 dock panels, shared-lane ownership/live count, finalized totals, immutable
@@ -653,7 +679,7 @@ review workflow. Phase 9.4 diagnostics are not stored review events.
 
 ## SQLite conceptual data model
 
-PLANNED in Phase 10:
+PLANNED in the persistence scope of Phase 10:
 
 SQLite is the MVP storage target.
 
@@ -773,7 +799,7 @@ The roadmap currently spans Phase 0 through Phase 16.
 | Phase 7 | Handle reverse movement and duplicate counting. |
 | Phase 8 | Build three-section session manager. |
 | Phase 9 | Build Operator MVP User Interface. |
-| Phase 10 | Store sessions and events in SQLite. |
+| Phase 10 | Phase 10.1 runtime foundation implemented; SQLite session/event storage remains planned. |
 | Phase 11 | Evaluate HogFlow against human-verified ground truth. |
 | Phase 12 | Build error analysis and analytics dashboard. |
 | Phase 13 | Create failure review system and review clips. |
@@ -813,8 +839,9 @@ infrastructure, Phase 8.2 sequential session/counting integration, and Phase
 evidence. Phase 9.4 completes the authorized technical Operator MVP with a
 synthetic/headless-validated executable, one shared source worker, one-slot
 preview, UI-thread overlays, bounded diagnostics, and bounded USB reopen over
-Phase 8. Physical-camera, real GUI, and representative pig ingestion have not
-been validated.
+Phase 8. Phase 10.1 adds bounded synchronous runtime supervision without
+another execution thread or persistence. Physical-camera, real GUI,
+representative pig ingestion, and multi-shift endurance have not been validated.
 
 ## Pilot readiness phase
 
@@ -962,7 +989,7 @@ Not yet implemented:
 
 * representative pig line-position evaluation and calibrated line selection
 * representative pig reverse-movement and duplicate-counting validation
-* Phase 10 through Phase 16
+* Phase 10 persistence, Phase 10.2, and Phase 11 through Phase 16
 * a completed or validated real authorized pig-video dataset
 * completed real pig annotations
 * a real trained and validated pig-specific detector checkpoint
@@ -974,8 +1001,8 @@ Not yet implemented:
 * representative physical-camera, GUI-performance, and operator validation
 * pig ground-truth evaluation
 
-Current roadmap status: Phase 9.4 latest-frame preview, diagnostics, and
-bounded USB recovery implemented with synthetic headless evidence, completing
-the authorized Phase 9 technical scope. Representative pig validation,
-cross-reconnect identity policy, physical-camera/GUI validation, persistence,
-and broader review workflow remain pending. Phase 10 has not started.
+Current roadmap status: Phase 10.1 bounded runtime supervision implemented with
+synthetic/headless evidence over the completed Phase 9 technical scope.
+Representative pig validation, cross-reconnect identity policy,
+physical-camera/GUI and multi-shift validation, persistence, and broader review
+workflow remain pending. Phase 10.2 and Phase 11 have not started.

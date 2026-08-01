@@ -1453,3 +1453,47 @@ does not solve identity continuity. Tracker-ID reuse after reconnect can still
 cause undercount, while fragmentation/ID switches can cause overcount. Real
 camera reopen, UI throughput, pig tracking, and count accuracy remain pending
 empirical validation.
+
+## ADR-059 - Supervise the existing runtime synchronously with bounded state
+
+Status: Accepted
+
+### Context
+
+Phase 9.4 has one shared source, one non-daemon processing worker, one visual
+slot, and one authoritative shared counting lane. Long-running execution needs
+health, heartbeat, memory, failure, and restart diagnostics. Adding a second
+monitor worker or polling loop would violate the authorized threading model;
+retaining every heartbeat or frame would create a memory-safety defect.
+Restarting tracking while a session is counting can invalidate temporary
+identity continuity and therefore cannot be treated as an always-safe repair.
+
+### Decision
+
+Add `hogflow.runtime` as a synchronous supervision layer over public immutable
+camera and multi-dock snapshots. The caller requests each heartbeat at its own
+cadence. `RuntimeHealthManager` stores only lifetime scalar aggregates, one
+previous observation, and a fixed-capacity warning deque. Standard-library
+process memory probes return current/peak resident bytes when supported and an
+explicit unavailable sample otherwise.
+
+Classify dead worker, pipeline stall, stale frame, bounded repeated source or
+detector failures, tracker/crossing corruption, preview failure, and lane
+failure into explicit recoverable or fatal issues. Keep restart manual and
+bounded. Camera and pipeline restart recreate the existing one-worker/source
+composition; by default both are rejected while the shared lane is occupied.
+Preview restart resets only the optional one-slot channel and cannot mutate
+counting. No UI or external configuration service is introduced.
+
+### Consequences
+
+Runtime status can be sampled deterministically without a camera, GPU, UI, or
+new thread. Metrics remain bounded and restarts are observable. The camera and
+pipeline restart operations are intentionally coupled because detector,
+tracker, crossing, and source share one existing worker lifecycle.
+
+The implementation is a production-runtime foundation, not production
+readiness evidence. Thresholds, memory-probe portability, shift-length
+endurance, physical camera recovery, pig inference, and operator response still
+require representative validation. Active-session automatic recovery remains
+blocked rather than risking silent count corruption.

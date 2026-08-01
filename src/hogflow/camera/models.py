@@ -183,6 +183,17 @@ class CountingPipelineSnapshot:
     effective_fps: float = 0.0
     recovery_attempts: int = 0
     recovery_successes: int = 0
+    last_processed_frame_index: int | None = None
+    camera_failures: int = 0
+    detector_failures: int = 0
+    tracker_failures: int = 0
+    crossing_failures: int = 0
+    frames_dropped: int = 0
+    processing_samples: int = 0
+    average_processing_latency_ms: float = 0.0
+    maximum_processing_latency_ms: float = 0.0
+    consecutive_camera_failures: int = 0
+    consecutive_detector_failures: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, CountingPipelineStatus):
@@ -195,11 +206,30 @@ class CountingPipelineSnapshot:
             (self.stale_results_rejected, "stale results"),
             (self.recovery_attempts, "recovery attempts"),
             (self.recovery_successes, "recovery successes"),
+            (self.camera_failures, "camera failures"),
+            (self.detector_failures, "detector failures"),
+            (self.tracker_failures, "tracker failures"),
+            (self.crossing_failures, "crossing failures"),
+            (self.frames_dropped, "dropped frames"),
+            (self.processing_samples, "processing samples"),
+            (self.consecutive_camera_failures, "consecutive camera failures"),
+            (self.consecutive_detector_failures, "consecutive detector failures"),
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"Counting pipeline {label} must be non-negative.")
         if self.recovery_successes > self.recovery_attempts:
             raise ValueError("Pipeline recovery successes cannot exceed attempts.")
+        if self.last_processed_frame_index is not None and (
+            not isinstance(self.last_processed_frame_index, int)
+            or isinstance(self.last_processed_frame_index, bool)
+            or self.last_processed_frame_index < 0
+        ):
+            raise ValueError("Last processed frame index must be non-negative.")
+        if self.last_processed_frame_index is not None and (
+            self.camera.last_frame_index is None
+            or self.last_processed_frame_index > self.camera.last_frame_index
+        ):
+            raise ValueError("Last processed frame cannot exceed the acquired frame sequence.")
         if (
             not isinstance(self.effective_fps, (int, float))
             or isinstance(self.effective_fps, bool)
@@ -208,6 +238,25 @@ class CountingPipelineSnapshot:
         ):
             raise ValueError("Counting pipeline FPS must be finite and non-negative.")
         object.__setattr__(self, "effective_fps", float(self.effective_fps))
+        for name in (
+            "average_processing_latency_ms",
+            "maximum_processing_latency_ms",
+        ):
+            value = getattr(self, name)
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not isfinite(value)
+                or float(value) < 0
+            ):
+                raise ValueError("Counting pipeline latency must be finite and non-negative.")
+            object.__setattr__(self, name, float(value))
+        if self.processing_samples == 0 and (
+            self.average_processing_latency_ms != 0.0 or self.maximum_processing_latency_ms != 0.0
+        ):
+            raise ValueError("Pipeline latency requires at least one processing sample.")
+        if self.maximum_processing_latency_ms < self.average_processing_latency_ms:
+            raise ValueError("Maximum pipeline latency cannot be below its average.")
         if self.active_crossing_lifecycle_id is not None and (
             not isinstance(self.active_crossing_lifecycle_id, str)
             or fullmatch(_OPAQUE_ID, self.active_crossing_lifecycle_id) is None
