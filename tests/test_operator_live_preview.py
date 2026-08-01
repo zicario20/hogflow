@@ -67,6 +67,8 @@ def test_presenter_consumes_preview_only_through_application_boundary() -> None:
     assert len(view.plans) == 1
     assert view.plans[0] is not None
     assert view.plans[0].frame.frame_sequence == 3
+    assert view.plans[0].display_width <= 640
+    assert view.plans[0].display_height <= 270
     assert screen.camera_pipeline.preview_available
     assert runtime.application.preview_snapshot().frames_consumed == 1
     assert not runtime.application.preview_snapshot().frame_available

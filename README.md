@@ -160,7 +160,11 @@ USB reopen is bounded per run and resets tracker/crossing state before resume;
 it does not solve identity continuity or establish count accuracy.
 The operator desktop places its complete content in one vertically scrollable
 viewport so pipeline, truck, session, refresh, and exit controls remain
-reachable on smaller Windows displays and under display scaling.
+reachable on smaller Windows displays and under display scaling. Its compact
+ergonomic layout keeps lane and pipeline diagnostics at the top, aligns the
+bounded preview with grouped operator actions, and arranges the four docks as
+a two-by-two grid. The responsive layout reflows on narrow windows without
+changing snapshot ownership or any operator command.
 
 Phase 10.1 adds `hogflow.runtime`, a synchronous supervision layer over the
 public camera/pipeline and four-dock/shared-lane snapshots. It produces

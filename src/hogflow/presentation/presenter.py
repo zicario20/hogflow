@@ -37,6 +37,9 @@ from hogflow.presentation.models import (
 from hogflow.presentation.ports import OperatorPreviewView, OperatorView
 from hogflow.presentation.preview import build_preview_render_plan
 
+_OPERATOR_PREVIEW_MAXIMUM_WIDTH = 640
+_OPERATOR_PREVIEW_MAXIMUM_HEIGHT = 270
+
 
 class OperatorPresenter:
     """Delegate commands and render only fresh Phase 8 snapshots."""
@@ -286,6 +289,8 @@ class OperatorPresenter:
                         f"camera={screen.camera_pipeline.camera_status}",
                         f"pipeline={screen.camera_pipeline.pipeline_status}",
                     ),
+                    maximum_width=_OPERATOR_PREVIEW_MAXIMUM_WIDTH,
+                    maximum_height=_OPERATOR_PREVIEW_MAXIMUM_HEIGHT,
                 )
             )
             self._view.render_preview(plan, screen.camera_pipeline)

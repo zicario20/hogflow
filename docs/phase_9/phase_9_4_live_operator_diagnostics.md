@@ -172,6 +172,29 @@ close. The preview retains only its latest frame and starts at a bounded
 16:9 display size; scrolling and rendering remain presentation concerns and
 cannot change counting, detector, tracker, or camera-pipeline behavior.
 
+## Ergonomic workstation layout
+
+The desktop uses a dense monitoring hierarchy without changing its visual
+theme. Shared-lane status is a compact horizontal bar, pipeline diagnostics
+wrap into a compact dashboard, and the bounded preview aligns with the top of
+the grouped operator actions. Truck/session, pipeline/source, and application
+controls remain distinct and immediately discoverable. Dock summaries use the
+deterministic two-by-two arrangement:
+
+```text
+Dock 1    Dock 3
+Dock 2    Dock 4
+```
+
+At wide workstation sizes the status panels share horizontal space and the
+preview/actions remain side by side. Narrow windows reflow totals and actions
+above the preview, without horizontal scrolling; the full-page vertical
+scroll remains the accessibility fallback. Preview planning keeps one uniform
+scale factor, so the reduced display height does not distort frames. This is a
+presentation-only arrangement: actions, enabled states, live counts, totals,
+camera health, and pipeline health still come from immutable snapshots and
+existing public presenter/application operations.
+
 ## Shutdown
 
 Application shutdown preserves Phase 9.3 ordering:

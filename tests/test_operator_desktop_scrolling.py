@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
+from hogflow.application import DockId
 from hogflow.presentation import OperatorAction, TkOperatorView
 
 
@@ -35,6 +36,9 @@ class FakeWidget:
 
     def grid(self, **options: Any) -> None:
         self.grid_options = dict(options)
+
+    def grid_forget(self) -> None:
+        self.grid_options = {}
 
     def configure(self, **options: Any) -> None:
         self.options.update(options)
@@ -223,6 +227,13 @@ def _is_descendant(widget: FakeWidget, ancestor: FakeWidget) -> bool:
     return False
 
 
+def _walk_widgets(widget: FakeWidget) -> tuple[FakeWidget, ...]:
+    descendants = [widget]
+    for child in widget.children:
+        descendants.extend(_walk_widgets(child))
+    return tuple(descendants)
+
+
 def test_root_content_uses_one_connected_vertical_scroll_area() -> None:
     view, _root = _view()
 
@@ -291,8 +302,73 @@ def test_all_operator_controls_and_preview_are_inside_scrollable_content() -> No
         assert view._buttons[action].options["text"] == label
         assert _is_descendant(view._buttons[action], view._scroll_content)
     assert _is_descendant(view._preview_canvas, view._scroll_content)
-    assert view._preview_canvas.options["width"] == 640
-    assert view._preview_canvas.options["height"] == 360
+    assert view._preview_canvas.options["width"] == 480
+    assert view._preview_canvas.options["height"] == 270
+
+
+def test_wide_layout_prioritizes_preview_actions_and_compact_status() -> None:
+    view, _root = _view()
+
+    assert view._lane_panel.grid_options["row"] == 0
+    assert view._lane_panel.grid_options["column"] == 0
+    assert view._totals_panel.grid_options["row"] == 0
+    assert view._totals_panel.grid_options["column"] == 1
+    assert view._preview_panel.grid_options["row"] == 0
+    assert view._preview_panel.grid_options["column"] == 0
+    assert view._actions_panel.grid_options["row"] == 0
+    assert view._actions_panel.grid_options["column"] == 1
+
+    assert _is_descendant(
+        view._buttons[OperatorAction.REGISTER_TRUCK],
+        view._action_groups["truck_session"],
+    )
+    assert _is_descendant(
+        view._buttons[OperatorAction.START_PIPELINE],
+        view._action_groups["pipeline_source"],
+    )
+    assert _is_descendant(
+        view._buttons[OperatorAction.EXIT],
+        view._action_groups["application"],
+    )
+    pipeline_rows = {
+        widget.grid_options["row"] for pair in view._pipeline_field_widgets for widget in pair
+    }
+    assert pipeline_rows == {0, 1}
+
+
+def test_widget_dimensions_are_configured_on_widgets_not_grid() -> None:
+    view, _root = _view()
+
+    assert all("width" not in widget.grid_options for widget in _walk_widgets(view._scroll_content))
+
+
+def test_docks_use_two_by_two_operational_order() -> None:
+    view, _root = _view()
+
+    assert view._dock_panels[DockId.DOCK_1].grid_options["row"] == 0
+    assert view._dock_panels[DockId.DOCK_1].grid_options["column"] == 0
+    assert view._dock_panels[DockId.DOCK_2].grid_options["row"] == 1
+    assert view._dock_panels[DockId.DOCK_2].grid_options["column"] == 0
+    assert view._dock_panels[DockId.DOCK_3].grid_options["row"] == 0
+    assert view._dock_panels[DockId.DOCK_3].grid_options["column"] == 1
+    assert view._dock_panels[DockId.DOCK_4].grid_options["row"] == 1
+    assert view._dock_panels[DockId.DOCK_4].grid_options["column"] == 1
+
+
+def test_narrow_layout_reflows_controls_without_horizontal_scroll() -> None:
+    view, _root = _view()
+
+    canvas_callback = view._scroll_canvas.bindings["<Configure>"][0][1]
+    canvas_callback(FakeEvent(view._scroll_canvas, width=900))
+
+    assert view._lane_panel.grid_options["columnspan"] == 2
+    assert view._totals_panel.grid_options["row"] == 1
+    assert view._actions_panel.grid_options["row"] == 0
+    assert view._preview_panel.grid_options["row"] == 1
+    pipeline_rows = {
+        widget.grid_options["row"] for pair in view._pipeline_field_widgets for widget in pair
+    }
+    assert pipeline_rows == {0, 1, 2, 3}
 
 
 def test_preview_empty_state_still_renders_inside_scrolled_layout() -> None:

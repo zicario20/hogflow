@@ -25,6 +25,11 @@ from hogflow.presentation.preview import PreviewPrimitiveKind, PreviewRenderPlan
 
 _EMPTY = "—"
 _LIVE_REFRESH_INTERVAL_MS = 200
+_WIDE_LAYOUT_MINIMUM_WIDTH = 1100
+_WIDE_PIPELINE_FIELD_COLUMNS = 7
+_NARROW_PIPELINE_FIELD_COLUMNS = 4
+_PREVIEW_INITIAL_WIDTH = 480
+_PREVIEW_INITIAL_HEIGHT = 270
 
 
 def parse_session_plan(value: str) -> tuple[PlannedSession, ...]:
@@ -169,6 +174,19 @@ class TkOperatorView:
         self._scrollbar: Any = None
         self._scroll_content: Any = None
         self._scroll_window_id: Any = None
+        self._layout_mode: tuple[bool, int] | None = None
+        self._top_status_frame: Any = None
+        self._lane_panel: Any = None
+        self._pipeline_panel: Any = None
+        self._pipeline_field_widgets: list[tuple[Any, Any]] = []
+        self._center_frame: Any = None
+        self._preview_panel: Any = None
+        self._actions_panel: Any = None
+        self._action_groups: dict[str, Any] = {}
+        self._docks_panel: Any = None
+        self._dock_panels: dict[DockId, Any] = {}
+        self._totals_panel: Any = None
+        self._totals_label: Any = None
         self._build_layout()
         self._root.protocol("WM_DELETE_WINDOW", self._request_exit)
 
@@ -235,14 +253,16 @@ class TkOperatorView:
                 "\n".join(
                     (
                         f"{panel.title}{heading}",
-                        f"Operation ID: {panel.operation_id}",
-                        f"Status: {panel.status}",
-                        f"Pig Type: {panel.pig_type}",
-                        f"Truck Total: {panel.truck_total}",
-                        f"Current Session: {panel.current_session}",
-                        f"Next Session: {panel.next_session}",
-                        f"Next Pig Type: {panel.next_pig_type}",
-                        f"Owns Shared Lane: {'YES' if panel.owns_lane else 'NO'}",
+                        f"Operation ID: {panel.operation_id} | Status: {panel.status}",
+                        f"Pig Type: {panel.pig_type} | Truck Total: {panel.truck_total}",
+                        (
+                            f"Current Session: {panel.current_session} | "
+                            f"Next Session: {panel.next_session}"
+                        ),
+                        (
+                            f"Next Pig Type: {panel.next_pig_type} | "
+                            f"Owns Shared Lane: {'YES' if panel.owns_lane else 'NO'}"
+                        ),
                     )
                 )
             )
@@ -402,8 +422,16 @@ class TkOperatorView:
         )
         self._bind_scroll_navigation()
 
-        lane = tk.LabelFrame(self._scroll_content, text="Shared Counting Lane")
-        lane.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
+        self._top_status_frame = tk.Frame(self._scroll_content)
+        self._top_status_frame.grid(row=0, column=0, sticky="ew", padx=4, pady=(4, 2))
+        self._top_status_frame.columnconfigure(0, weight=3)
+        self._top_status_frame.columnconfigure(1, weight=2)
+
+        self._lane_panel = tk.LabelFrame(
+            self._top_status_frame,
+            text="Shared Counting Lane",
+        )
+        lane = self._lane_panel
         lane_fields = (
             ("Status", "status"),
             ("Current Dock", "dock"),
@@ -412,18 +440,33 @@ class TkOperatorView:
             ("Current Session", "session"),
             ("Live Count", "count"),
         )
-        for index, (label, key) in enumerate(lane_fields):
-            row, column = divmod(index, 3)
-            tk.Label(lane, text=f"{label}:").grid(row=row, column=column * 2, sticky="w")
-            tk.Label(lane, textvariable=self._lane_values[key]).grid(
-                row=row,
+        lane_value_widths = (8, 8, 14, 8, 14, 6)
+        for column, ((label, key), width) in enumerate(
+            zip(lane_fields, lane_value_widths, strict=True)
+        ):
+            tk.Label(lane, text=f"{label}:").grid(
+                row=0,
+                column=column * 2,
+                sticky="w",
+                padx=(2, 1),
+            )
+            tk.Label(
+                lane,
+                textvariable=self._lane_values[key],
+                width=width,
+            ).grid(
+                row=0,
                 column=column * 2 + 1,
                 sticky="w",
-                padx=(0, 12),
+                padx=(0, 4),
             )
 
-        pipeline = tk.LabelFrame(self._scroll_content, text="Shared Camera Pipeline")
-        pipeline.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
+        self._pipeline_panel = tk.LabelFrame(
+            self._scroll_content,
+            text="Shared Camera Pipeline",
+        )
+        pipeline = self._pipeline_panel
+        pipeline.grid(row=1, column=0, sticky="ew", padx=4, pady=2)
         pipeline_fields = (
             ("Source", "source"),
             ("Camera", "camera_status"),
@@ -439,22 +482,29 @@ class TkOperatorView:
             ("Lifecycle", "lifecycle"),
             ("Last Error", "last_error"),
         )
-        for index, (label, key) in enumerate(pipeline_fields):
-            row, column = divmod(index, 4)
-            tk.Label(pipeline, text=f"{label}:").grid(
-                row=row,
-                column=column * 2,
-                sticky="w",
+        pipeline_value_widths = (18, 9, 9, 7, 7, 6, 7, 6, 8, 7, 9, 16, 20)
+        for (label, key), width in zip(
+            pipeline_fields,
+            pipeline_value_widths,
+            strict=True,
+        ):
+            label_widget = tk.Label(pipeline, text=f"{label}:")
+            value_widget = tk.Label(
+                pipeline,
+                textvariable=self._pipeline_values[key],
+                anchor="w",
+                width=width,
             )
-            tk.Label(pipeline, textvariable=self._pipeline_values[key]).grid(
-                row=row,
-                column=column * 2 + 1,
-                sticky="w",
-                padx=(0, 12),
-            )
+            self._pipeline_field_widgets.append((label_widget, value_widget))
 
-        preview = tk.LabelFrame(self._scroll_content, text="Live Shared-Camera Preview")
-        preview.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        self._center_frame = tk.Frame(self._scroll_content)
+        self._center_frame.grid(row=2, column=0, sticky="nsew", padx=4, pady=2)
+
+        self._preview_panel = tk.LabelFrame(
+            self._center_frame,
+            text="Live Shared-Camera Preview",
+        )
+        preview = self._preview_panel
         preview.columnconfigure(0, weight=1)
         tk.Label(preview, textvariable=self._preview_status_value, anchor="w").grid(
             row=0,
@@ -463,24 +513,34 @@ class TkOperatorView:
         )
         self._preview_canvas = tk.Canvas(
             preview,
-            width=640,
-            height=360,
+            width=_PREVIEW_INITIAL_WIDTH,
+            height=_PREVIEW_INITIAL_HEIGHT,
             background="black",
             highlightthickness=0,
         )
-        self._preview_canvas.grid(row=1, column=0, sticky="nsew")
+        self._preview_canvas.grid(row=1, column=0, sticky="nw")
 
         body = tk.Frame(self._scroll_content)
-        body.grid(row=3, column=0, sticky="nsew", padx=8)
-        body.columnconfigure(0, weight=2)
+        body.grid(row=3, column=0, sticky="nsew", padx=4, pady=2)
+        body.columnconfigure(0, weight=1)
         body.columnconfigure(1, weight=1)
 
-        docks = tk.LabelFrame(body, text="Docks")
-        docks.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        self._docks_panel = tk.LabelFrame(body, text="Docks")
+        docks = self._docks_panel
+        docks.grid(row=0, column=0, columnspan=2, sticky="nsew")
         docks.columnconfigure(0, weight=1)
-        for row, dock in enumerate(DockId):
+        docks.columnconfigure(1, weight=1)
+        dock_positions = {
+            DockId.DOCK_1: (0, 0),
+            DockId.DOCK_2: (1, 0),
+            DockId.DOCK_3: (0, 1),
+            DockId.DOCK_4: (1, 1),
+        }
+        for dock in DockId:
+            row, column = dock_positions[dock]
             panel = tk.LabelFrame(docks, text=f"Dock {dock.sequence_number}")
-            panel.grid(row=row, column=0, sticky="ew", padx=6, pady=4)
+            panel.grid(row=row, column=column, sticky="nsew", padx=3, pady=2)
+            self._dock_panels[dock] = panel
             tk.Label(
                 panel,
                 textvariable=self._dock_values[dock],
@@ -488,51 +548,76 @@ class TkOperatorView:
                 anchor="w",
             ).grid(row=0, column=0, sticky="ew")
 
-        actions = tk.LabelFrame(body, text="Operator Actions")
-        actions.grid(row=0, column=1, sticky="nsew")
-        actions.columnconfigure(1, weight=1)
-        tk.Label(actions, text="Dock").grid(row=0, column=0, sticky="w")
+        self._actions_panel = tk.LabelFrame(self._center_frame, text="Operator Actions")
+        actions = self._actions_panel
+        actions.columnconfigure(0, weight=1)
+
+        form = tk.Frame(actions)
+        form.grid(row=0, column=0, sticky="ew", padx=3, pady=2)
+        form.columnconfigure(1, weight=1)
+        form.columnconfigure(3, weight=1)
+        tk.Label(form, text="Dock").grid(row=0, column=0, sticky="w")
         tk.OptionMenu(
-            actions,
+            form,
             self._dock_value,
             *(dock.value for dock in DockId),
             command=lambda _value: self._refresh_selected_dock(),
-        ).grid(row=0, column=1, sticky="ew")
-        tk.Label(actions, text="Operation ID").grid(row=1, column=0, sticky="w")
-        tk.Entry(actions, textvariable=self._operation_value).grid(
+        ).grid(row=0, column=1, sticky="ew", padx=(0, 4))
+        tk.Label(form, text="Operation ID").grid(row=0, column=2, sticky="w")
+        tk.Entry(form, textvariable=self._operation_value).grid(
+            row=0,
+            column=3,
+            sticky="ew",
+        )
+        tk.Label(form, text="Session ID").grid(row=1, column=0, sticky="w")
+        tk.Entry(form, textvariable=self._session_value).grid(
             row=1,
             column=1,
             sticky="ew",
+            padx=(0, 4),
         )
-        tk.Label(actions, text="Session plan").grid(row=2, column=0, sticky="nw")
-        self._session_plan_widget = tk.Text(actions, width=34, height=5)
-        self._session_plan_widget.grid(row=2, column=1, sticky="ew")
-        tk.Label(actions, text="id,sequence,type[,expected]").grid(
-            row=3,
-            column=1,
+        tk.Label(form, text="Session plan").grid(row=1, column=2, sticky="nw")
+        self._session_plan_widget = tk.Text(form, width=26, height=3)
+        self._session_plan_widget.grid(row=1, column=3, sticky="ew")
+        tk.Label(form, text="id,sequence,type[,expected]").grid(
+            row=2,
+            column=3,
             sticky="w",
         )
-        tk.Label(actions, text="Session ID").grid(row=4, column=0, sticky="w")
-        tk.Entry(actions, textvariable=self._session_value).grid(
-            row=4,
-            column=1,
-            sticky="ew",
-        )
-        tk.Label(actions, text="Source").grid(row=5, column=0, sticky="w")
-        source_frame = tk.Frame(actions)
-        source_frame.grid(row=5, column=1, sticky="ew")
-        source_frame.columnconfigure(1, weight=1)
+
+        truck_group = tk.LabelFrame(actions, text="Truck / Session")
+        truck_group.grid(row=1, column=0, sticky="ew", padx=3, pady=2)
+        truck_group.columnconfigure(0, weight=1)
+        truck_group.columnconfigure(1, weight=1)
+        self._action_groups["truck_session"] = truck_group
+
+        pipeline_group = tk.LabelFrame(actions, text="Pipeline / Source")
+        pipeline_group.grid(row=2, column=0, sticky="ew", padx=3, pady=2)
+        pipeline_group.columnconfigure(0, weight=1)
+        pipeline_group.columnconfigure(1, weight=1)
+        pipeline_group.columnconfigure(2, weight=1)
+        self._action_groups["pipeline_source"] = pipeline_group
+        source_frame = tk.Frame(pipeline_group)
+        source_frame.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 2))
+        source_frame.columnconfigure(2, weight=1)
+        tk.Label(source_frame, text="Source").grid(row=0, column=0, sticky="w")
         tk.OptionMenu(
             source_frame,
             self._source_kind_value,
             "camera",
             "video",
-        ).grid(row=0, column=0, sticky="ew")
+        ).grid(row=0, column=1, sticky="ew")
         tk.Entry(source_frame, textvariable=self._source_value).grid(
             row=0,
-            column=1,
+            column=2,
             sticky="ew",
         )
+
+        application_group = tk.LabelFrame(actions, text="Application")
+        application_group.grid(row=3, column=0, sticky="ew", padx=3, pady=2)
+        application_group.columnconfigure(0, weight=1)
+        application_group.columnconfigure(1, weight=1)
+        self._action_groups["application"] = application_group
 
         callbacks: tuple[tuple[OperatorAction, str, Callable[[], None]], ...] = (
             (OperatorAction.REGISTER_TRUCK, "Register Truck", self._register_truck),
@@ -598,32 +683,133 @@ class TkOperatorView:
             ),
             (OperatorAction.EXIT, "Exit Application", self._request_exit),
         )
-        for row, (action, label, callback) in enumerate(callbacks, start=6):
-            button = tk.Button(actions, text=label, command=callback)
+        truck_positions = {
+            OperatorAction.REGISTER_TRUCK: (0, 0),
+            OperatorAction.START_TRUCK: (0, 1),
+            OperatorAction.START_SESSION: (1, 0),
+            OperatorAction.COMPLETE_SESSION: (1, 1),
+            OperatorAction.CANCEL_SESSION: (2, 0),
+            OperatorAction.COMPLETE_TRUCK: (2, 1),
+            OperatorAction.CANCEL_TRUCK: (3, 0),
+        }
+        pipeline_positions = {
+            OperatorAction.CONFIGURE_SOURCE: (1, 0),
+            OperatorAction.START_PIPELINE: (1, 1),
+            OperatorAction.STOP_PIPELINE: (1, 2),
+        }
+        application_positions = {
+            OperatorAction.REFRESH: (0, 0),
+            OperatorAction.EXIT: (0, 1),
+        }
+        for action, label, callback in callbacks:
+            if action in truck_positions:
+                parent = truck_group
+                row, column = truck_positions[action]
+                columnspan = 2 if action is OperatorAction.CANCEL_TRUCK else 1
+            elif action in pipeline_positions:
+                parent = pipeline_group
+                row, column = pipeline_positions[action]
+                columnspan = 1
+            else:
+                parent = application_group
+                row, column = application_positions[action]
+                columnspan = 1
+            button = tk.Button(parent, text=label, command=callback)
             button.grid(
                 row=row,
-                column=0,
-                columnspan=2,
+                column=column,
+                columnspan=columnspan,
                 sticky="ew",
-                pady=2,
+                padx=1,
+                pady=1,
             )
             self._buttons[action] = button
 
-        totals = tk.LabelFrame(self._scroll_content, text="Totals")
-        totals.grid(row=4, column=0, sticky="ew", padx=8, pady=8)
+        self._totals_panel = tk.LabelFrame(self._top_status_frame, text="Totals")
+        totals = self._totals_panel
         totals.columnconfigure(0, weight=1)
-        tk.Label(totals, textvariable=self._totals_value, anchor="w").grid(
+        self._totals_label = tk.Label(
+            totals,
+            textvariable=self._totals_value,
+            anchor="w",
+            justify="left",
+        )
+        self._totals_label.grid(
             row=0,
             column=0,
             sticky="ew",
         )
         tk.Label(self._scroll_content, textvariable=self._status_value, anchor="w").grid(
-            row=5,
+            row=4,
             column=0,
             sticky="ew",
-            padx=8,
-            pady=(0, 8),
+            padx=4,
+            pady=(0, 4),
         )
+        self._apply_responsive_layout(1366)
+
+    def _grid_pipeline_fields(self, field_columns: int) -> None:
+        for index, (label_widget, value_widget) in enumerate(self._pipeline_field_widgets):
+            field_row, field_column = divmod(index, field_columns)
+            label_widget.grid(
+                row=field_row,
+                column=field_column * 2,
+                sticky="w",
+                padx=(2, 1),
+            )
+            value_widget.grid(
+                row=field_row,
+                column=field_column * 2 + 1,
+                sticky="w",
+                padx=(0, 3),
+            )
+
+    def _apply_responsive_layout(self, width: int) -> None:
+        wide = width >= _WIDE_LAYOUT_MINIMUM_WIDTH
+        pipeline_columns = _WIDE_PIPELINE_FIELD_COLUMNS if wide else _NARROW_PIPELINE_FIELD_COLUMNS
+        layout_mode = (wide, pipeline_columns)
+        if self._layout_mode == layout_mode:
+            return
+        self._layout_mode = layout_mode
+
+        self._lane_panel.grid_forget()
+        self._totals_panel.grid_forget()
+        self._preview_panel.grid_forget()
+        self._actions_panel.grid_forget()
+        if wide:
+            self._lane_panel.grid(row=0, column=0, sticky="ew", padx=(0, 2))
+            self._totals_panel.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
+            self._center_frame.columnconfigure(0, weight=3)
+            self._center_frame.columnconfigure(1, weight=2)
+            self._preview_panel.grid(row=0, column=0, sticky="nw", padx=(0, 3))
+            self._actions_panel.grid(row=0, column=1, sticky="new", padx=(3, 0))
+            self._totals_label.configure(wraplength=max(280, int(width * 0.34)))
+        else:
+            self._lane_panel.grid(row=0, column=0, columnspan=2, sticky="ew")
+            self._totals_panel.grid(
+                row=1,
+                column=0,
+                columnspan=2,
+                sticky="ew",
+                pady=(2, 0),
+            )
+            self._center_frame.columnconfigure(0, weight=1)
+            self._center_frame.columnconfigure(1, weight=0)
+            self._actions_panel.grid(
+                row=0,
+                column=0,
+                columnspan=2,
+                sticky="ew",
+                pady=(0, 3),
+            )
+            self._preview_panel.grid(
+                row=1,
+                column=0,
+                columnspan=2,
+                sticky="nw",
+            )
+            self._totals_label.configure(wraplength=max(400, width - 32))
+        self._grid_pipeline_fields(pipeline_columns)
 
     def _on_scroll_content_configure(self, _event: Any) -> None:
         """Keep the vertical scroll range aligned with all rendered content."""
@@ -638,6 +824,7 @@ class TkOperatorView:
         width = int(getattr(event, "width", 0))
         if width > 0:
             self._scroll_canvas.itemconfigure(self._scroll_window_id, width=width)
+            self._apply_responsive_layout(width)
 
     def _bind_scroll_navigation(self) -> None:
         """Install one window-scoped mouse and keyboard navigation binding set."""
