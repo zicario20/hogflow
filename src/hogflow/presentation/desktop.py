@@ -121,7 +121,7 @@ def parse_video_source_form(kind: str, value: str) -> VideoSourceRequest:
 
 
 class TkOperatorView:
-    """Unstyled Tkinter adapter with snapshot-only business rendering."""
+    """Scrollable Tkinter adapter with snapshot-only business rendering."""
 
     def __init__(self, root: Any, tk: Any) -> None:
         self._root = root
@@ -164,6 +164,11 @@ class TkOperatorView:
         self._closed = False
         self._session_plan_widget: Any = None
         self._buttons: dict[OperatorAction, Any] = {}
+        self._scroll_binding_ids: dict[str, str | None] = {}
+        self._scroll_canvas: Any = None
+        self._scrollbar: Any = None
+        self._scroll_content: Any = None
+        self._scroll_window_id: Any = None
         self._build_layout()
         self._root.protocol("WM_DELETE_WINDOW", self._request_exit)
 
@@ -351,15 +356,53 @@ class TkOperatorView:
         if self._live_refresh_after_id is not None:
             self._root.after_cancel(self._live_refresh_after_id)
             self._live_refresh_after_id = None
+        self._unbind_scroll_navigation()
         self._root.destroy()
 
     def _build_layout(self) -> None:
         tk = self._tk
         self._root.title("HogFlow Operator MVP")
+        self._root.minsize(900, 600)
         self._root.columnconfigure(0, weight=1)
-        self._root.rowconfigure(3, weight=1)
+        self._root.rowconfigure(0, weight=1)
 
-        lane = tk.LabelFrame(self._root, text="Shared Counting Lane")
+        outer = tk.Frame(self._root)
+        outer.grid(row=0, column=0, sticky="nsew")
+        outer.columnconfigure(0, weight=1)
+        outer.rowconfigure(0, weight=1)
+
+        self._scroll_canvas = tk.Canvas(
+            outer,
+            highlightthickness=0,
+            borderwidth=0,
+        )
+        self._scroll_canvas.grid(row=0, column=0, sticky="nsew")
+        self._scrollbar = tk.Scrollbar(
+            outer,
+            orient="vertical",
+            command=self._scroll_canvas.yview,
+        )
+        self._scrollbar.grid(row=0, column=1, sticky="ns")
+        self._scroll_canvas.configure(yscrollcommand=self._scrollbar.set)
+
+        self._scroll_content = tk.Frame(self._scroll_canvas)
+        self._scroll_content.columnconfigure(0, weight=1)
+        self._scroll_window_id = self._scroll_canvas.create_window(
+            (0, 0),
+            window=self._scroll_content,
+            anchor="nw",
+        )
+        self._scroll_content.bind(
+            "<Configure>",
+            self._on_scroll_content_configure,
+        )
+        self._scroll_canvas.bind(
+            "<Configure>",
+            self._on_scroll_canvas_configure,
+        )
+        self._bind_scroll_navigation()
+
+        lane = tk.LabelFrame(self._scroll_content, text="Shared Counting Lane")
         lane.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
         lane_fields = (
             ("Status", "status"),
@@ -369,16 +412,17 @@ class TkOperatorView:
             ("Current Session", "session"),
             ("Live Count", "count"),
         )
-        for column, (label, key) in enumerate(lane_fields):
-            tk.Label(lane, text=f"{label}:").grid(row=0, column=column * 2, sticky="w")
+        for index, (label, key) in enumerate(lane_fields):
+            row, column = divmod(index, 3)
+            tk.Label(lane, text=f"{label}:").grid(row=row, column=column * 2, sticky="w")
             tk.Label(lane, textvariable=self._lane_values[key]).grid(
-                row=0,
+                row=row,
                 column=column * 2 + 1,
                 sticky="w",
                 padx=(0, 12),
             )
 
-        pipeline = tk.LabelFrame(self._root, text="Shared Camera Pipeline")
+        pipeline = tk.LabelFrame(self._scroll_content, text="Shared Camera Pipeline")
         pipeline.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
         pipeline_fields = (
             ("Source", "source"),
@@ -395,21 +439,23 @@ class TkOperatorView:
             ("Lifecycle", "lifecycle"),
             ("Last Error", "last_error"),
         )
-        for column, (label, key) in enumerate(pipeline_fields):
+        for index, (label, key) in enumerate(pipeline_fields):
+            row, column = divmod(index, 4)
             tk.Label(pipeline, text=f"{label}:").grid(
-                row=0,
+                row=row,
                 column=column * 2,
                 sticky="w",
             )
             tk.Label(pipeline, textvariable=self._pipeline_values[key]).grid(
-                row=0,
+                row=row,
                 column=column * 2 + 1,
                 sticky="w",
                 padx=(0, 12),
             )
 
-        preview = tk.LabelFrame(self._root, text="Live Shared-Camera Preview")
+        preview = tk.LabelFrame(self._scroll_content, text="Live Shared-Camera Preview")
         preview.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        preview.columnconfigure(0, weight=1)
         tk.Label(preview, textvariable=self._preview_status_value, anchor="w").grid(
             row=0,
             column=0,
@@ -417,20 +463,21 @@ class TkOperatorView:
         )
         self._preview_canvas = tk.Canvas(
             preview,
-            width=800,
-            height=450,
+            width=640,
+            height=360,
             background="black",
             highlightthickness=0,
         )
         self._preview_canvas.grid(row=1, column=0, sticky="nsew")
 
-        body = tk.Frame(self._root)
+        body = tk.Frame(self._scroll_content)
         body.grid(row=3, column=0, sticky="nsew", padx=8)
         body.columnconfigure(0, weight=2)
         body.columnconfigure(1, weight=1)
 
         docks = tk.LabelFrame(body, text="Docks")
         docks.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        docks.columnconfigure(0, weight=1)
         for row, dock in enumerate(DockId):
             panel = tk.LabelFrame(docks, text=f"Dock {dock.sequence_number}")
             panel.grid(row=row, column=0, sticky="ew", padx=6, pady=4)
@@ -443,6 +490,7 @@ class TkOperatorView:
 
         actions = tk.LabelFrame(body, text="Operator Actions")
         actions.grid(row=0, column=1, sticky="nsew")
+        actions.columnconfigure(1, weight=1)
         tk.Label(actions, text="Dock").grid(row=0, column=0, sticky="w")
         tk.OptionMenu(
             actions,
@@ -473,6 +521,7 @@ class TkOperatorView:
         tk.Label(actions, text="Source").grid(row=5, column=0, sticky="w")
         source_frame = tk.Frame(actions)
         source_frame.grid(row=5, column=1, sticky="ew")
+        source_frame.columnconfigure(1, weight=1)
         tk.OptionMenu(
             source_frame,
             self._source_kind_value,
@@ -560,20 +609,112 @@ class TkOperatorView:
             )
             self._buttons[action] = button
 
-        totals = tk.LabelFrame(self._root, text="Totals")
+        totals = tk.LabelFrame(self._scroll_content, text="Totals")
         totals.grid(row=4, column=0, sticky="ew", padx=8, pady=8)
+        totals.columnconfigure(0, weight=1)
         tk.Label(totals, textvariable=self._totals_value, anchor="w").grid(
             row=0,
             column=0,
             sticky="ew",
         )
-        tk.Label(self._root, textvariable=self._status_value, anchor="w").grid(
+        tk.Label(self._scroll_content, textvariable=self._status_value, anchor="w").grid(
             row=5,
             column=0,
             sticky="ew",
             padx=8,
             pady=(0, 8),
         )
+
+    def _on_scroll_content_configure(self, _event: Any) -> None:
+        """Keep the vertical scroll range aligned with all rendered content."""
+
+        bounds = self._scroll_canvas.bbox("all")
+        if bounds is not None:
+            self._scroll_canvas.configure(scrollregion=bounds)
+
+    def _on_scroll_canvas_configure(self, event: Any) -> None:
+        """Match the embedded content width to the visible viewport."""
+
+        width = int(getattr(event, "width", 0))
+        if width > 0:
+            self._scroll_canvas.itemconfigure(self._scroll_window_id, width=width)
+
+    def _bind_scroll_navigation(self) -> None:
+        """Install one window-scoped mouse and keyboard navigation binding set."""
+
+        if self._scroll_binding_ids:
+            return
+        handlers = {
+            "<MouseWheel>": self._on_mouse_wheel,
+            "<Up>": lambda event: self._scroll_by_units(event, -1),
+            "<Down>": lambda event: self._scroll_by_units(event, 1),
+            "<Prior>": lambda event: self._scroll_by_pages(event, -1),
+            "<Next>": lambda event: self._scroll_by_pages(event, 1),
+            "<Home>": lambda event: self._scroll_to_edge(event, 0.0),
+            "<End>": lambda event: self._scroll_to_edge(event, 1.0),
+        }
+        self._scroll_binding_ids = {
+            sequence: self._root.bind(sequence, handler, add="+")
+            for sequence, handler in handlers.items()
+        }
+
+    def _unbind_scroll_navigation(self) -> None:
+        """Remove only bindings owned by this view during deterministic shutdown."""
+
+        for sequence, binding_id in self._scroll_binding_ids.items():
+            if binding_id is not None:
+                self._root.unbind(sequence, binding_id)
+        self._scroll_binding_ids.clear()
+
+    def _on_mouse_wheel(self, event: Any) -> str | None:
+        """Scroll the Windows page and preserve multiline Text behavior."""
+
+        if self._widget_class(event) == "Text":
+            return None
+        delta = int(getattr(event, "delta", 0))
+        if delta == 0:
+            return None
+        units = -int(delta / 120)
+        if units == 0:
+            units = -1 if delta > 0 else 1
+        self._scroll_canvas.yview_scroll(units, "units")
+        return "break"
+
+    def _scroll_by_units(self, event: Any, units: int) -> str | None:
+        if self._uses_local_navigation(event):
+            return None
+        self._scroll_canvas.yview_scroll(units, "units")
+        return "break"
+
+    def _scroll_by_pages(self, event: Any, pages: int) -> str | None:
+        if self._uses_local_navigation(event):
+            return None
+        self._scroll_canvas.yview_scroll(pages, "pages")
+        return "break"
+
+    def _scroll_to_edge(self, event: Any, fraction: float) -> str | None:
+        if self._uses_local_navigation(event):
+            return None
+        self._scroll_canvas.yview_moveto(fraction)
+        return "break"
+
+    @staticmethod
+    def _widget_class(event: Any) -> str:
+        widget = getattr(event, "widget", None)
+        if widget is None or not hasattr(widget, "winfo_class"):
+            return ""
+        return str(widget.winfo_class())
+
+    @classmethod
+    def _uses_local_navigation(cls, event: Any) -> bool:
+        return cls._widget_class(event) in {
+            "Entry",
+            "Listbox",
+            "Spinbox",
+            "TEntry",
+            "TSpinbox",
+            "Text",
+        }
 
     def _register_truck(self) -> None:
         try:

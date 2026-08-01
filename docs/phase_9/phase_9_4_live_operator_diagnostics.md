@@ -155,6 +155,23 @@ The desktop displays:
 
 Live count and finalized totals continue to come only from Phase 8 snapshots.
 
+## Scrollable desktop accessibility hotfix
+
+A later desktop usability correction keeps the complete operator page inside
+one vertically scrollable Tkinter viewport. The shared-lane status, pipeline
+diagnostics, bounded preview, dock panels, totals, all operator actions, status
+messages, and exit action move together in that viewport. The vertical
+scrollbar is always present; the embedded content width follows the visible
+canvas width to avoid unnecessary horizontal scrolling.
+
+Windows mouse-wheel navigation and Up/Down, Page Up/Page Down, and Home/End
+navigation are window-scoped and installed once. The multiline session-plan
+`Text` widget preserves its own wheel and editing navigation. All owned
+bindings and the existing single 200 ms refresh callback are removed during
+close. The preview retains only its latest frame and starts at a bounded
+16:9 display size; scrolling and rendering remain presentation concerns and
+cannot change counting, detector, tracker, or camera-pipeline behavior.
+
 ## Shutdown
 
 Application shutdown preserves Phase 9.3 ordering:

@@ -158,6 +158,9 @@ direction, dimensions, source/pipeline status, FPS, failures, lane ownership,
 and current snapshot-derived totals. Preview failures do not affect counting.
 USB reopen is bounded per run and resets tracker/crossing state before resume;
 it does not solve identity continuity or establish count accuracy.
+The operator desktop places its complete content in one vertically scrollable
+viewport so pipeline, truck, session, refresh, and exit controls remain
+reachable on smaller Windows displays and under display scaling.
 
 Phase 10.1 adds `hogflow.runtime`, a synchronous supervision layer over the
 public camera/pipeline and four-dock/shared-lane snapshots. It produces
