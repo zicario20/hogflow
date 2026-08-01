@@ -287,6 +287,7 @@ def test_all_operator_controls_and_preview_are_inside_scrollable_content() -> No
         OperatorAction.CONFIGURE_SOURCE: "Configure/Open Source",
         OperatorAction.START_PIPELINE: "Start Pipeline",
         OperatorAction.STOP_PIPELINE: "Stop Pipeline",
+        OperatorAction.RESTART_VIDEO: "Restart Video",
         OperatorAction.REGISTER_TRUCK: "Register Truck",
         OperatorAction.START_TRUCK: "Start Truck",
         OperatorAction.START_SESSION: "Start Session",

@@ -480,6 +480,7 @@ Phase 9.3 supplies the shared camera/counting integration:
 * one serialized gateway for operator commands and shared-lane evidence;
 * exact dock/source/crossing-lifecycle checks against delayed results;
 * immutable camera/pipeline health snapshots and manual-refresh UI controls;
+* explicit local-file replay after EOF without reconfiguring the source;
 * deterministic source, worker, failure, stale-evidence, shutdown, and
   architecture tests.
 
@@ -515,11 +516,17 @@ Technical launch examples:
 ```console
 python -m hogflow run --camera 0
 python -m hogflow run --video local-validation.mp4
+python -m hogflow run --video local-validation.mp4 --real-time-video
 hogflow --help
 ```
 
 Neither `--help` nor package import opens a camera. The no-source workflow
-demonstration remains available.
+demonstration remains available. Local-file EOF freezes the latest preview
+frame and enables both `Start Pipeline` and the explicit `Restart Video` recovery;
+replay reopens only playback state, resets
+temporary tracker/crossing state, and retains the loaded detector plus current
+session/counting lifecycle. `--real-time-video` optionally paces only file
+sources from embedded timestamps and never changes USB-camera behavior.
 
 ## High-level pipeline
 

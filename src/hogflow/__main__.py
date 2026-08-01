@@ -49,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable the local latest-frame operator preview.",
     )
     parser.add_argument(
+        "--real-time-video",
+        action="store_true",
+        help="Pace a local video near its embedded timestamps; cameras are unchanged.",
+    )
+    parser.add_argument(
         "--detector",
         choices=tuple(item.value for item in DetectorBackend),
         default=DetectorBackend.EMPTY.value,
@@ -86,6 +91,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             source = VideoSourceRequest.camera(arguments.camera)
         elif arguments.video is not None:
             source = VideoSourceRequest.video_file(arguments.video)
+        if arguments.real_time_video and arguments.video is None:
+            raise OperatorInputError("--real-time-video requires an explicit --video source.")
         settings = {}
         if source is not None:
             settings["video_source"] = source
@@ -93,6 +100,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings["preview_configuration"] = PreviewConfiguration(enabled=False)
         if detector_configuration.backend is not DetectorBackend.EMPTY:
             settings["detector_configuration"] = detector_configuration
+        if arguments.real_time_video:
+            settings["real_time_file_playback"] = True
         composition = compose_operator_desktop(**settings)
         composition.run()
     except (HogFlowError, OperatorInputError) as exc:

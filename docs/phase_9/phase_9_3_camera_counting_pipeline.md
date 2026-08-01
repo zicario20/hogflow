@@ -157,7 +157,9 @@ frame data, path, credential, or stack trace is exposed.
 - delayed results are rejected and counted as stale evidence, without failing
   a healthy worker;
 - unexpected worker exceptions become a sanitized `INTERNAL` failure;
-- source/processor cleanup always runs;
+- failure, explicit stop, reconfiguration, and shutdown clean source/processor
+  resources; normal local-file EOF closes the decoder but intentionally retains
+  the loaded processor until replay, reconfiguration, or application shutdown;
 - a shutdown timeout is an explicit fatal shutdown error.
 
 No failure is converted into an empty successful count.
@@ -185,6 +187,7 @@ The manual-refresh Tkinter view adds:
 - Configure/Open Source;
 - Start Pipeline;
 - Stop Pipeline;
+- Restart Video after normal local-file EOF;
 - source identity;
 - camera and pipeline status;
 - acquired/processed frame totals;
@@ -194,6 +197,20 @@ The manual-refresh Tkinter view adds:
 Button availability derives from immutable pipeline snapshots. There is no
 video preview, image rendering, overlay, automatic polling, or worker-to-Tk
 call.
+
+## Local-file replay lifecycle correction
+
+A post-Phase 9.4 functional correction distinguishes normal file EOF from a
+failed or explicitly stopped live source. EOF leaves the application running,
+keeps the selected source/configuration and loaded processor, and exposes an
+explicit `Restart Video` action; `Start Pipeline` also routes to that replay
+operation after EOF. Replay creates a fresh file decoder and resets
+only temporary tracker/crossing state; it does not reset or fabricate Phase 7
+session counts. Repeated replay remains explicit and uses the same one worker.
+
+The latest preview slot retains the final frame without adding a queue or frame
+history. `--real-time-video` is an optional file-only pacing mode based on
+embedded source timestamps. USB camera behavior is unchanged.
 
 ## Limitations
 

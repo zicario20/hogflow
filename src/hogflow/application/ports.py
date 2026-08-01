@@ -58,6 +58,9 @@ class OperatorApplication(Protocol):
     def stop_counting_pipeline(self) -> CountingPipelineSnapshot:
         """Stop the one shared camera worker."""
 
+    def restart_video(self) -> CountingPipelineSnapshot:
+        """Replay the configured local video after normal end of file."""
+
     def camera_snapshot(self) -> CameraSnapshot:
         """Return the current immutable camera state."""
 

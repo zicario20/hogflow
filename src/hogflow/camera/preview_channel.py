@@ -19,8 +19,10 @@ class LatestPreviewFrameChannel:
     """Retain at most one immutable visual frame.
 
     ``publish`` never waits for UI consumption. A new frame atomically replaces
-    the old slot, and ``take_latest`` atomically removes the current slot. No
-    list, queue, playback buffer, or frame history exists.
+    the old slot, and ``take_latest`` marks that slot as delivered without
+    deleting its pixels. ``retained_latest`` may therefore freeze the final
+    frame after local-file EOF while the channel still owns exactly one frame.
+    No list, queue, playback buffer, or frame history exists.
     """
 
     def __init__(
@@ -37,6 +39,7 @@ class LatestPreviewFrameChannel:
         self._clock = monotonic_clock
         self._lock = Lock()
         self._latest: PreviewFrame | None = None
+        self._frame_available = False
         self._closed = False
         self._rendering_failed = False
         self._frames_published = 0
@@ -65,9 +68,10 @@ class LatestPreviewFrameChannel:
         with self._lock:
             if self._closed or self._rendering_failed:
                 return
-            if self._latest is not None:
+            if self._frame_available:
                 self._frames_replaced += 1
             self._latest = frame
+            self._frame_available = True
             self._frames_published += 1
             self._first_publish_at = (
                 now if self._first_publish_at is None else self._first_publish_at
@@ -79,16 +83,24 @@ class LatestPreviewFrameChannel:
                 self._failure_message = None
 
     def take_latest(self) -> PreviewFrame | None:
-        """Return and remove the newest frame, if one is available."""
+        """Return the newest undelivered frame, if one is available."""
 
         with self._lock:
             if not self.enabled or self._closed or self._rendering_failed:
                 return None
-            frame = self._latest
-            self._latest = None
+            frame = self._latest if self._frame_available else None
             if frame is not None:
+                self._frame_available = False
                 self._frames_consumed += 1
             return frame
+
+    def retained_latest(self) -> PreviewFrame | None:
+        """Return the one retained frame without changing delivery telemetry."""
+
+        with self._lock:
+            if not self.enabled or self._closed or self._rendering_failed:
+                return None
+            return self._latest
 
     def record_publication_failure(self) -> None:
         """Record one isolated overlay/publication failure and keep counting live."""
@@ -112,6 +124,7 @@ class LatestPreviewFrameChannel:
                 self._render_failures += 1
                 self._rendering_failed = True
                 self._latest = None
+                self._frame_available = False
                 self._failure_category = PreviewFailureCategory.RENDERING
                 self._failure_message = "Live preview rendering stopped; counting continues."
             return self._snapshot_locked()
@@ -123,6 +136,7 @@ class LatestPreviewFrameChannel:
             if self._closed:
                 return
             self._latest = None
+            self._frame_available = False
             self._rendering_failed = False
             self._frames_published = 0
             self._frames_replaced = 0
@@ -140,12 +154,14 @@ class LatestPreviewFrameChannel:
 
         with self._lock:
             self._latest = None
+            self._frame_available = False
 
     def close(self) -> None:
         """Permanently close the visual channel; repeated calls are safe."""
 
         with self._lock:
             self._latest = None
+            self._frame_available = False
             self._closed = True
 
     def snapshot(self) -> PreviewSnapshot:
@@ -163,14 +179,14 @@ class LatestPreviewFrameChannel:
             health = PreviewHealthState.FAILED
         elif self._failure_category is PreviewFailureCategory.PUBLICATION:
             health = PreviewHealthState.DEGRADED
-        elif self._latest is not None:
+        elif self._frame_available:
             health = PreviewHealthState.AVAILABLE
         else:
             health = PreviewHealthState.WAITING
         return PreviewSnapshot(
             enabled=self.enabled,
             health_state=health,
-            frame_available=self._latest is not None,
+            frame_available=self._frame_available,
             frames_published=self._frames_published,
             frames_replaced=self._frames_replaced,
             frames_consumed=self._frames_consumed,

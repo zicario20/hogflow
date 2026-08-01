@@ -142,12 +142,26 @@ class OperatorApplicationService:
         """Start the one shared camera pipeline."""
 
         self._require_runtime_open()
-        return self._require_counting_pipeline().start()
+        controller = self._require_counting_pipeline()
+        snapshot = controller.snapshot()
+        if (
+            snapshot.camera.source_type is not None
+            and snapshot.camera.source_type.value == "file"
+            and snapshot.camera.source_exhausted
+        ):
+            return controller.restart_video()
+        return controller.start()
 
     def stop_counting_pipeline(self) -> CountingPipelineSnapshot:
         """Stop the one shared camera pipeline."""
 
         return self._require_counting_pipeline().stop()
+
+    def restart_video(self) -> CountingPipelineSnapshot:
+        """Replay the selected local file without changing application configuration."""
+
+        self._require_runtime_open()
+        return self._require_counting_pipeline().restart_video()
 
     def camera_snapshot(self) -> CameraSnapshot:
         """Return a camera snapshot without exposing infrastructure."""

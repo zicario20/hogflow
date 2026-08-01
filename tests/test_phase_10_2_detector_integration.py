@@ -7,6 +7,7 @@ from _phase5_4_helpers import tracked_object
 from _phase9_3_helpers import RecordingSource, finite_events, source_configuration, wait_for_status
 
 import hogflow.__main__ as operator_main
+from hogflow.application import VideoSourceRequest
 from hogflow.bootstrap import DEFAULT_CAMERA_CROSSING_CONFIGURATION, build_operator_runtime
 from hogflow.camera import CountingPipelineStatus, DetectorTrackingCrossingProcessor
 from hogflow.counting import VirtualLineCrossingDetector
@@ -155,6 +156,44 @@ def test_restart_creates_one_fresh_detector_lifecycle_without_per_frame_reload(
     assert all(detector.inferred_sequences == [0, 1] for detector in detectors)
     assert all(not detector.is_loaded for detector in detectors)
     assert len(sources) == 2
+
+
+def test_local_file_replay_reuses_the_loaded_detector_lifecycle(tmp_path: Path) -> None:
+    configuration = PigDetectorConfiguration.ultralytics(_artifact(tmp_path))
+    video = tmp_path / "synthetic-replay.mp4"
+    video.write_bytes(b"synthetic-test-only")
+    sources: list[RecordingSource] = []
+    detectors: list[ScriptedDetector] = []
+
+    def source_factory(_configuration):
+        source = RecordingSource(events=finite_events(2))
+        sources.append(source)
+        return source
+
+    def processor_factory() -> DetectorTrackingCrossingProcessor:
+        detector = ScriptedDetector({})
+        detectors.append(detector)
+        return _processor(configuration, detector)
+
+    runtime = build_operator_runtime(
+        source_factory=source_factory,
+        processor_factory=processor_factory,
+        detector_configuration=configuration,
+    )
+    runtime.application.configure_video_source(VideoSourceRequest.video_file(video))
+
+    runtime.application.start_counting_pipeline()
+    wait_for_status(runtime.counting_pipeline, CountingPipelineStatus.STOPPED)
+    runtime.application.restart_video()
+    wait_for_status(runtime.counting_pipeline, CountingPipelineStatus.STOPPED)
+
+    assert len(detectors) == 1
+    assert detectors[0].is_loaded
+    assert detectors[0].inferred_sequences == [0, 1, 2, 3]
+    assert len(sources) == 2
+
+    runtime.application.shutdown()
+    assert not detectors[0].is_loaded
 
 
 def test_operator_cli_passes_validated_detector_configuration_without_path_output(

@@ -111,6 +111,23 @@ class OperatorPresenter:
             OperatorStatus.PIPELINE_STOPPED,
         )
 
+    def restart_video(
+        self,
+        dock_id: DockId = DockId.DOCK_1,
+    ) -> OperatorScreen:
+        """Replay the configured local file through the application boundary."""
+
+        try:
+            self._application.restart_video()
+        except ExpectedOperatorError as exc:
+            self._view.show_error(str(exc))
+            raise
+        return self._render(
+            self._application.snapshot(),
+            dock_id,
+            OperatorStatus.VIDEO_RESTARTED,
+        )
+
     def register_truck(self, command: RegisterTruckCommand) -> OperatorScreen:
         """Register one truck and render its selected dock."""
 
@@ -351,6 +368,9 @@ def screen_from_snapshot(
     )
     pipeline = pipeline or _not_configured_pipeline()
     preview = preview or _disabled_preview()
+    local_file = (
+        pipeline.camera.source_type is not None and pipeline.camera.source_type.value == "file"
+    )
     camera_panel = CameraPipelinePanel(
         source=pipeline.camera.display_name,
         camera_status=(
@@ -366,7 +386,11 @@ def screen_from_snapshot(
         stale_evidence_rejected=pipeline.stale_results_rejected,
         recovery_attempts=pipeline.recovery_attempts,
         worker_alive=pipeline.worker_alive,
-        preview_status=preview.health_state.value.replace("_", " ").title(),
+        preview_status=(
+            "End of Video"
+            if local_file and pipeline.camera.source_exhausted
+            else preview.health_state.value.replace("_", " ").title()
+        ),
         preview_available=preview.frame_available,
         preview_fps=preview.effective_preview_fps,
         preview_failures=preview.publication_failures + preview.render_failures,
@@ -390,6 +414,9 @@ def _action_state(
     selected_dock: DockId,
     pipeline: CountingPipelineSnapshot,
 ) -> OperatorActionState:
+    local_file = (
+        pipeline.camera.source_type is not None and pipeline.camera.source_type.value == "file"
+    )
     dock = snapshot.for_dock(selected_dock)
     runtime_open = not snapshot.coordinator_closed
     owns_lane = (
@@ -415,7 +442,10 @@ def _action_state(
         ),
         start_pipeline=runtime_open
         and pipeline.status is CountingPipelineStatus.STOPPED
-        and pipeline.camera.status is CameraStatus.CLOSED,
+        and (
+            pipeline.camera.status is CameraStatus.CLOSED
+            or (local_file and pipeline.camera.source_exhausted)
+        ),
         stop_pipeline=runtime_open
         and pipeline.worker_alive
         and pipeline.status
@@ -424,6 +454,11 @@ def _action_state(
             CountingPipelineStatus.RUNNING,
             CountingPipelineStatus.STOPPING,
         ),
+        restart_video=runtime_open
+        and pipeline.status is CountingPipelineStatus.STOPPED
+        and not pipeline.worker_alive
+        and local_file
+        and pipeline.camera.source_exhausted,
         refresh=True,
         exit=True,
     )

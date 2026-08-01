@@ -4,7 +4,8 @@
 > `AGENTS.md`, no en sustitución de sus reglas normativas.
 
 Última reconstrucción integral: 25 de julio de 2026.
-Última actualización incremental: Phase 10.3, 1 de agosto de 2026.
+Última actualización incremental: hotfix de replay local posterior a Phase 10.3,
+1 de agosto de 2026.
 
 Línea base técnica de Phase 10.3:
 `e14bf5b5d73b886ff9834b606787ca58872c65b2`
@@ -357,7 +358,7 @@ Reglas:
 | `CountingPipelineController`, `DetectorTrackingCrossingProcessor` | `src/hogflow/camera/` | Un worker/source compartido; reutiliza contratos live y enruta únicamente `LiveCrossingResult`, nunca incrementa counts. |
 | `CameraSnapshot`, `CountingPipelineSnapshot` | `src/hogflow/camera/models.py` | Proyecciones inmutables y sanitizadas de source, estado, métricas acotadas, lifecycle y error. |
 | `PreviewFrame`, `PreviewSnapshot`, `PreviewConfiguration` | `src/hogflow/camera/preview_models.py` | Frame RGB visual inmutable y métricas/status de preview; no son snapshots de negocio. |
-| `LatestPreviewFrameChannel` | `src/hogflow/camera/preview_channel.py` | Canal thread-safe de una sola ranura: cada publicación reemplaza el frame anterior y el consumo lo retira. |
+| `LatestPreviewFrameChannel` | `src/hogflow/camera/preview_channel.py` | Canal thread-safe de una sola ranura: cada publicación reemplaza el frame anterior; el consumo lo marca entregado y el mismo slot puede congelar el frame final tras EOF sin crear historia. |
 | `CameraRecoveryConfiguration` | `src/hogflow/camera/models.py` | Política USB inmutable, explícita y acotada de reintentos; file/EOF no reconecta. |
 | `SerializedMultiDockRuntimeAccess` | `src/hogflow/application/runtime_access.py` | Gateway único que serializa operador y lane routing y rechaza evidencia stale por dock/source/lifecycle. |
 | `OperatorApplication`, `OperatorApplicationService` | `src/hogflow/application/` | Comandos Phase 9.1–9.4 sin business state propio; delegan al coordinator/pipeline públicos, exponen preview visual y coordinan shutdown. |
@@ -417,7 +418,8 @@ controlados mediante el contrato público Phase 7 y finaliza una sesión.
 - tracking se ejecuta serialmente después de una detección exitosa y no agrega
   otra cola;
 - source drops, inference skips y tracking failures se contabilizan por etapas;
-- reconexión live usa backoff determinista; EOF de archivo no reconecta;
+- reconexión live usa backoff determinista; EOF de archivo no reconecta, pero
+  habilita replay explícito con fuente nueva y processor/detector retenido;
 - cierre cooperativo libera cámara, detector, tracker y preview.
 
 ---
@@ -927,6 +929,10 @@ Resumen de madurez:
 - **Estado:** implementación técnica completada según alcance; detector/tracking
   pig-specific, rendimiento visual en hardware, usabilidad operacional,
   reconexión con backends reales y count accuracy siguen pendientes.
+- **Hotfix posterior:** EOF de archivo conserva el último frame y el processor
+  cargado, habilita `Start Pipeline` y expone `Restart Video`, permite replay repetido con reset solo de
+  tracker/crossing y ofrece pacing file-only opt-in mediante
+  `--real-time-video`. USB, Phase 7, Phase 8 y reglas de negocio no cambian.
 
 ### 5.24 Phase 10.1 — Production Runtime Foundation
 
@@ -1094,6 +1100,7 @@ tabla preserva su razonamiento operativo.
 | 058 | 9.4 | Queue/history de preview o una ranura reemplazable; render en worker o UI; recovery ilimitada o acotada. | Un canal thread-safe de una ranura conserva solo el frame más reciente, Tk renderiza en su hilo y USB usa reintentos acotados; file/EOF no reconecta. | Preview no aplica backpressure ni decide negocio; fallos visuales se aíslan. Reconnect resetea tracker/crossing y conserva riesgos de identidad Phase 7. Aceptada. |
 | 059 | 10.1 | Monitor thread/history completa o supervisión síncrona acotada; restart transparente o guardado. | Heartbeat caller-driven, scalar aggregates + warning deque fijo y restart manual; camera/pipeline restart se bloquea con lane ocupada. | No hilo/queue nuevo ni corrupción silenciosa de identidad; failover activo y tuning real pendientes. Aceptada. |
 | 060 | 10.2 | Descargar/usar un modelo implícito, acoplar composición a framework o configurar un artefacto local explícito. | Reutilizar `LiveDetector`, mantener Ultralytics dentro de adapters, default vacío, path privado, target mapping explícito y provenance/telemetría acotadas. | Un modelo se carga una vez por lifecycle y los fallos no fabrican evidencia; validación pig-specific y optimización quedan pendientes. Aceptada. |
+| 061 | Hotfix post-10.3 | Tratar EOF local como cierre irreversible, auto-loop o replay explícito. | EOF conserva configuración, processor/detector y el último slot visual; `Restart Video` recrea la fuente y resetea tracker/crossing, con pacing temporal file-only opcional. | Replay repetible sin historia ni worker adicional; el count/session actual no se reinicia y USB no cambia. Aceptada. |
 
 ---
 

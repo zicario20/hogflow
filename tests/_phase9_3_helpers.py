@@ -33,12 +33,13 @@ class RecordingSource:
         *,
         events: tuple[SyntheticEvent, ...],
         stream_id: str = OPERATOR_LANE_SOURCE_ID,
+        frame_interval_seconds: float = 0,
     ) -> None:
         self.inner = SyntheticCameraSource(
             stream_id=stream_id,
             events=events,
             dimensions=FrameDimensions(8, 6, 3),
-            frame_interval_seconds=0,
+            frame_interval_seconds=frame_interval_seconds,
         )
         self.open_calls = 0
         self.close_calls = 0

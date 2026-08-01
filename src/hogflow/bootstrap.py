@@ -140,6 +140,8 @@ def build_operator_runtime(
     runtime_configuration: ProductionRuntimeConfiguration = ProductionRuntimeConfiguration(),
     runtime_health_manager: RuntimeHealthManager | None = None,
     detector_configuration: PigDetectorConfiguration = PigDetectorConfiguration.empty(),
+    real_time_file_playback: bool = False,
+    playback_waiter: Callable[[float], bool] | None = None,
 ) -> OperatorRuntimeComposition:
     """Build one shared lane, source controller, and operator application."""
 
@@ -162,6 +164,8 @@ def build_operator_runtime(
         recovery_configuration=recovery_configuration,
         preview_channel=preview_channel,
         detector_configuration=detector_configuration,
+        real_time_file_playback=real_time_file_playback,
+        playback_waiter=playback_waiter,
     )
     application = OperatorApplicationService(
         coordinator,
@@ -204,6 +208,7 @@ def compose_operator_desktop(
     runtime_configuration: ProductionRuntimeConfiguration = ProductionRuntimeConfiguration(),
     runtime_health_manager: RuntimeHealthManager | None = None,
     detector_configuration: PigDetectorConfiguration = PigDetectorConfiguration.empty(),
+    real_time_file_playback: bool = False,
 ) -> OperatorDesktopComposition:
     """Create and wire lane → coordinator → application → presenter → view."""
 
@@ -217,6 +222,7 @@ def compose_operator_desktop(
         runtime_configuration=runtime_configuration,
         runtime_health_manager=runtime_health_manager,
         detector_configuration=detector_configuration,
+        real_time_file_playback=real_time_file_playback,
     )
     try:
         if video_source is not None:

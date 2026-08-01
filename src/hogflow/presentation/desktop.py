@@ -596,6 +596,7 @@ class TkOperatorView:
         pipeline_group.columnconfigure(0, weight=1)
         pipeline_group.columnconfigure(1, weight=1)
         pipeline_group.columnconfigure(2, weight=1)
+        pipeline_group.columnconfigure(3, weight=1)
         self._action_groups["pipeline_source"] = pipeline_group
         source_frame = tk.Frame(pipeline_group)
         source_frame.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 2))
@@ -677,6 +678,14 @@ class TkOperatorView:
                 ),
             ),
             (
+                OperatorAction.RESTART_VIDEO,
+                "Restart Video",
+                lambda: self._invoke(
+                    self._require_presenter().restart_video,
+                    self._dock(),
+                ),
+            ),
+            (
                 OperatorAction.REFRESH,
                 "Refresh Snapshot",
                 self._refresh_selected_dock,
@@ -696,6 +705,7 @@ class TkOperatorView:
             OperatorAction.CONFIGURE_SOURCE: (1, 0),
             OperatorAction.START_PIPELINE: (1, 1),
             OperatorAction.STOP_PIPELINE: (1, 2),
+            OperatorAction.RESTART_VIDEO: (1, 3),
         }
         application_positions = {
             OperatorAction.REFRESH: (0, 0),

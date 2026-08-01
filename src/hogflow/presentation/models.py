@@ -19,6 +19,7 @@ class OperatorAction(str, Enum):
     CONFIGURE_SOURCE = "configure_source"
     START_PIPELINE = "start_pipeline"
     STOP_PIPELINE = "stop_pipeline"
+    RESTART_VIDEO = "restart_video"
     REFRESH = "refresh"
     EXIT = "exit"
 
@@ -38,6 +39,7 @@ class OperatorStatus(str, Enum):
     SOURCE_CONFIGURED = "Video Source Configured"
     PIPELINE_STARTED = "Counting Pipeline Started"
     PIPELINE_STOPPED = "Counting Pipeline Stopped"
+    VIDEO_RESTARTED = "Local Video Restarted"
     ACTION_NOT_CONFIRMED = "Action Not Confirmed"
     APPLICATION_CLOSED = "Application Closed"
     ERROR = "Error"
@@ -81,6 +83,7 @@ class OperatorActionState:
     configure_source: bool
     start_pipeline: bool
     stop_pipeline: bool
+    restart_video: bool
     refresh: bool
     exit: bool
 
@@ -98,6 +101,7 @@ class OperatorActionState:
                 self.configure_source,
                 self.start_pipeline,
                 self.stop_pipeline,
+                self.restart_video,
                 self.refresh,
                 self.exit,
             )

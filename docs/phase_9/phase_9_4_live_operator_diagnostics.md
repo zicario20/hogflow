@@ -30,8 +30,9 @@ evidence.
 ## Latest-frame visual channel
 
 `LatestPreviewFrameChannel` owns exactly one optional `PreviewFrame` reference.
-Publication atomically replaces that reference; consumption atomically removes
-it. The channel has:
+Publication atomically replaces that reference; normal consumption marks it as
+delivered but keeps the same one reference available for a final-frame freeze
+after local-file EOF. The channel has:
 
 - no `Queue` or `deque`;
 - no playback or frame history;
@@ -65,6 +66,21 @@ only semantic indicator.
 
 No overlay performs tracking, crossing, duplicate suppression, reverse
 classification, or counting.
+
+## Local-file completion and replay
+
+Normal local-file EOF is an operator-visible completion state, not a fatal
+camera failure. The camera displays `Exhausted`, preview displays `End of
+Video`, and the final one-slot frame remains visible. `Restart Video` becomes
+available only for an exhausted `FILE` source; `Start Pipeline` is also enabled
+and routes to the same replay lifecycle. Replay recreates the decoder, resets
+tracker/crossing playback state, reuses the already loaded detector/processor,
+and preserves the selected source, current shared-lane session, Phase 7 count,
+and bounded cumulative diagnostics. Replays can be requested repeatedly.
+
+`--real-time-video` optionally paces local files against embedded source
+timestamps inside the existing worker. It creates no thread, queue, frame
+history, or UI polling and never applies to USB cameras.
 
 ## Thread ownership and UI refresh
 
@@ -213,6 +229,7 @@ Repeated stop/close remains safe after successful cleanup.
 ## Explicit exclusions
 
 Phase 9.4 does not add persistence, database, API, network, cloud, recording,
-playback, frame history, multiple cameras, per-dock resources, ROI/line editor,
+arbitrary seek/playback controls, frame history, multiple cameras, per-dock resources,
+ROI/line editor,
 calibration, authentication, reports, exports, hardware integration, model
 training, accuracy improvement, Phase 10, or production deployment.

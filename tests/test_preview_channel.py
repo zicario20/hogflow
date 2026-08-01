@@ -74,6 +74,8 @@ def test_latest_frame_replaces_previous_without_accumulation() -> None:
     assert snapshot.frame_available
     assert channel.snapshot().frames_consumed == 1
     assert not channel.snapshot().frame_available
+    assert channel.retained_latest() is latest
+    assert channel.take_latest() is None
     assert not hasattr(channel, "_queue")
     assert not hasattr(channel, "_history")
 

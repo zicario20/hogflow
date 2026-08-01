@@ -75,6 +75,8 @@ class CountingPipelineController:
         recovery_configuration: CameraRecoveryConfiguration = CameraRecoveryConfiguration(),
         preview_channel: LatestPreviewFrameChannel | None = None,
         detector_configuration: PigDetectorConfiguration = PigDetectorConfiguration.empty(),
+        real_time_file_playback: bool = False,
+        playback_waiter: Callable[[float], bool] | None = None,
     ) -> None:
         if not callable(source_factory) or not callable(processor_factory):
             raise TypeError("Camera pipeline factories must be callable.")
@@ -92,6 +94,12 @@ class CountingPipelineController:
             raise CameraPipelineConfigurationError(
                 "Camera pipeline detector configuration is invalid."
             )
+        if not isinstance(real_time_file_playback, bool):
+            raise CameraPipelineConfigurationError(
+                "Real-time local-file playback setting must be boolean."
+            )
+        if playback_waiter is not None and not callable(playback_waiter):
+            raise CameraPipelineConfigurationError("Playback waiter must be callable.")
         self._runtime = runtime
         self._source_factory = source_factory
         self._processor_factory = processor_factory
@@ -101,6 +109,8 @@ class CountingPipelineController:
         self._startup_wait = float(startup_wait_seconds)
         self._recovery_configuration = recovery_configuration
         self._detector_configuration = detector_configuration
+        self._real_time_file_playback = real_time_file_playback
+        self._playback_waiter = playback_waiter
         self._detector_snapshot = DetectorRuntimeSnapshot.for_configuration(detector_configuration)
         self._preview = preview_channel or LatestPreviewFrameChannel(
             PreviewConfiguration(enabled=False),
@@ -173,6 +183,7 @@ class CountingPipelineController:
                 "Configured video source is unavailable or invalid."
             ) from exc
         with self._lock:
+            self._close_retained_processor()
             self._close_configured_source()
             self._configuration = configuration
             self._source = prospective_source
@@ -212,6 +223,14 @@ class CountingPipelineController:
                 raise CameraPipelineLifecycleError(
                     "Reconfigure the source before restarting a failed pipeline."
                 )
+            if (
+                self._source_exhausted
+                and self._configuration is not None
+                and self._configuration.source_type is SourceType.FILE
+            ):
+                raise CameraPipelineLifecycleError(
+                    "Use Restart Video to replay an exhausted local video source."
+                )
             try:
                 processor = self._processor_factory()
             except Exception as exc:
@@ -220,23 +239,7 @@ class CountingPipelineController:
                 ) from exc
             self._processor = processor
             self._refresh_detector_snapshot(processor)
-            self._stop_requested.clear()
-            self._startup_complete.clear()
-            self._pipeline_status = CountingPipelineStatus.STARTING
-            self._camera_status = CameraStatus.OPENING
-            self._failure_category = PipelineFailureCategory.NONE
-            self._failure_message = None
-            self._source_exhausted = False
-            self._preview.reset()
-            self._started_at = self._clock()
-            self._stopped_at = None
-            worker = Thread(
-                target=self._run_worker,
-                name="hogflow-shared-counting-pipeline",
-                daemon=False,
-            )
-            self._worker = worker
-            worker.start()
+            self._start_worker_locked()
         self._startup_complete.wait(self._startup_wait)
         return self.snapshot()
 
@@ -246,7 +249,8 @@ class CountingPipelineController:
         with self._lock:
             worker = self._worker
             if worker is None or not worker.is_alive():
-                self._preview.clear()
+                if not self._source_exhausted:
+                    self._preview.clear()
                 return self._snapshot_locked()
             self._pipeline_status = CountingPipelineStatus.STOPPING
             self._stop_requested.set()
@@ -279,9 +283,60 @@ class CountingPipelineController:
     def close(self) -> CountingPipelineSnapshot:
         """Stop acquisition and permanently close the optional visual channel."""
 
-        snapshot = self.stop()
+        self.stop()
+        with self._lock:
+            self._close_retained_processor()
         self._preview.close()
-        return snapshot
+        return self.snapshot()
+
+    def restart_video(self) -> CountingPipelineSnapshot:
+        """Replay one exhausted local file without reloading its detector.
+
+        The source decoder is recreated and tracker/crossing state is reset.
+        The current processor, detector configuration, shared-lane binding, and
+        bounded cumulative diagnostics remain owned by this controller.
+        """
+
+        with self._lock:
+            configuration = self._configuration
+            processor = self._processor
+            if (
+                self._worker_is_alive()
+                or self._pipeline_status is not CountingPipelineStatus.STOPPED
+            ):
+                raise CameraPipelineLifecycleError(
+                    "Restart Video requires a stopped local-file pipeline."
+                )
+            if configuration is None or configuration.source_type is not SourceType.FILE:
+                raise CameraPipelineLifecycleError(
+                    "Restart Video is available only for a configured local video file."
+                )
+            if not self._source_exhausted:
+                raise CameraPipelineLifecycleError(
+                    "Restart Video requires a local video that reached end of file."
+                )
+            if processor is None or not processor.is_started:
+                raise CameraPipelineLifecycleError(
+                    "Exhausted local video has no reusable processing lifecycle."
+                )
+        try:
+            prospective_source = self._source_factory(configuration)
+        except Exception as exc:
+            raise CameraPipelineConfigurationError(
+                "Configured local video could not be reopened for replay."
+            ) from exc
+        try:
+            processor.reset()
+        except Exception as exc:
+            raise CameraPipelineProcessingError(
+                "Local video processing state could not reset for replay."
+            ) from exc
+        with self._lock:
+            self._source = prospective_source
+            self._processor = processor
+            self._start_worker_locked(reset_preview=False)
+        self._startup_complete.wait(self._startup_wait)
+        return self.snapshot()
 
     def restart(self) -> CountingPipelineSnapshot:
         """Recreate the configured source and worker without changing lane state.
@@ -313,9 +368,18 @@ class CountingPipelineController:
             return self._snapshot_locked()
 
     def latest_preview_frame(self) -> PreviewFrame | None:
-        """Return and remove the newest visual frame without blocking the worker."""
+        """Return the newest frame, freezing the final local-file frame at EOF."""
 
-        return self._preview.take_latest()
+        frame = self._preview.take_latest()
+        if frame is not None:
+            return frame
+        with self._lock:
+            retain_final = (
+                self._source_exhausted
+                and self._configuration is not None
+                and self._configuration.source_type is SourceType.FILE
+            )
+        return self._preview.retained_latest() if retain_final else None
 
     def preview_snapshot(self) -> PreviewSnapshot:
         """Return bounded visual-channel telemetry without pixel data."""
@@ -343,13 +407,16 @@ class CountingPipelineController:
         try:
             if not self._open_source(source):
                 return
-            processor.start(source.identity.stream_id)
+            if not processor.is_started:
+                processor.start(source.identity.stream_id)
             with self._lock:
                 self._camera_status = CameraStatus.RUNNING
                 self._pipeline_status = CountingPipelineStatus.RUNNING
                 self._startup_complete.set()
-            sequence = 0
+            with self._lock:
+                sequence = 0 if self._last_frame_index is None else self._last_frame_index + 1
             temporary_source_failures = 0
+            playback_origin: tuple[float, float] | None = None
             while not self._stop_requested.is_set():
                 try:
                     result = source.read()
@@ -368,6 +435,12 @@ class CountingPipelineController:
                         raise StreamFatalReadError(
                             "Video source returned a frame status without frame data."
                         )
+                    playback_origin = self._pace_local_file_frame(
+                        result.frame.source_timestamp_seconds,
+                        playback_origin,
+                    )
+                    if self._stop_requested.is_set():
+                        break
                     acquired_at = self._clock()
                     packet = FramePacket(
                         stream=source.identity,
@@ -473,16 +546,29 @@ class CountingPipelineController:
         finally:
             self._startup_complete.set()
             cleanup_failure: BaseException | None = None
-            try:
-                processor.close()
-            except BaseException as exc:
-                cleanup_failure = exc
+            configuration = self._configuration
+            retain_processor = (
+                ended
+                and failure is None
+                and configuration is not None
+                and configuration.source_type is SourceType.FILE
+            )
+            if not retain_processor:
+                try:
+                    processor.close()
+                except BaseException as exc:
+                    cleanup_failure = exc
             try:
                 if source.is_open():
                     source.close()
             except BaseException as exc:
                 if cleanup_failure is None:
                     cleanup_failure = exc
+            if cleanup_failure is not None and retain_processor:
+                try:
+                    processor.close()
+                except BaseException:
+                    pass
             with self._lock:
                 self._stopped_at = self._clock()
                 if failure is not None:
@@ -669,6 +755,63 @@ class CountingPipelineController:
         self._detector_snapshot = DetectorRuntimeSnapshot.for_configuration(
             self._detector_configuration
         )
+
+    def _start_worker_locked(self, *, reset_preview: bool = True) -> None:
+        self._stop_requested.clear()
+        self._startup_complete.clear()
+        self._pipeline_status = CountingPipelineStatus.STARTING
+        self._camera_status = CameraStatus.OPENING
+        self._failure_category = PipelineFailureCategory.NONE
+        self._failure_message = None
+        self._source_exhausted = False
+        if reset_preview:
+            self._preview.reset()
+        self._started_at = self._clock()
+        self._stopped_at = None
+        worker = Thread(
+            target=self._run_worker,
+            name="hogflow-shared-counting-pipeline",
+            daemon=False,
+        )
+        self._worker = worker
+        worker.start()
+
+    def _pace_local_file_frame(
+        self,
+        source_seconds: float | None,
+        origin: tuple[float, float] | None,
+    ) -> tuple[float, float] | None:
+        configuration = self._configuration
+        if (
+            not self._real_time_file_playback
+            or configuration is None
+            or configuration.source_type is not SourceType.FILE
+            or source_seconds is None
+        ):
+            return origin
+        now = float(self._monotonic())
+        if origin is None:
+            return (source_seconds, now)
+        target_elapsed = max(0.0, source_seconds - origin[0])
+        actual_elapsed = max(0.0, now - origin[1])
+        delay = target_elapsed - actual_elapsed
+        if delay > 0:
+            waiter = self._playback_waiter or self._stop_requested.wait
+            waiter(delay)
+        return origin
+
+    def _close_retained_processor(self) -> None:
+        processor = self._processor
+        if processor is None or not processor.is_started:
+            return
+        try:
+            processor.close()
+            self._refresh_detector_snapshot(processor)
+        except Exception as exc:
+            raise CameraPipelineShutdownError(
+                "Retained local-video processor could not close cleanly."
+            ) from exc
+        self._processor = None
 
     def _close_configured_source(self) -> None:
         source = self._source
