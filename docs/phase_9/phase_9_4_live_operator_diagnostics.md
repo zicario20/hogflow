@@ -190,8 +190,8 @@ cannot change counting, detector, tracker, or camera-pipeline behavior.
 
 ## Ergonomic workstation layout
 
-The desktop uses a dense monitoring hierarchy without changing its visual
-theme. Shared-lane status is a compact horizontal bar, pipeline diagnostics
+The desktop uses a dense monitoring hierarchy. Shared-lane status is a compact
+horizontal bar, pipeline diagnostics
 wrap into a compact dashboard, and the bounded preview aligns with the top of
 the grouped operator actions. Truck/session, pipeline/source, and application
 controls remain distinct and immediately discoverable. Dock summaries use the
@@ -210,6 +210,25 @@ scale factor, so the reduced display height does not distort frames. This is a
 presentation-only arrangement: actions, enabled states, live counts, totals,
 camera health, and pipeline health still come from immutable snapshots and
 existing public presenter/application operations.
+
+## Demo industrial HMI visual system
+
+A later presentation-only increment applies a centralized dark industrial HMI
+theme without changing Phase 9.4 runtime semantics. The header exposes the
+truthful mode (`VALIDATION BUILD`, `VALIDATION MODE`, or `LIVE MODE`) plus
+system, camera, and pipeline state. Shared-lane ownership and `LIVE COUNT` have
+priority over bounded technical diagnostics; the preview uses a restrained
+professional frame, while the four docks preserve the existing two-by-two
+ergonomic layout.
+
+The visual system uses semantic color together with labels, system fonts,
+compact 4/8-based spacing, visible focus, readable disabled controls, and no
+animation or remote assets. The UI still consumes immutable snapshots only.
+There is no `PRODUCTION MODE`, no production-readiness claim, and no change to
+the detector, tracker, crossing, counter, replay, shared lane, session, worker,
+or one-slot preview contracts. See
+[`hogflow_demo_visual_design.md`](hogflow_demo_visual_design.md) for the full
+presentation specification.
 
 ## Shutdown
 

@@ -38,7 +38,7 @@ from hogflow.presentation.ports import OperatorPreviewView, OperatorView
 from hogflow.presentation.preview import build_preview_render_plan
 
 _OPERATOR_PREVIEW_MAXIMUM_WIDTH = 640
-_OPERATOR_PREVIEW_MAXIMUM_HEIGHT = 270
+_OPERATOR_PREVIEW_MAXIMUM_HEIGHT = 225
 
 
 class OperatorPresenter:
@@ -373,6 +373,9 @@ def screen_from_snapshot(
     )
     camera_panel = CameraPipelinePanel(
         source=pipeline.camera.display_name,
+        source_type=(
+            None if pipeline.camera.source_type is None else pipeline.camera.source_type.value
+        ),
         camera_status=(
             "Exhausted"
             if pipeline.camera.source_exhausted

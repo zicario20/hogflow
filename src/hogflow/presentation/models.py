@@ -160,6 +160,7 @@ class CameraPipelinePanel:
     """Display-only camera and one-worker pipeline projection."""
 
     source: str
+    source_type: str | None
     camera_status: str
     pipeline_status: str
     frames_acquired: int

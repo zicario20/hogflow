@@ -303,8 +303,8 @@ def test_all_operator_controls_and_preview_are_inside_scrollable_content() -> No
         assert view._buttons[action].options["text"] == label
         assert _is_descendant(view._buttons[action], view._scroll_content)
     assert _is_descendant(view._preview_canvas, view._scroll_content)
-    assert view._preview_canvas.options["width"] == 480
-    assert view._preview_canvas.options["height"] == 270
+    assert view._preview_canvas.options["width"] == 400
+    assert view._preview_canvas.options["height"] == 225
 
 
 def test_wide_layout_prioritizes_preview_actions_and_compact_status() -> None:
@@ -334,7 +334,7 @@ def test_wide_layout_prioritizes_preview_actions_and_compact_status() -> None:
     pipeline_rows = {
         widget.grid_options["row"] for pair in view._pipeline_field_widgets for widget in pair
     }
-    assert pipeline_rows == {0, 1}
+    assert pipeline_rows == {1, 2}
 
 
 def test_widget_dimensions_are_configured_on_widgets_not_grid() -> None:
@@ -369,7 +369,7 @@ def test_narrow_layout_reflows_controls_without_horizontal_scroll() -> None:
     pipeline_rows = {
         widget.grid_options["row"] for pair in view._pipeline_field_widgets for widget in pair
     }
-    assert pipeline_rows == {0, 1, 2, 3}
+    assert pipeline_rows == {1, 2, 3, 4}
 
 
 def test_preview_empty_state_still_renders_inside_scrolled_layout() -> None:

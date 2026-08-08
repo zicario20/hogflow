@@ -165,6 +165,12 @@ ergonomic layout keeps lane and pipeline diagnostics at the top, aligns the
 bounded preview with grouped operator actions, and arranges the four docks as
 a two-by-two grid. The responsive layout reflows on narrow windows without
 changing snapshot ownership or any operator command.
+The presentation applies a centralized dark industrial HMI theme using the
+approved Option A hierarchy, compact secondary diagnostics, a prominent live
+lifecycle count, and a professionally framed shared-camera preview. Mode labels
+remain evidence-based: `VALIDATION BUILD` with no source, `VALIDATION MODE` for
+local files, and `LIVE MODE` for cameras. `PRODUCTION MODE` is deliberately not
+used because representative validation and pilot readiness remain pending.
 
 Phase 10.1 adds `hogflow.runtime`, a synchronous supervision layer over the
 public camera/pipeline and four-dock/shared-lane snapshots. It produces
@@ -501,6 +507,7 @@ detections or count evidence.
 * [Phase 9.4 live operator diagnostics](docs/phase_9/phase_9_4_live_operator_diagnostics.md)
 * [Phase 9.4 validation](docs/phase_9/phase_9_4_validation.md)
 * [Phase 9.4 summary](docs/phase_9/phase_9_4_summary.md)
+* [HogFlow demo industrial HMI visual design](docs/phase_9/hogflow_demo_visual_design.md)
 * [Phase 10.1 runtime foundation](docs/phase_10/phase_10_1_runtime_foundation.md)
 * [Phase 10.1 validation](docs/phase_10/phase_10_1_validation.md)
 * [Phase 10.1 summary](docs/phase_10/phase_10_1_summary.md)

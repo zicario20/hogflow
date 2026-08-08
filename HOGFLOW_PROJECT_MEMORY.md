@@ -4,8 +4,8 @@
 > `AGENTS.md`, no en sustitución de sus reglas normativas.
 
 Última reconstrucción integral: 25 de julio de 2026.
-Última actualización incremental: hotfix de replay local posterior a Phase 10.3,
-1 de agosto de 2026.
+Última actualización incremental: diseño visual HMI industrial posterior a
+Phase 10.3, 8 de agosto de 2026.
 
 Línea base técnica de Phase 10.3:
 `e14bf5b5d73b886ff9834b606787ca58872c65b2`
@@ -933,6 +933,13 @@ Resumen de madurez:
   cargado, habilita `Start Pipeline` y expone `Restart Video`, permite replay repetido con reset solo de
   tracker/crossing y ofrece pacing file-only opt-in mediante
   `--real-time-video`. USB, Phase 7, Phase 8 y reglas de negocio no cambian.
+- **Diseño visual posterior:** la workstation conserva Tkinter, snapshots y el
+  layout ergonómico, pero adopta un tema HMI industrial centralizado con
+  jerarquía Option A, diagnósticos compactos, `LIVE COUNT` prominente y preview
+  enmarcado. Los modos son `VALIDATION BUILD` sin fuente, `VALIDATION MODE` para
+  archivo y `LIVE MODE` para cámara; `PRODUCTION MODE` no existe. El cambio es
+  exclusivamente presentation y no altera detector, tracker, crossing,
+  counting, sessions, replay, worker ni runtime.
 
 ### 5.24 Phase 10.1 — Production Runtime Foundation
 
@@ -1217,6 +1224,11 @@ tabla preserva su razonamiento operativo.
 | Regresión enfocada Phase 10.3 | 216 passed para detector, cámara/pipeline, runtime health y límites arquitectónicos |
 | Suite local Phase 10.3 | 985 passed; 1 warning heredado de ByteTrack deprecated |
 | Evidencia local Phase 10.3 | Tres videos metadata-only; 0 sidecars; 0 modelos compatibles; inference/counting no ejecutados |
+| Suite baseline diseño HMI demo | 1002 passed; 1 warning heredado de ByteTrack deprecated |
+| Suite enfocada diseño HMI demo | 103 passed para presentation, replay/cámara y límites arquitectónicos |
+| Suite local diseño HMI demo | 1008 passed; 1 warning heredado de ByteTrack deprecated |
+| Smoke local diseño HMI demo | Tk real a 1600×920/1366×768 y tres replays de un archivo ignorado con detector vacío; sin cámara física ni evidencia de conteo |
+| Quality gates diseño HMI demo | Ruff check/format, compileall, pip check, import/CLI smoke, arquitectura y diff check pasan |
 | Python local verificado | 3.12.13; proyecto declara `>=3.10` |
 | Python CI | 3.12 en Ubuntu latest |
 
