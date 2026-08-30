@@ -24,7 +24,11 @@ from hogflow.evaluation import (
     PredictedDetection,
 )
 from hogflow.models import BoundingBox
-from hogflow.training.models import PreparedTrainingDataset, ValidationPrediction
+from hogflow.training.models import (
+    PreparedEvaluationDataset,
+    PreparedTrainingDataset,
+    ValidationPrediction,
+)
 
 _FINALIZED_STATUSES = frozenset({AnnotationStatus.ANNOTATED, AnnotationStatus.VERIFIED_EMPTY})
 _ACTIVE_SPLITS = frozenset({DatasetSplit.TRAIN, DatasetSplit.VALIDATION, DatasetSplit.TEST})
@@ -45,7 +49,7 @@ def load_prepared_training_dataset(
     root = Path(dataset_root)
     local_manifest_path = Path(manifest_path)
     manifest = load_annotation_manifest(local_manifest_path)
-    report = validate_annotation_dataset(root, manifest)
+    report = validate_annotation_dataset(root, manifest, scope_to_manifest=True)
     if not report.valid:
         raise InputDataError(
             f"Prepared dataset validation failed with {report.error_count} fatal issue(s)."
@@ -86,7 +90,7 @@ def load_prepared_training_dataset(
 
 
 def image_path_for_frame(
-    dataset: PreparedTrainingDataset,
+    dataset: PreparedTrainingDataset | PreparedEvaluationDataset,
     frame_id: str,
 ) -> Path:
     """Resolve one opaque manifest frame to its local prepared image."""
@@ -96,7 +100,7 @@ def image_path_for_frame(
 
 
 def label_path_for_frame(
-    dataset: PreparedTrainingDataset,
+    dataset: PreparedTrainingDataset | PreparedEvaluationDataset,
     frame_id: str,
 ) -> Path:
     """Resolve one opaque manifest frame to its validated local YOLO label."""
@@ -106,13 +110,15 @@ def label_path_for_frame(
 
 
 def frame_record(
-    dataset: PreparedTrainingDataset,
+    dataset: PreparedTrainingDataset | PreparedEvaluationDataset,
     frame_id: str,
 ) -> AnnotationFrameRecord:
     """Return one manifest frame by opaque identifier."""
 
-    if not isinstance(dataset, PreparedTrainingDataset):
-        raise InputDataError("dataset must be PreparedTrainingDataset.")
+    if not isinstance(dataset, (PreparedTrainingDataset, PreparedEvaluationDataset)):
+        raise InputDataError(
+            "dataset must be PreparedTrainingDataset or PreparedEvaluationDataset."
+        )
     for record in dataset.manifest.frames:
         if record.frame_id == frame_id:
             return record
@@ -120,7 +126,7 @@ def frame_record(
 
 
 def build_detection_frame(
-    dataset: PreparedTrainingDataset,
+    dataset: PreparedTrainingDataset | PreparedEvaluationDataset,
     frame_id: str,
     predictions: tuple[ValidationPrediction, ...],
 ) -> DetectionFrame:

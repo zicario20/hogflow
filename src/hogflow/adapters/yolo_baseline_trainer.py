@@ -30,6 +30,7 @@ from hogflow.training.models import (
     DetectorTrainingOutput,
     DetectorValidationOutput,
     FrameworkMetric,
+    PreparedEvaluationDataset,
     PreparedTrainingDataset,
     ValidationPrediction,
 )
@@ -120,6 +121,9 @@ class YOLOBaselineTrainer:
             }
             if resume is not None:
                 arguments["resume"] = str(resume)
+            if configuration.early_stopping_patience is not None:
+                arguments["patience"] = configuration.early_stopping_patience
+            arguments.update(configuration.augmentation_settings)
             framework_result = model.train(**arguments)
             checkpoint = _trainer_checkpoint(model)
         except HogFlowError:
@@ -181,6 +185,7 @@ class YOLOBaselineTrainer:
                 conf=configuration.confidence_threshold,
                 device=configuration.device,
                 imgsz=configuration.image_size,
+                iou=configuration.iou_threshold,
                 save=False,
                 verbose=False,
             )
@@ -204,6 +209,51 @@ class YOLOBaselineTrainer:
             frames=frames,
             framework_metrics=_framework_metrics(framework_result),
         )
+
+    def validate_holdout(
+        self,
+        dataset: PreparedEvaluationDataset,
+        checkpoint_path: Path,
+        configuration: TrainingConfiguration,
+    ) -> DetectorValidationOutput:
+        """Predict an explicit evaluation-only holdout without training or tuning."""
+
+        if not isinstance(dataset, PreparedEvaluationDataset):
+            raise InputDataError("dataset must be PreparedEvaluationDataset.")
+        if not isinstance(configuration, TrainingConfiguration):
+            raise InputDataError("configuration must be TrainingConfiguration.")
+        if not isinstance(checkpoint_path, Path) or not checkpoint_path.is_file():
+            raise InputDataError("The local detector checkpoint is missing or is not a file.")
+        frame_ids = dataset.frame_ids
+        image_paths = [str(image_path_for_frame(dataset, frame_id)) for frame_id in frame_ids]
+        try:
+            model = self._yolo_factory(str(checkpoint_path))
+            prediction_results = model.predict(
+                source=image_paths,
+                classes=[0],
+                conf=configuration.confidence_threshold,
+                device=configuration.device,
+                imgsz=configuration.image_size,
+                iou=configuration.iou_threshold,
+                save=False,
+                verbose=False,
+            )
+        except Exception as exc:
+            raise HogFlowError(
+                "YOLO holdout validation failed for the explicit evaluation-only dataset."
+            ) from exc
+        if len(prediction_results) != len(frame_ids):
+            raise HogFlowError("YOLO returned an unexpected number of holdout results.")
+        frames = tuple(
+            sorted(
+                (
+                    _validation_frame(dataset, frame_id, result)
+                    for frame_id, result in zip(frame_ids, prediction_results, strict=True)
+                ),
+                key=lambda frame: (frame.source_video_id, frame.frame_id),
+            )
+        )
+        return DetectorValidationOutput(frames=frames)
 
     def _prepare_output_directories(self) -> None:
         for name in ("evaluation", "metrics", "models", "runs", "tensorboard"):
@@ -340,7 +390,7 @@ def _framework_split(split: Any) -> str:
 
 
 def _validation_frame(
-    dataset: PreparedTrainingDataset,
+    dataset: PreparedTrainingDataset | PreparedEvaluationDataset,
     frame_id: str,
     result: Any,
 ):

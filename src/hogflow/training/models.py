@@ -115,6 +115,37 @@ class PreparedTrainingDataset:
 
 
 @dataclass(frozen=True, slots=True)
+class PreparedEvaluationDataset:
+    """Validated evaluation-only input for an independent holdout partition."""
+
+    frame_ids: tuple[str, ...]
+    root: Path
+    manifest_path: Path
+    manifest: AnnotationDatasetManifest
+    validation_report: AnnotationValidationReport
+    dataset_version: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.frame_ids, tuple) or tuple(sorted(self.frame_ids)) != self.frame_ids:
+            raise InputDataError("frame_ids must be a sorted immutable tuple.")
+        if not self.frame_ids:
+            raise InputDataError("Prepared evaluation dataset requires at least one frame.")
+        if not isinstance(self.root, Path) or not isinstance(self.manifest_path, Path):
+            raise InputDataError("Prepared evaluation dataset locations must be pathlib Paths.")
+        if not isinstance(self.manifest, AnnotationDatasetManifest):
+            raise InputDataError("manifest must be AnnotationDatasetManifest.")
+        if not isinstance(self.validation_report, AnnotationValidationReport):
+            raise InputDataError("validation_report must be AnnotationValidationReport.")
+        if not self.validation_report.valid:
+            raise InputDataError("Prepared evaluation dataset must pass annotation validation.")
+        if fullmatch(r"[0-9a-f]{64}", self.dataset_version) is None:
+            raise InputDataError("dataset_version must be a SHA-256 hexadecimal digest.")
+        manifest_frame_ids = {frame.frame_id for frame in self.manifest.frames}
+        if not set(self.frame_ids).issubset(manifest_frame_ids):
+            raise InputDataError("Evaluation frame IDs must be present in the manifest.")
+
+
+@dataclass(frozen=True, slots=True)
 class DetectorTrainingOutput:
     """Framework-neutral artifacts returned after one trainer invocation."""
 
@@ -277,6 +308,7 @@ __all__ = [
     "DetectorValidationOutput",
     "FailureAnalysisSummary",
     "FrameworkMetric",
+    "PreparedEvaluationDataset",
     "PreparedTrainingDataset",
     "TrainingMetrics",
     "TrainingRunMetadata",

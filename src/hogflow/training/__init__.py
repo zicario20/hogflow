@@ -1,6 +1,6 @@
 """Framework-neutral baseline detector training contracts and orchestration."""
 
-from hogflow.training.configuration import TrainingConfiguration
+from hogflow.training.configuration import TrainingConfiguration, TrainingProfile
 from hogflow.training.contracts import DetectorTrainer
 from hogflow.training.dataset import load_prepared_training_dataset
 from hogflow.training.models import (
@@ -9,6 +9,7 @@ from hogflow.training.models import (
     DetectorValidationOutput,
     FailureAnalysisSummary,
     FrameworkMetric,
+    PreparedEvaluationDataset,
     PreparedTrainingDataset,
     TrainingMetrics,
     TrainingRunMetadata,
@@ -22,8 +23,10 @@ __all__ = [
     "DetectorValidationOutput",
     "FailureAnalysisSummary",
     "FrameworkMetric",
+    "PreparedEvaluationDataset",
     "PreparedTrainingDataset",
     "TrainingConfiguration",
+    "TrainingProfile",
     "TrainingMetrics",
     "TrainingRunMetadata",
     "ValidationPrediction",
