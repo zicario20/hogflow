@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence
 
 from hogflow.annotation.models import (
     ANNOTATION_POLICY_VERSION,
+    AnnotationSplitPolicy,
     PIG_CLASS_ID,
     PIG_CLASS_NAME,
     AnnotationDatasetManifest,
@@ -18,6 +19,7 @@ from hogflow.annotation.models import (
     AnnotationStatus,
     DatasetSplit,
     ManifestValidationStatus,
+    TemporalBlock,
 )
 from hogflow.core import HogFlowError, InputDataError, configure_logging, get_logger
 
@@ -27,6 +29,9 @@ LOGGER = get_logger(__name__)
 def build_annotation_manifest(
     extraction_report: Mapping[str, Any],
     status_map: Mapping[str, Any],
+    *,
+    split_policy: AnnotationSplitPolicy = AnnotationSplitPolicy.SOURCE_ISOLATED,
+    temporal_blocks: Sequence[TemporalBlock] = (),
 ) -> AnnotationDatasetManifest:
     """Build one path-private manifest from sanitized extraction and status data."""
 
@@ -63,6 +68,10 @@ def build_annotation_manifest(
                     annotation_status=AnnotationStatus(frame_status["status"]),
                     bounding_box_count=frame_status.get("bounding_box_count", 0),
                     checksum_sha256=item["checksum_sha256"],
+                    source_timestamp_seconds=item.get(
+                        "actual_timestamp_seconds", item.get("planned_timestamp_seconds")
+                    ),
+                    temporal_block_id=item.get("temporal_block_id"),
                     validation_status=ManifestValidationStatus.PENDING,
                 )
             )
@@ -76,13 +85,17 @@ def build_annotation_manifest(
             "Annotation status map contains unknown opaque frame IDs: "
             + ", ".join(unexpected_statuses)
         )
-    _enforce_source_split_isolation(frame_records)
+    block_tuple = tuple(sorted(temporal_blocks, key=lambda block: block.block_id))
+    if split_policy is AnnotationSplitPolicy.SOURCE_ISOLATED:
+        _enforce_source_split_isolation(frame_records)
     return AnnotationDatasetManifest(
-        schema_version=1,
+        schema_version=1 if split_policy is AnnotationSplitPolicy.SOURCE_ISOLATED else 2,
         dataset_id=dataset_id,
         annotation_policy_version=ANNOTATION_POLICY_VERSION,
         class_map=((PIG_CLASS_ID, PIG_CLASS_NAME),),
         frames=tuple(sorted(frame_records, key=lambda frame: frame.frame_id)),
+        split_policy=split_policy,
+        temporal_blocks=block_tuple,
     )
 
 
@@ -110,10 +123,37 @@ def manifest_to_dict(manifest: AnnotationDatasetManifest) -> dict[str, Any]:
                 "split": frame.split.value,
                 "validation_status": frame.validation_status.value,
                 "width": frame.width,
+                **(
+                    {"source_timestamp_seconds": frame.source_timestamp_seconds}
+                    if frame.source_timestamp_seconds is not None
+                    else {}
+                ),
+                **(
+                    {"temporal_block_id": frame.temporal_block_id}
+                    if frame.temporal_block_id is not None
+                    else {}
+                ),
             }
             for frame in manifest.frames
         ],
         "schema_version": manifest.schema_version,
+        **(
+            {
+                "split_policy": manifest.split_policy.value,
+                "temporal_blocks": [
+                    {
+                        "block_id": block.block_id,
+                        "clip_id": block.clip_id,
+                        "split": block.split.value,
+                        "start_seconds": block.start_seconds,
+                        "end_seconds": block.end_seconds,
+                    }
+                    for block in manifest.temporal_blocks
+                ],
+            }
+            if manifest.split_policy is AnnotationSplitPolicy.TEMPORAL_BLOCKED
+            else {}
+        ),
     }
 
 
@@ -151,9 +191,24 @@ def load_annotation_manifest(path: str | Path) -> AnnotationDatasetManifest:
                 annotation_status=AnnotationStatus(item["annotation_status"]),
                 bounding_box_count=item["bounding_box_count"],
                 checksum_sha256=item["checksum_sha256"],
+                source_timestamp_seconds=item.get("source_timestamp_seconds"),
+                temporal_block_id=item.get("temporal_block_id"),
                 validation_status=ManifestValidationStatus(item["validation_status"]),
             )
             for item in frame_payload
+        )
+        split_policy = AnnotationSplitPolicy(
+            payload.get("split_policy", AnnotationSplitPolicy.SOURCE_ISOLATED.value)
+        )
+        temporal_blocks = tuple(
+            TemporalBlock(
+                block_id=item["block_id"],
+                clip_id=item["clip_id"],
+                split=DatasetSplit(item["split"]),
+                start_seconds=item["start_seconds"],
+                end_seconds=item["end_seconds"],
+            )
+            for item in payload.get("temporal_blocks", [])
         )
         return AnnotationDatasetManifest(
             schema_version=payload["schema_version"],
@@ -161,6 +216,8 @@ def load_annotation_manifest(path: str | Path) -> AnnotationDatasetManifest:
             annotation_policy_version=payload["annotation_policy_version"],
             class_map=class_map,
             frames=frames,
+            split_policy=split_policy,
+            temporal_blocks=temporal_blocks,
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise InputDataError("Annotation dataset manifest has an invalid structure.") from exc

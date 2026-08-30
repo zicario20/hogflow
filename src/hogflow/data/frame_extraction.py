@@ -15,6 +15,7 @@ from typing import Any, Mapping, Sequence
 
 from hogflow.annotation.models import (
     DatasetSplit,
+    validate_opaque_identifier,
     validate_phase4_identifier,
     validate_relative_workspace_path,
 )
@@ -28,6 +29,10 @@ from hogflow.core import (
 from hogflow.data.frame_selection import FrameSelectionPlan, PlannedFrame, read_frame_selection_plan
 
 LOGGER = get_logger(__name__)
+SEEK_RETRY_WINDOW_SECONDS = 1.5
+MINIMUM_SEEK_RETRY_STEP_SECONDS = 0.02
+DEFAULT_SEEK_RETRY_STEP_SECONDS = 0.05
+MAX_TIMESTAMP_DELTA_SECONDS = 0.05
 
 
 class ImageFormat(str, Enum):
@@ -54,6 +59,7 @@ class ExtractedFrameRecord:
     image_relative_path: str
     planned_timestamp_seconds: float
     actual_timestamp_seconds: float | None
+    temporal_block_id: str | None
     width: int
     height: int
     checksum_sha256: str
@@ -84,6 +90,8 @@ class ExtractedFrameRecord:
             or self.actual_timestamp_seconds < 0
         ):
             raise InputDataError("actual_timestamp_seconds must be non-negative when present.")
+        if self.temporal_block_id is not None:
+            validate_opaque_identifier(self.temporal_block_id, field_name="temporal_block_id")
         if (
             not isinstance(self.width, int)
             or isinstance(self.width, bool)
@@ -207,6 +215,7 @@ def write_extraction_report(report: FrameExtractionReport, path: str | Path) -> 
                 "planned_timestamp_seconds": record.planned_timestamp_seconds,
                 "split": record.split.value,
                 "status": record.status.value,
+                "temporal_block_id": record.temporal_block_id,
                 "width": record.width,
             }
             for record in report.records
@@ -292,10 +301,11 @@ def _extract_clip_frames(
     extension = f".{image_format.value}"
     try:
         for planned in sorted(frames, key=lambda frame: frame.planned_timestamp_seconds):
-            capture.set(cv2.CAP_PROP_POS_MSEC, planned.planned_timestamp_seconds * 1000.0)
-            ok, image = capture.read()
-            if not ok or image is None or getattr(image, "size", 0) == 0:
-                raise InputDataError(f"Unable to decode planned opaque frame {planned.frame_id!r}.")
+            image, actual_seconds = _decode_frame_with_seek_retry(
+                capture,
+                planned,
+                cv2_module=cv2,
+            )
             height, width = image.shape[:2]
             if width <= 0 or height <= 0:
                 raise InputDataError(
@@ -309,8 +319,6 @@ def _extract_clip_frames(
             image_relative_path = f"images/{planned.split.value}/{planned.frame_id}{extension}"
             destination = output_root / _relative_workspace_path(image_relative_path)
             status = _write_or_verify_image(destination, content, frame_id=planned.frame_id)
-            actual_msec = capture.get(cv2.CAP_PROP_POS_MSEC)
-            actual_seconds = actual_msec / 1000.0 if actual_msec >= 0 else None
             records.append(
                 ExtractedFrameRecord(
                     frame_id=planned.frame_id,
@@ -319,6 +327,7 @@ def _extract_clip_frames(
                     image_relative_path=image_relative_path,
                     planned_timestamp_seconds=planned.planned_timestamp_seconds,
                     actual_timestamp_seconds=actual_seconds,
+                    temporal_block_id=planned.temporal_block_id,
                     width=int(width),
                     height=int(height),
                     checksum_sha256=hashlib.sha256(content).hexdigest(),
@@ -328,6 +337,101 @@ def _extract_clip_frames(
     finally:
         capture.release()
     return records
+
+
+def _decode_frame_with_seek_retry(
+    capture: Any,
+    planned: PlannedFrame,
+    *,
+    cv2_module: Any,
+) -> tuple[Any, float | None]:
+    step_seconds = _seek_retry_step_seconds(capture, cv2_module)
+    tolerance_seconds = max(MAX_TIMESTAMP_DELTA_SECONDS, step_seconds * 2.5)
+    for candidate_seconds in _seek_retry_candidates(
+        planned.planned_timestamp_seconds,
+        step_seconds,
+    ):
+        capture.set(cv2_module.CAP_PROP_POS_MSEC, candidate_seconds * 1000.0)
+        ok, image = capture.read()
+        if not ok or image is None or getattr(image, "size", 0) == 0:
+            continue
+        actual_seconds = _capture_timestamp_seconds(capture, cv2_module)
+        resolved = _resolve_candidate_frame(
+            capture,
+            image,
+            actual_seconds,
+            planned.planned_timestamp_seconds,
+            tolerance_seconds,
+            step_seconds,
+            cv2_module=cv2_module,
+        )
+        if resolved is not None:
+            return resolved
+    raise InputDataError(
+        f"Unable to decode planned opaque frame {planned.frame_id!r} within the bounded timestamp tolerance."
+    )
+
+
+def _seek_retry_candidates(
+    timestamp_seconds: float,
+    step_seconds: float,
+) -> tuple[float, ...]:
+    maximum_steps = max(1, math.ceil(SEEK_RETRY_WINDOW_SECONDS / step_seconds))
+    values: list[float] = [round(timestamp_seconds, 9)]
+    seen = {values[0]}
+    for distance in range(1, maximum_steps + 1):
+        candidate = round(timestamp_seconds - (distance * step_seconds), 9)
+        if candidate < 0 or candidate in seen:
+            continue
+        seen.add(candidate)
+        values.append(candidate)
+    return tuple(values)
+
+
+def _resolve_candidate_frame(
+    capture: Any,
+    image: Any,
+    actual_seconds: float | None,
+    planned_seconds: float,
+    tolerance_seconds: float,
+    step_seconds: float,
+    *,
+    cv2_module: Any,
+) -> tuple[Any, float | None] | None:
+    if actual_seconds is not None and abs(actual_seconds - planned_seconds) <= tolerance_seconds:
+        return image, actual_seconds
+    if actual_seconds is None or actual_seconds > planned_seconds + tolerance_seconds:
+        return None
+    maximum_reads = max(
+        1, math.ceil((SEEK_RETRY_WINDOW_SECONDS + tolerance_seconds) / step_seconds)
+    )
+    for _ in range(maximum_reads):
+        ok, next_image = capture.read()
+        if not ok or next_image is None or getattr(next_image, "size", 0) == 0:
+            return None
+        next_seconds = _capture_timestamp_seconds(capture, cv2_module)
+        if next_seconds is not None and abs(next_seconds - planned_seconds) <= tolerance_seconds:
+            return next_image, next_seconds
+        if next_seconds is not None and next_seconds > planned_seconds + tolerance_seconds:
+            return None
+    return None
+
+
+def _seek_retry_step_seconds(capture: Any, cv2_module: Any) -> float:
+    fps = capture.get(cv2_module.CAP_PROP_FPS)
+    if (
+        isinstance(fps, (int, float))
+        and not isinstance(fps, bool)
+        and math.isfinite(fps)
+        and fps > 0
+    ):
+        return max(MINIMUM_SEEK_RETRY_STEP_SECONDS, 1.0 / fps)
+    return DEFAULT_SEEK_RETRY_STEP_SECONDS
+
+
+def _capture_timestamp_seconds(capture: Any, cv2_module: Any) -> float | None:
+    actual_msec = capture.get(cv2_module.CAP_PROP_POS_MSEC)
+    return actual_msec / 1000.0 if actual_msec >= 0 else None
 
 
 def _relative_workspace_path(value: str) -> Path:

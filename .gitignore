@@ -28,6 +28,8 @@ data/runs/**
 !data/runs/.gitkeep
 data/evaluation/**
 !data/evaluation/.gitkeep
+data/training/**
+!data/training/.gitkeep
 data/tensorboard/**
 data/metrics/**
 data/live/**

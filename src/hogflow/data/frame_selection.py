@@ -13,7 +13,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from hogflow.annotation.models import DatasetSplit, validate_phase4_identifier
+from hogflow.annotation.models import (
+    DatasetSplit,
+    validate_opaque_identifier,
+    validate_phase4_identifier,
+)
 from hogflow.core import (
     ConfigurationError,
     HogFlowError,
@@ -103,6 +107,7 @@ class PlannedFrame:
     split: DatasetSplit
     planned_timestamp_seconds: float
     selection_strategy: FrameSelectionStrategy
+    temporal_block_id: str | None = None
     extraction_status: ExtractionStatus = ExtractionStatus.PLANNED
 
     def __post_init__(self) -> None:
@@ -119,6 +124,8 @@ class PlannedFrame:
             raise InputDataError("planned_timestamp_seconds must be finite and non-negative.")
         if not isinstance(self.selection_strategy, FrameSelectionStrategy):
             raise InputDataError("selection_strategy must be FrameSelectionStrategy.")
+        if self.temporal_block_id is not None:
+            validate_opaque_identifier(self.temporal_block_id, field_name="temporal_block_id")
         if self.extraction_status is not ExtractionStatus.PLANNED:
             raise InputDataError("New frame plans must use planned extraction status.")
 
@@ -246,6 +253,11 @@ def write_frame_selection_plan(plan: FrameSelectionPlan, path: str | Path) -> No
                 "planned_timestamp_seconds": frame.planned_timestamp_seconds,
                 "selection_strategy": frame.selection_strategy.value,
                 "split": frame.split.value,
+                **(
+                    {"temporal_block_id": frame.temporal_block_id}
+                    if frame.temporal_block_id is not None
+                    else {}
+                ),
             }
             for frame in plan.frames
         ],
@@ -277,6 +289,7 @@ def read_frame_selection_plan(path: str | Path) -> FrameSelectionPlan:
                 split=DatasetSplit(item["split"]),
                 planned_timestamp_seconds=item["planned_timestamp_seconds"],
                 selection_strategy=FrameSelectionStrategy(item["selection_strategy"]),
+                temporal_block_id=item.get("temporal_block_id"),
                 extraction_status=ExtractionStatus(item["extraction_status"]),
             )
             for item in frames_payload

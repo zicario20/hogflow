@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -9,6 +10,7 @@ import pytest
 from hogflow.annotation.models import DatasetSplit
 from hogflow.core import InputDataError
 from hogflow.data.frame_extraction import (
+    ExtractedFrameRecord,
     ExtractedFrameStatus,
     ImageFormat,
     extract_frames,
@@ -18,6 +20,7 @@ from hogflow.data.frame_extraction import (
 from hogflow.data.frame_selection import (
     ClipSamplingMetadata,
     FrameSelectionSettings,
+    FrameSelectionStrategy,
     create_frame_selection_plan,
 )
 
@@ -148,3 +151,170 @@ def test_extraction_report_is_sanitized_and_deterministic(tmp_path: Path) -> Non
     assert output.read_text(encoding="utf-8") == first
     assert str(source) not in first
     assert source.name not in first
+
+
+def test_seek_retry_recovers_from_a_bounded_decode_hole(monkeypatch, tmp_path: Path) -> None:
+    class FakeCapture:
+        def __init__(self) -> None:
+            self.position_ms = 0.0
+            self.scan_ms = None
+
+        def isOpened(self) -> bool:
+            return True
+
+        def set(self, property_id: int, value: float) -> bool:
+            assert property_id == FakeCV2.CAP_PROP_POS_MSEC
+            self.position_ms = value
+            if value <= 700.0:
+                self.scan_ms = 900.0
+            else:
+                self.scan_ms = None
+            return True
+
+        def read(self):
+            if self.scan_ms is not None:
+                current = self.scan_ms
+                self.scan_ms += 50.0
+                if current > 1100.0:
+                    return False, None
+                self.position_ms = current
+                return True, np.full((12, 16, 3), 7, dtype=np.uint8)
+            if self.position_ms >= 1000.0:
+                return False, None
+            return True, np.full((12, 16, 3), 7, dtype=np.uint8)
+
+        def get(self, property_id: int) -> float:
+            return {
+                FakeCV2.CAP_PROP_FPS: 10.0,
+                FakeCV2.CAP_PROP_POS_MSEC: self.position_ms,
+            }.get(property_id, 0.0)
+
+        def release(self) -> None:
+            return None
+
+    class FakeCV2(SimpleNamespace):
+        CAP_PROP_FPS = 12
+        CAP_PROP_POS_MSEC = 13
+
+        @staticmethod
+        def VideoCapture(_path: str) -> FakeCapture:
+            return FakeCapture()
+
+        @staticmethod
+        def imencode(_extension: str, image):
+            return True, np.frombuffer(image.tobytes(), dtype=np.uint8)
+
+    from hogflow.data import frame_extraction as frame_extraction_module
+
+    monkeypatch.setattr(frame_extraction_module, "_require_cv2", lambda: FakeCV2)
+    source = tmp_path / "synthetic.avi"
+    source.write_bytes(b"placeholder")
+    plan = create_frame_selection_plan(
+        (ClipSamplingMetadata(CLIP_ID, 1.5),),
+        {CLIP_ID: DatasetSplit.TRAIN},
+        settings=FrameSelectionSettings(
+            strategy=FrameSelectionStrategy.TARGET_COUNT,
+            target_frame_count=1,
+            maximum_frames_per_clip=1,
+            start_exclusion_seconds=1.0,
+            end_exclusion_seconds=0.0,
+        ),
+    )
+
+    report = extract_frames(plan, {CLIP_ID: source}, tmp_path / "annotations")
+
+    assert len(report.records) == 1
+    assert report.records[0].status is ExtractedFrameStatus.EXTRACTED
+    assert report.records[0].actual_timestamp_seconds == pytest.approx(1.0)
+
+
+def test_seek_retry_rejects_far_timestamp_substitution(monkeypatch, tmp_path: Path) -> None:
+    class FakeCapture:
+        def __init__(self) -> None:
+            self.position_ms = 0.0
+
+        def isOpened(self) -> bool:
+            return True
+
+        def set(self, property_id: int, value: float) -> bool:
+            assert property_id == FakeCV2.CAP_PROP_POS_MSEC
+            self.position_ms = value
+            return True
+
+        def read(self):
+            self.position_ms = 1800.0
+            return True, np.full((12, 16, 3), 9, dtype=np.uint8)
+
+        def get(self, property_id: int) -> float:
+            return {
+                FakeCV2.CAP_PROP_FPS: 10.0,
+                FakeCV2.CAP_PROP_POS_MSEC: self.position_ms,
+            }.get(property_id, 0.0)
+
+        def release(self) -> None:
+            return None
+
+    class FakeCV2(SimpleNamespace):
+        CAP_PROP_FPS = 12
+        CAP_PROP_POS_MSEC = 13
+
+        @staticmethod
+        def VideoCapture(_path: str) -> FakeCapture:
+            return FakeCapture()
+
+        @staticmethod
+        def imencode(_extension: str, image):
+            return True, np.frombuffer(image.tobytes(), dtype=np.uint8)
+
+    from hogflow.data import frame_extraction as frame_extraction_module
+
+    monkeypatch.setattr(frame_extraction_module, "_require_cv2", lambda: FakeCV2)
+    source = tmp_path / "synthetic.avi"
+    source.write_bytes(b"placeholder")
+    plan = create_frame_selection_plan(
+        (ClipSamplingMetadata(CLIP_ID, 1.5),),
+        {CLIP_ID: DatasetSplit.TRAIN},
+        settings=FrameSelectionSettings(
+            strategy=FrameSelectionStrategy.TARGET_COUNT,
+            target_frame_count=1,
+            maximum_frames_per_clip=1,
+            start_exclusion_seconds=1.0,
+            end_exclusion_seconds=0.0,
+        ),
+    )
+
+    with pytest.raises(InputDataError, match="bounded timestamp tolerance"):
+        extract_frames(plan, {CLIP_ID: source}, tmp_path / "annotations")
+
+
+def test_extracted_frame_temporal_block_id_must_be_opaque() -> None:
+    record = ExtractedFrameRecord(
+        frame_id="4" * 24,
+        clip_id=CLIP_ID,
+        split=DatasetSplit.TRAIN,
+        image_relative_path=f"images/train/{'4' * 24}.png",
+        planned_timestamp_seconds=1.0,
+        actual_timestamp_seconds=1.05,
+        temporal_block_id="block_a",
+        width=64,
+        height=48,
+        checksum_sha256="a" * 64,
+        status=ExtractedFrameStatus.EXTRACTED,
+    )
+
+    assert record.temporal_block_id == "block_a"
+
+    with pytest.raises(InputDataError, match="temporal_block_id"):
+        ExtractedFrameRecord(
+            frame_id="5" * 24,
+            clip_id=CLIP_ID,
+            split=DatasetSplit.TRAIN,
+            image_relative_path=f"images/train/{'5' * 24}.png",
+            planned_timestamp_seconds=1.0,
+            actual_timestamp_seconds=1.05,
+            temporal_block_id="../private",
+            width=64,
+            height=48,
+            checksum_sha256="b" * 64,
+            status=ExtractedFrameStatus.EXTRACTED,
+        )
