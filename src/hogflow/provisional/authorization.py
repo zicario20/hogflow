@@ -41,7 +41,11 @@ class AuthorizedProvisionalVideo:
             raise InputDataError("Provisional video role must be explicit.")
         if _EXPECTED_ROLES[self.video_id] != self.role.value:
             raise InputDataError("Provisional video role does not match the authorized identifier.")
-        if not isinstance(self.basename, str) or not self.basename or self.basename != self.basename.strip():
+        if (
+            not isinstance(self.basename, str)
+            or not self.basename
+            or self.basename != self.basename.strip()
+        ):
             raise InputDataError("Provisional video basename must be non-empty sanitized text.")
         candidate = Path(self.basename)
         if (

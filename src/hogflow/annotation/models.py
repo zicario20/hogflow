@@ -256,9 +256,8 @@ class AnnotationDatasetManifest:
             raise InputDataError("Manifest frames must have unique IDs in sorted order.")
         if not isinstance(self.split_policy, AnnotationSplitPolicy):
             raise InputDataError("split_policy must be an AnnotationSplitPolicy value.")
-        if (
-            not isinstance(self.temporal_blocks, tuple)
-            or not all(isinstance(block, TemporalBlock) for block in self.temporal_blocks)
+        if not isinstance(self.temporal_blocks, tuple) or not all(
+            isinstance(block, TemporalBlock) for block in self.temporal_blocks
         ):
             raise InputDataError("temporal_blocks must be an immutable TemporalBlock tuple.")
         if self.split_policy is AnnotationSplitPolicy.SOURCE_ISOLATED:

@@ -85,9 +85,7 @@ def test_temporal_blocks_reject_more_than_one_source_clip(tmp_path: Path) -> Non
 
     report = validate_annotation_dataset(tmp_path, manifest)
 
-    assert "temporal_policy_requires_single_clip" in {
-        finding.code for finding in report.findings
-    }
+    assert "temporal_policy_requires_single_clip" in {finding.code for finding in report.findings}
     assert not report.valid
 
 
@@ -133,7 +131,9 @@ def _temporal_manifest(
 
 def _missing_timestamp_manifest(root: Path) -> tuple[AnnotationDatasetManifest, Path]:
     first = _record(root, FRAME_A, DatasetSplit.TRAIN, timestamp=None, value=30, block_id="block_a")
-    second = _record(root, FRAME_B, DatasetSplit.VALIDATION, timestamp=6.0, value=60, block_id="block_b")
+    second = _record(
+        root, FRAME_B, DatasetSplit.VALIDATION, timestamp=6.0, value=60, block_id="block_b"
+    )
     _write_labels(root, first, second)
     manifest = AnnotationDatasetManifest(
         schema_version=2,

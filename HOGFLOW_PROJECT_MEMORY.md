@@ -4,8 +4,9 @@
 > `AGENTS.md`, no en sustitución de sus reglas normativas.
 
 Última reconstrucción integral: 25 de julio de 2026.
-Última actualización incremental: diseño visual HMI industrial posterior a
-Phase 10.3, 8 de agosto de 2026.
+Última actualización incremental: preparación local provisional Phase 10.3A
+(autorización exacta, split temporal, planeación A/B y anotador), 30 de agosto
+de 2026.
 
 Línea base técnica de Phase 10.3:
 `e14bf5b5d73b886ff9834b606787ca58872c65b2`
@@ -1007,13 +1008,48 @@ Resumen de madurez:
 - **Estado:** infraestructura técnica implementada; validación empírica del
   detector/tracking/counting bloqueada por modelo y ground truth ausentes.
 
-### 5.27 Estado de las fases posteriores
+### 5.27 Phase 10.3A — Provisional Pig Dataset & Demo Model Preparation
+
+- **Objetivo:** desbloquear la primera validación empírica pig-specific sin
+  alterar el catálogo estricto de Phase 10.3 ni convertir la validación en
+  discovery arbitrario de media.
+- **Entregado:** paquete local `hogflow.provisional` con manifest exacto de dos
+  videos, IDs sanitizados `demo_video_a`/`demo_video_b`, roles explícitos de
+  desarrollo e independencia, y planeación determinista A/B sobre los contratos
+  de Phase 4.2; extensión opcional de `hogflow.annotation` y
+  `hogflow.data.frame_selection` para política `temporal_blocked`; extracción
+  tolerante con `temporal_block_id` en `hogflow.data.frame_extraction`; helper
+  local de anotación `scripts/annotate_pigs.py` con guardado YOLO clase `pig`
+  (`class_id = 0`), progreso reanudable y controles mínimos `Previous`, `Next`,
+  `Save`, `Mark Empty`, `Delete Box` y `Redraw Selected`.
+- **Decisiones:** los únicos inputs autorizados para esta subfase son
+  `video A.mp4` y `video B.mp4` en `data/raw/`, preservados como ignorados y
+  no versionados; `demo_video_a` queda reservado a desarrollo con separación
+  temporal y `demo_video_b` como holdout independiente; el catálogo estricto de
+  Phase 10.3 permanece sin cambios; si faltan cajas humanas, el flujo debe
+  detenerse en `HUMAN ANNOTATION REQUIRED` en vez de fabricar labels o entrenar.
+- **Evidencia local:** ambos videos autorizados existen y son legibles. Metadata
+  inspeccionada: ambos HEVC, 1320×2868; `video A.mp4` 557 frames,
+  11.173333 s, `avg_frame_rate 83550/1769`; `video B.mp4` 583 frames,
+  18.098333 s, `avg_frame_rate 174900/5591`. El workspace ignorado
+  `data/annotations/phase10_3a_tolerance/` fue reconstruido localmente con
+  `48` frames `train`, `16` `validation` y `36` `test`; el peor desvío absoluto
+  entre timestamp planificado y resuelto fue `0.07828556233333295 s`, con `0`
+  frames por encima de `0.1 s`.
+- **Estado:** preparación técnica local implementada y material de anotación
+  listo; training del detector, artifact final, integración end-to-end y
+  métricas de conteo siguen bloqueados hasta completar bounding boxes humanas
+  validadas. Los manual crossing totals continúan `UNKNOWN` y no deben
+  fabricarse.
+
+### 5.28 Estado de las fases posteriores
 
 Phase 9 está técnicamente completada según sus subfases autorizadas; Phase
 10.1 implementa runtime supervision, Phase 10.2 integra el boundary local de
 detector y Phase 10.3 implementa el workflow de validación sin completar la
-evidencia empírica. Persistencia Phase 10, Phase 10.4 y Phase 11–16 no están
-iniciadas:
+evidencia empírica. Phase 10.3A añade solo la preparación local provisional y
+permanece bloqueada en anotación humana. Persistencia Phase 10, Phase 10.4 y
+Phase 11–16 no están iniciadas:
 
 | Fase | Alcance normativo | Estado |
 | --- | --- | --- |

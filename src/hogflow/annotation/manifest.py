@@ -11,11 +11,11 @@ from typing import Any, Mapping, Sequence
 
 from hogflow.annotation.models import (
     ANNOTATION_POLICY_VERSION,
-    AnnotationSplitPolicy,
     PIG_CLASS_ID,
     PIG_CLASS_NAME,
     AnnotationDatasetManifest,
     AnnotationFrameRecord,
+    AnnotationSplitPolicy,
     AnnotationStatus,
     DatasetSplit,
     ManifestValidationStatus,

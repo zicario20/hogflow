@@ -607,7 +607,9 @@ def write_status_map(path: str | Path, payload: dict[str, Any]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Local-only HogFlow pig box annotation helper.")
     parser.add_argument("--dataset", type=Path, required=True)
-    parser.add_argument("--manifest", "--extraction-report", dest="extraction_report", type=Path, required=True)
+    parser.add_argument(
+        "--manifest", "--extraction-report", dest="extraction_report", type=Path, required=True
+    )
     parser.add_argument("--status-map", type=Path, required=True)
     return parser
 
@@ -671,7 +673,9 @@ def _required_positive_int(payload: dict[str, Any], field_name: str) -> int:
     return value
 
 
-def _prune_unknown_status_entries(status_map: dict[str, Any], *, allowed_frame_ids: set[str]) -> None:
+def _prune_unknown_status_entries(
+    status_map: dict[str, Any], *, allowed_frame_ids: set[str]
+) -> None:
     frames = status_map["frames"]
     for frame_id in tuple(frames):
         if frame_id not in allowed_frame_ids:
