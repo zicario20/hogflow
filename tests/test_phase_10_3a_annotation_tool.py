@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import sys
@@ -130,3 +131,23 @@ def test_annotation_script_stays_local_to_annotation_dependencies() -> None:
         "hogflow.counting",
     ):
         assert forbidden not in source
+
+
+def test_widget_constructors_use_scalar_internal_padding() -> None:
+    tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
+    violations: list[str] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr not in {"Frame", "Label", "Button", "Canvas"}:
+            continue
+        for keyword in node.keywords:
+            if keyword.arg not in {"padx", "pady"}:
+                continue
+            if isinstance(keyword.value, ast.Tuple):
+                violations.append(f"{node.func.attr}:{keyword.arg}:{node.lineno}")
+
+    assert not violations

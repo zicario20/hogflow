@@ -352,8 +352,8 @@ class PigAnnotatorApplication:
         self._canvas.bind("<B1-Motion>", self._on_left_drag)
         self._canvas.bind("<ButtonRelease-1>", self._on_left_release)
 
-        controls = self._tk.Frame(self._root, padx=12, pady=(0, 12))
-        controls.pack(fill="x")
+        controls = self._tk.Frame(self._root, padx=12, pady=12)
+        controls.pack(fill="x", pady=(0, 12))
         self._add_button(controls, "Previous", self._go_previous)
         self._add_button(controls, "Next", self._go_next)
         self._add_button(controls, "Save", self._save_current)
