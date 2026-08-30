@@ -20,6 +20,7 @@ from hogflow.provisional.frame_plan import (
     build_phase10_3a_sampling_metadata,
     create_phase10_3a_frame_selection_plan,
     summarize_phase10_3a_frame_selection_plan,
+    write_phase10_3a_frame_selection_plan,
     write_phase10_3a_plan_summary,
 )
 
@@ -103,6 +104,28 @@ def test_summary_contains_temporal_boundaries_without_private_paths(tmp_path: Pa
     assert "video A.mp4" not in output.read_text(encoding="utf-8")
     assert "video B.mp4" not in output.read_text(encoding="utf-8")
     assert str(tmp_path).replace("\\", "/") not in output.read_text(encoding="utf-8")
+
+
+def test_plan_writer_keeps_explicit_per_block_targets(tmp_path: Path) -> None:
+    plan = create_phase10_3a_frame_selection_plan(_metadata(), settings=_settings())
+    summary = summarize_phase10_3a_frame_selection_plan(plan, _metadata(), settings=_settings())
+    output = tmp_path / "phase10_3a_plan.json"
+
+    write_phase10_3a_frame_selection_plan(plan, summary, output)
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["settings"]["strategy"] == FrameSelectionStrategy.TARGET_COUNT.value
+    assert payload["phase10_3a_block_plan"]["settings_scope"] == (
+        "composite_defaults_plus_explicit_block_targets"
+    )
+    assert {
+        block["block_id"]: block["target_frame_count"]
+        for block in payload["phase10_3a_block_plan"]["blocks"]
+    } == {
+        TRAIN_BLOCK_ID: TRAIN_FRAME_TARGET,
+        CALIBRATION_BLOCK_ID: CALIBRATION_FRAME_TARGET,
+        HOLDOUT_BLOCK_ID: HOLDOUT_FRAME_TARGET,
+    }
 
 
 def test_metadata_requires_exact_authorized_video_ids() -> None:

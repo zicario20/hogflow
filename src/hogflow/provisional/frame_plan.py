@@ -19,6 +19,7 @@ from hogflow.data.frame_selection import (
     FrameSelectionStrategy,
     PlannedFrame,
     create_frame_selection_plan,
+    write_frame_selection_plan,
 )
 
 DEMO_VIDEO_A_ID = "demo_video_a"
@@ -243,6 +244,39 @@ def write_phase10_3a_plan_summary(summary: Phase10_3aPlanSummary, path: str | Pa
     _atomic_write_json(Path(path), payload)
 
 
+def write_phase10_3a_frame_selection_plan(
+    plan: FrameSelectionPlan,
+    summary: Phase10_3aPlanSummary,
+    path: str | Path,
+) -> None:
+    """Write the generic plan plus explicit per-block targets for composite planning."""
+
+    if not isinstance(plan, FrameSelectionPlan):
+        raise InputDataError("plan must be FrameSelectionPlan.")
+    if not isinstance(summary, Phase10_3aPlanSummary):
+        raise InputDataError("summary must be Phase10_3aPlanSummary.")
+    destination = Path(path)
+    write_frame_selection_plan(plan, destination)
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+    payload["phase10_3a_block_plan"] = {
+        "effective_strategy": plan.settings.strategy.value,
+        "settings_scope": "composite_defaults_plus_explicit_block_targets",
+        "blocks": [
+            {
+                "block_id": block.block_id,
+                "clip_id": block.clip_id,
+                "end_seconds": block.end_seconds,
+                "split": block.split.value,
+                "start_seconds": block.start_seconds,
+                "target_frame_count": block.target_frame_count,
+                "video_id": block.video_id,
+            }
+            for block in summary.blocks
+        ],
+    }
+    _atomic_write_json(destination, payload)
+
+
 def _validated_metadata(
     metadata_by_video_id: Mapping[str, ClipSamplingMetadata],
 ) -> dict[str, ClipSamplingMetadata]:
@@ -396,5 +430,6 @@ __all__ = [
     "declared_phase10_3a_blocks",
     "phase10_3a_clip_id",
     "summarize_phase10_3a_frame_selection_plan",
+    "write_phase10_3a_frame_selection_plan",
     "write_phase10_3a_plan_summary",
 ]
