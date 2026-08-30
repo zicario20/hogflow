@@ -7,13 +7,16 @@ import pytest
 
 from hogflow.annotation.models import DatasetSplit
 from hogflow.core import InputDataError
-from hogflow.data.frame_selection import FrameSelectionSettings
+from hogflow.data.frame_selection import FrameSelectionSettings, FrameSelectionStrategy
 from hogflow.provisional.frame_plan import (
     CALIBRATION_BLOCK_ID,
+    CALIBRATION_FRAME_TARGET,
     DEMO_A_CLIP_ID,
     DEMO_B_CLIP_ID,
     HOLDOUT_BLOCK_ID,
+    HOLDOUT_FRAME_TARGET,
     TRAIN_BLOCK_ID,
+    TRAIN_FRAME_TARGET,
     build_phase10_3a_sampling_metadata,
     create_phase10_3a_frame_selection_plan,
     summarize_phase10_3a_frame_selection_plan,
@@ -47,6 +50,20 @@ def test_plan_is_deterministic_and_contains_no_duplicate_timestamps() -> None:
     assert len({(frame.clip_id, frame.planned_timestamp_seconds) for frame in first.frames}) == len(
         first.frames
     )
+    assert first.settings.strategy is FrameSelectionStrategy.TARGET_COUNT
+
+
+def test_plan_uses_expected_split_counts_and_target_count_metadata() -> None:
+    plan = create_phase10_3a_frame_selection_plan(_metadata(), settings=_settings())
+
+    assert sum(frame.split is DatasetSplit.TRAIN for frame in plan.frames) == TRAIN_FRAME_TARGET
+    assert (
+        sum(frame.split is DatasetSplit.VALIDATION for frame in plan.frames)
+        == CALIBRATION_FRAME_TARGET
+    )
+    assert sum(frame.split is DatasetSplit.TEST for frame in plan.frames) == HOLDOUT_FRAME_TARGET
+    assert plan.settings.target_frame_count == TRAIN_FRAME_TARGET
+    assert plan.settings.maximum_frames_per_clip == TRAIN_FRAME_TARGET
 
 
 def test_video_b_frames_are_holdout_only() -> None:

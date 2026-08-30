@@ -8,7 +8,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from hogflow.annotation.models import DatasetSplit, validate_opaque_identifier
 from hogflow.core import InputDataError, phase4_clip_id
@@ -147,7 +147,7 @@ def create_phase10_3a_frame_selection_plan(
         warnings.update(block_plan.warnings)
         frames.extend(block_plan.frames)
     return FrameSelectionPlan(
-        settings=settings,
+        settings=_effective_plan_settings(settings, blocks),
         frames=tuple(sorted(frames, key=_frame_sort_key)),
         warnings=tuple(sorted(warnings)),
     )
@@ -262,6 +262,21 @@ def _validated_metadata(
     if metadata[DEMO_VIDEO_A_ID].duration_seconds <= TEMPORAL_BUFFER_SECONDS:
         raise InputDataError("demo_video_a is too short for a positive temporal split buffer.")
     return metadata
+
+
+def _effective_plan_settings(
+    settings: FrameSelectionSettings,
+    blocks: Sequence[Phase10_3aFrameBlock],
+) -> FrameSelectionSettings:
+    target_frame_count = max(block.target_frame_count for block in blocks)
+    return FrameSelectionSettings(
+        strategy=FrameSelectionStrategy.TARGET_COUNT,
+        interval_seconds=settings.interval_seconds,
+        target_frame_count=target_frame_count,
+        maximum_frames_per_clip=target_frame_count,
+        start_exclusion_seconds=settings.start_exclusion_seconds,
+        end_exclusion_seconds=settings.end_exclusion_seconds,
+    )
 
 
 def _development_boundaries(

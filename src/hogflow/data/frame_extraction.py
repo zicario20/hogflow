@@ -29,6 +29,9 @@ from hogflow.core import (
 from hogflow.data.frame_selection import FrameSelectionPlan, PlannedFrame, read_frame_selection_plan
 
 LOGGER = get_logger(__name__)
+SEEK_RETRY_WINDOW_SECONDS = 0.4
+MINIMUM_SEEK_RETRY_STEP_SECONDS = 0.02
+DEFAULT_SEEK_RETRY_STEP_SECONDS = 0.05
 
 
 class ImageFormat(str, Enum):
@@ -297,10 +300,11 @@ def _extract_clip_frames(
     extension = f".{image_format.value}"
     try:
         for planned in sorted(frames, key=lambda frame: frame.planned_timestamp_seconds):
-            capture.set(cv2.CAP_PROP_POS_MSEC, planned.planned_timestamp_seconds * 1000.0)
-            ok, image = capture.read()
-            if not ok or image is None or getattr(image, "size", 0) == 0:
-                raise InputDataError(f"Unable to decode planned opaque frame {planned.frame_id!r}.")
+            image, actual_seconds = _decode_frame_with_seek_retry(
+                capture,
+                planned,
+                cv2_module=cv2,
+            )
             height, width = image.shape[:2]
             if width <= 0 or height <= 0:
                 raise InputDataError(
@@ -314,8 +318,6 @@ def _extract_clip_frames(
             image_relative_path = f"images/{planned.split.value}/{planned.frame_id}{extension}"
             destination = output_root / _relative_workspace_path(image_relative_path)
             status = _write_or_verify_image(destination, content, frame_id=planned.frame_id)
-            actual_msec = capture.get(cv2.CAP_PROP_POS_MSEC)
-            actual_seconds = actual_msec / 1000.0 if actual_msec >= 0 else None
             records.append(
                 ExtractedFrameRecord(
                     frame_id=planned.frame_id,
@@ -334,6 +336,57 @@ def _extract_clip_frames(
     finally:
         capture.release()
     return records
+
+
+def _decode_frame_with_seek_retry(
+    capture: Any,
+    planned: PlannedFrame,
+    *,
+    cv2_module: Any,
+) -> tuple[Any, float | None]:
+    for candidate_seconds in _seek_retry_candidates(
+        capture, planned.planned_timestamp_seconds, cv2_module
+    ):
+        capture.set(cv2_module.CAP_PROP_POS_MSEC, candidate_seconds * 1000.0)
+        ok, image = capture.read()
+        if ok and image is not None and getattr(image, "size", 0) != 0:
+            actual_msec = capture.get(cv2_module.CAP_PROP_POS_MSEC)
+            actual_seconds = actual_msec / 1000.0 if actual_msec >= 0 else None
+            return image, actual_seconds
+    raise InputDataError(
+        f"Unable to decode planned opaque frame {planned.frame_id!r} after bounded seek retry."
+    )
+
+
+def _seek_retry_candidates(
+    capture: Any,
+    timestamp_seconds: float,
+    cv2_module: Any,
+) -> tuple[float, ...]:
+    step_seconds = _seek_retry_step_seconds(capture, cv2_module)
+    maximum_steps = max(1, math.ceil(SEEK_RETRY_WINDOW_SECONDS / step_seconds))
+    values: list[float] = [round(timestamp_seconds, 9)]
+    seen = {values[0]}
+    for distance in range(1, maximum_steps + 1):
+        for direction in (-1, 1):
+            candidate = round(timestamp_seconds + (distance * step_seconds * direction), 9)
+            if candidate < 0 or candidate in seen:
+                continue
+            seen.add(candidate)
+            values.append(candidate)
+    return tuple(values)
+
+
+def _seek_retry_step_seconds(capture: Any, cv2_module: Any) -> float:
+    fps = capture.get(cv2_module.CAP_PROP_FPS)
+    if (
+        isinstance(fps, (int, float))
+        and not isinstance(fps, bool)
+        and math.isfinite(fps)
+        and fps > 0
+    ):
+        return max(MINIMUM_SEEK_RETRY_STEP_SECONDS, 1.0 / fps)
+    return DEFAULT_SEEK_RETRY_STEP_SECONDS
 
 
 def _relative_workspace_path(value: str) -> Path:
