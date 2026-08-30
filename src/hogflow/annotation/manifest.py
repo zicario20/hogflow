@@ -20,6 +20,7 @@ from hogflow.annotation.models import (
     DatasetSplit,
     ManifestValidationStatus,
     TemporalBlock,
+    validate_opaque_identifier,
 )
 from hogflow.core import HogFlowError, InputDataError, configure_logging, get_logger
 
@@ -228,18 +229,55 @@ def prepare_manifest(
     extraction_report_path: str | Path,
     status_map_path: str | Path,
     frame_plan_path: str | Path | None = None,
+    temporal_block_ids: Sequence[str] | None = None,
     output_path: str | Path,
 ) -> AnnotationDatasetManifest:
     """Load local sanitized inputs, build a manifest, and write it."""
 
+    if temporal_block_ids is not None:
+        requested_block_ids = _normalize_temporal_block_ids(temporal_block_ids)
+        if frame_plan_path is None:
+            raise InputDataError("Temporal block scope requires an explicit local frame plan.")
+    else:
+        requested_block_ids = None
+
+    extraction_report = _load_json_object(extraction_report_path, description="extraction report")
+    status_map = _load_json_object(status_map_path, description="annotation status map")
     split_policy = AnnotationSplitPolicy.SOURCE_ISOLATED
     temporal_blocks: tuple[TemporalBlock, ...] = ()
     if frame_plan_path is not None:
-        temporal_blocks = _load_temporal_blocks_from_frame_plan(frame_plan_path)
-        split_policy = AnnotationSplitPolicy.TEMPORAL_BLOCKED
+        all_temporal_blocks = _load_temporal_blocks_from_frame_plan(frame_plan_path)
+        temporal_blocks = all_temporal_blocks
+        if requested_block_ids is not None:
+            blocks_by_id = {block.block_id: block for block in all_temporal_blocks}
+            unknown_block_ids = sorted(set(requested_block_ids) - set(blocks_by_id))
+            if unknown_block_ids:
+                raise InputDataError(
+                    "Requested scope contains an unknown temporal block: "
+                    + ", ".join(unknown_block_ids)
+                )
+            temporal_blocks = tuple(
+                block for block in all_temporal_blocks if block.block_id in requested_block_ids
+            )
+            extraction_report, status_map = _scope_manifest_inputs(
+                extraction_report,
+                status_map,
+                block_ids=set(requested_block_ids),
+            )
+            if any(block.split is DatasetSplit.TEST for block in temporal_blocks):
+                if len(temporal_blocks) != 1 or temporal_blocks[0].split is not DatasetSplit.TEST:
+                    raise InputDataError(
+                        "A test temporal block must be prepared as its own holdout manifest."
+                    )
+                split_policy = AnnotationSplitPolicy.SOURCE_ISOLATED
+                temporal_blocks = ()
+            else:
+                split_policy = AnnotationSplitPolicy.TEMPORAL_BLOCKED
+        else:
+            split_policy = AnnotationSplitPolicy.TEMPORAL_BLOCKED
     manifest = build_annotation_manifest(
-        _load_json_object(extraction_report_path, description="extraction report"),
-        _load_json_object(status_map_path, description="annotation status map"),
+        extraction_report,
+        status_map,
         split_policy=split_policy,
         temporal_blocks=temporal_blocks,
     )
@@ -256,6 +294,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--extraction-report", type=Path, required=True)
     parser.add_argument("--status-map", type=Path, required=True)
     parser.add_argument("--frame-plan", type=Path)
+    parser.add_argument(
+        "--block-id",
+        dest="temporal_block_ids",
+        action="append",
+        metavar="BLOCK_ID",
+        help="Limit a frame plan to one or more explicit temporal block IDs.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -271,12 +316,58 @@ def main(argv: Sequence[str] | None = None) -> int:
             extraction_report_path=arguments.extraction_report,
             status_map_path=arguments.status_map,
             frame_plan_path=arguments.frame_plan,
+            temporal_block_ids=arguments.temporal_block_ids,
             output_path=arguments.output,
         )
     except HogFlowError as exc:
         parser.error(str(exc))
     LOGGER.info("Annotation manifest complete: %d opaque frames", len(manifest.frames))
     return 0
+
+
+def _normalize_temporal_block_ids(value: Sequence[str]) -> tuple[str, ...]:
+    if isinstance(value, (str, bytes)):
+        raise InputDataError("Temporal block scope must contain one or more block IDs.")
+    block_ids = tuple(value)
+    if not block_ids:
+        raise InputDataError("Temporal block scope must contain one or more block IDs.")
+    for block_id in block_ids:
+        validate_opaque_identifier(block_id, field_name="temporal_block_id")
+    if len(set(block_ids)) != len(block_ids):
+        raise InputDataError("Temporal block scope must not contain duplicate block IDs.")
+    return block_ids
+
+
+def _scope_manifest_inputs(
+    extraction_report: Mapping[str, Any],
+    status_map: Mapping[str, Any],
+    *,
+    block_ids: set[str],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    records = extraction_report.get("records")
+    statuses = status_map.get("frames")
+    if not isinstance(records, list) or not isinstance(statuses, dict):
+        raise InputDataError("Manifest scope inputs have an invalid structure.")
+    scoped_records = [
+        record
+        for record in records
+        if isinstance(record, dict) and record.get("temporal_block_id") in block_ids
+    ]
+    if not scoped_records:
+        raise InputDataError("Requested temporal block scope contains no extracted frames.")
+    scoped_frame_ids: set[str] = set()
+    for record in scoped_records:
+        frame_id = record.get("frame_id")
+        if not isinstance(frame_id, str):
+            raise InputDataError("Manifest scope contains a record with an invalid frame ID.")
+        scoped_frame_ids.add(frame_id)
+    scoped_statuses = {
+        frame_id: status for frame_id, status in statuses.items() if frame_id in scoped_frame_ids
+    }
+    return (
+        {**extraction_report, "records": scoped_records},
+        {**status_map, "frames": scoped_statuses},
+    )
 
 
 def _enforce_source_split_isolation(frames: Sequence[AnnotationFrameRecord]) -> None:
@@ -306,14 +397,10 @@ def _load_temporal_blocks_from_frame_plan(path: str | Path) -> tuple[TemporalBlo
     payload = _load_json_object(path, description="frame plan")
     block_plan = payload.get("phase10_3a_block_plan")
     if not isinstance(block_plan, dict):
-        raise InputDataError(
-            "The local frame plan must contain phase10_3a_block_plan.blocks."
-        )
+        raise InputDataError("The local frame plan must contain phase10_3a_block_plan.blocks.")
     blocks_payload = block_plan.get("blocks")
     if not isinstance(blocks_payload, list) or not blocks_payload:
-        raise InputDataError(
-            "The local frame plan must contain phase10_3a_block_plan.blocks."
-        )
+        raise InputDataError("The local frame plan must contain phase10_3a_block_plan.blocks.")
     temporal_blocks: list[TemporalBlock] = []
     for item in blocks_payload:
         if not isinstance(item, dict):

@@ -129,23 +129,45 @@ class AnnotationValidationReport:
 def validate_annotation_dataset(
     dataset_root: str | Path,
     manifest: AnnotationDatasetManifest,
+    *,
+    scope_to_manifest: bool = False,
 ) -> AnnotationValidationReport:
-    """Validate a prepared local YOLO dataset without exposing source paths."""
+    """Validate a prepared local YOLO dataset without exposing source paths.
+
+    ``scope_to_manifest`` is an explicit opt-in for a manifest that represents
+    one partition of a shared ignored workspace.  It validates every image and
+    label referenced by that manifest while leaving files belonging to other
+    explicit partitions untouched.  The default continues to reject
+    unregistered files for ordinary prepared-dataset validation.
+    """
 
     if not isinstance(manifest, AnnotationDatasetManifest):
         raise InputDataError("manifest must be AnnotationDatasetManifest.")
+    if not isinstance(scope_to_manifest, bool):
+        raise InputDataError("scope_to_manifest must be a boolean.")
     root = Path(dataset_root)
     findings: list[ValidationFinding] = []
-    images = _discover_images(root, findings)
-    labels = _discover_labels(root, findings)
     records = {frame.frame_id: frame for frame in manifest.frames}
+    expected_images = (
+        {root / Path(*frame.image_relative_path.split("/")) for frame in manifest.frames}
+        if scope_to_manifest
+        else None
+    )
+    expected_labels = (
+        {root / "labels" / frame.split.value / f"{frame.frame_id}.txt" for frame in manifest.frames}
+        if scope_to_manifest
+        else None
+    )
+    images = _discover_images(root, findings, allowed_paths=expected_images)
+    labels = _discover_labels(root, findings, allowed_paths=expected_labels)
 
     if manifest.split_policy is AnnotationSplitPolicy.SOURCE_ISOLATED:
         _validate_source_split_isolation(manifest.frames, findings)
     else:
         _validate_temporal_blocks(manifest.frames, manifest.temporal_blocks, findings)
     _validate_duplicate_frame_locations(images, findings)
-    _validate_orphan_and_unregistered_files(images, labels, records, findings)
+    if not scope_to_manifest:
+        _validate_orphan_and_unregistered_files(images, labels, records, findings)
 
     content_hashes: dict[str, list[tuple[str, DatasetSplit]]] = {}
     for record in manifest.frames:
@@ -212,12 +234,14 @@ def run_validation(
     dataset_root: str | Path,
     manifest_path: str | Path,
     output_path: str | Path,
+    scope_to_manifest: bool = False,
 ) -> AnnotationValidationReport:
     """Load a manifest, validate the local dataset, and write all reports."""
 
     report = validate_annotation_dataset(
         dataset_root,
         load_annotation_manifest(manifest_path),
+        scope_to_manifest=scope_to_manifest,
     )
     write_validation_reports(report, output_path)
     return report
@@ -230,6 +254,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--scope-to-manifest",
+        action="store_true",
+        help="Validate only files explicitly referenced by the manifest.",
+    )
     return parser
 
 
@@ -245,6 +274,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             dataset_root=arguments.dataset,
             manifest_path=manifest_path,
             output_path=arguments.output,
+            scope_to_manifest=arguments.scope_to_manifest,
         )
     except HogFlowError as exc:
         parser.error(str(exc))
@@ -259,6 +289,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _discover_images(
     root: Path,
     findings: list[ValidationFinding],
+    *,
+    allowed_paths: set[Path] | None = None,
 ) -> dict[str, tuple[Path, ...]]:
     image_root = root / "images"
     found: dict[str, list[Path]] = {}
@@ -272,6 +304,8 @@ def _discover_images(
         )
         return {}
     for path in sorted(item for item in image_root.rglob("*") if item.is_file()):
+        if allowed_paths is not None and path not in allowed_paths:
+            continue
         if path.suffix.lower() not in SUPPORTED_IMAGE_EXTENSIONS:
             findings.append(
                 ValidationFinding(
@@ -288,6 +322,8 @@ def _discover_images(
 def _discover_labels(
     root: Path,
     findings: list[ValidationFinding],
+    *,
+    allowed_paths: set[Path] | None = None,
 ) -> dict[str, tuple[Path, ...]]:
     label_root = root / "labels"
     found: dict[str, list[Path]] = {}
@@ -301,6 +337,8 @@ def _discover_labels(
         )
         return {}
     for path in sorted(item for item in label_root.rglob("*") if item.is_file()):
+        if allowed_paths is not None and path not in allowed_paths:
+            continue
         if path.suffix.lower() != ".txt":
             findings.append(
                 ValidationFinding(
