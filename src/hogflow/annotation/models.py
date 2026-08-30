@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePosixPath
@@ -41,6 +42,13 @@ class ManifestValidationStatus(str, Enum):
     PENDING = "pending"
     VALID = "valid"
     INVALID = "invalid"
+
+
+class AnnotationSplitPolicy(str, Enum):
+    """Explicit split-isolation policy for one annotation manifest."""
+
+    SOURCE_ISOLATED = "source_isolated"
+    TEMPORAL_BLOCKED = "temporal_blocked"
 
 
 def validate_opaque_identifier(value: object, *, field_name: str) -> None:
@@ -127,6 +135,8 @@ class AnnotationFrameRecord:
     annotation_status: AnnotationStatus
     bounding_box_count: int
     checksum_sha256: str
+    source_timestamp_seconds: float | None = None
+    temporal_block_id: str | None = None
     validation_status: ManifestValidationStatus = ManifestValidationStatus.PENDING
 
     def __post_init__(self) -> None:
@@ -173,8 +183,45 @@ class AnnotationFrameRecord:
             or fullmatch(_CHECKSUM_PATTERN, self.checksum_sha256) is None
         ):
             raise InputDataError("checksum_sha256 must be 64 lowercase hexadecimal characters.")
+        if self.source_timestamp_seconds is not None and (
+            not isinstance(self.source_timestamp_seconds, (int, float))
+            or isinstance(self.source_timestamp_seconds, bool)
+            or not math.isfinite(self.source_timestamp_seconds)
+            or self.source_timestamp_seconds < 0
+        ):
+            raise InputDataError("source_timestamp_seconds must be finite and non-negative.")
+        if self.temporal_block_id is not None:
+            validate_opaque_identifier(self.temporal_block_id, field_name="temporal_block_id")
         if not isinstance(self.validation_status, ManifestValidationStatus):
             raise InputDataError("validation_status must be a ManifestValidationStatus value.")
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalBlock:
+    """One explicit time interval assigned to one split inside one source clip."""
+
+    block_id: str
+    clip_id: str
+    split: DatasetSplit
+    start_seconds: float
+    end_seconds: float
+
+    def __post_init__(self) -> None:
+        validate_opaque_identifier(self.block_id, field_name="block_id")
+        validate_phase4_identifier(self.clip_id, field_name="clip_id")
+        if not isinstance(self.split, DatasetSplit):
+            raise InputDataError("split must be a DatasetSplit value.")
+        for field_name in ("start_seconds", "end_seconds"):
+            value = getattr(self, field_name)
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise InputDataError(f"{field_name} must be finite and non-negative.")
+        if self.end_seconds <= self.start_seconds:
+            raise InputDataError("Temporal block end_seconds must be greater than start_seconds.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,10 +233,12 @@ class AnnotationDatasetManifest:
     annotation_policy_version: str
     class_map: tuple[tuple[int, str], ...]
     frames: tuple[AnnotationFrameRecord, ...]
+    split_policy: AnnotationSplitPolicy = AnnotationSplitPolicy.SOURCE_ISOLATED
+    temporal_blocks: tuple[TemporalBlock, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.schema_version != 1 or isinstance(self.schema_version, bool):
-            raise InputDataError("Annotation manifest schema_version must be 1.")
+        if self.schema_version not in {1, 2} or isinstance(self.schema_version, bool):
+            raise InputDataError("Annotation manifest schema_version must be 1 or 2.")
         validate_opaque_identifier(self.dataset_id, field_name="dataset_id")
         if (
             not isinstance(self.annotation_policy_version, str)
@@ -205,10 +254,33 @@ class AnnotationDatasetManifest:
         frame_ids = tuple(frame.frame_id for frame in self.frames)
         if tuple(sorted(frame_ids)) != frame_ids or len(set(frame_ids)) != len(frame_ids):
             raise InputDataError("Manifest frames must have unique IDs in sorted order.")
+        if not isinstance(self.split_policy, AnnotationSplitPolicy):
+            raise InputDataError("split_policy must be an AnnotationSplitPolicy value.")
+        if (
+            not isinstance(self.temporal_blocks, tuple)
+            or not all(isinstance(block, TemporalBlock) for block in self.temporal_blocks)
+        ):
+            raise InputDataError("temporal_blocks must be an immutable TemporalBlock tuple.")
+        if self.split_policy is AnnotationSplitPolicy.SOURCE_ISOLATED:
+            if self.schema_version != 1:
+                raise InputDataError("Source-isolated manifests must use schema_version 1.")
+            if self.temporal_blocks:
+                raise InputDataError("Source-isolated manifests cannot define temporal blocks.")
+        else:
+            if self.schema_version != 2:
+                raise InputDataError("Temporal-blocked manifests must use schema_version 2.")
+            if not self.temporal_blocks:
+                raise InputDataError("Temporal-blocked manifests require temporal blocks.")
+            block_ids = tuple(block.block_id for block in self.temporal_blocks)
+            if tuple(sorted(block_ids)) != block_ids or len(set(block_ids)) != len(block_ids):
+                raise InputDataError(
+                    "Temporal blocks must have unique IDs in deterministic sorted order."
+                )
 
 
 __all__ = [
     "ANNOTATION_POLICY_VERSION",
+    "AnnotationSplitPolicy",
     "PIG_CLASS_ID",
     "PIG_CLASS_NAME",
     "AnnotationDatasetManifest",
@@ -218,6 +290,7 @@ __all__ = [
     "FrameAnnotation",
     "ManifestValidationStatus",
     "PigAnnotation",
+    "TemporalBlock",
     "validate_opaque_identifier",
     "validate_phase4_identifier",
     "validate_relative_workspace_path",

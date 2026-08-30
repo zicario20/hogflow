@@ -18,8 +18,10 @@ from hogflow.annotation.manifest import load_annotation_manifest
 from hogflow.annotation.models import (
     AnnotationDatasetManifest,
     AnnotationFrameRecord,
+    AnnotationSplitPolicy,
     AnnotationStatus,
     DatasetSplit,
+    TemporalBlock,
     validate_opaque_identifier,
     validate_phase4_identifier,
 )
@@ -138,7 +140,10 @@ def validate_annotation_dataset(
     labels = _discover_labels(root, findings)
     records = {frame.frame_id: frame for frame in manifest.frames}
 
-    _validate_source_split_isolation(manifest.frames, findings)
+    if manifest.split_policy is AnnotationSplitPolicy.SOURCE_ISOLATED:
+        _validate_source_split_isolation(manifest.frames, findings)
+    else:
+        _validate_temporal_blocks(manifest.frames, manifest.temporal_blocks, findings)
     _validate_duplicate_frame_locations(images, findings)
     _validate_orphan_and_unregistered_files(images, labels, records, findings)
 
@@ -327,6 +332,89 @@ def _validate_source_split_isolation(
                 )
             )
             reported.add(frame.clip_id)
+
+
+def _validate_temporal_blocks(
+    frames: Sequence[AnnotationFrameRecord],
+    temporal_blocks: Sequence[TemporalBlock],
+    findings: list[ValidationFinding],
+) -> None:
+    blocks_by_id = {block.block_id: block for block in temporal_blocks}
+    blocks_by_clip: dict[str, list[TemporalBlock]] = {}
+    for block in temporal_blocks:
+        if block.split is DatasetSplit.TEST:
+            findings.append(
+                ValidationFinding(
+                    FindingSeverity.ERROR,
+                    "temporal_policy_forbids_test_split",
+                    "Temporal development manifests cannot contain test split blocks.",
+                    clip_id=block.clip_id,
+                )
+            )
+        blocks_by_clip.setdefault(block.clip_id, []).append(block)
+    for clip_id, blocks in blocks_by_clip.items():
+        ordered = sorted(blocks, key=lambda block: (block.start_seconds, block.end_seconds))
+        for previous, current in zip(ordered, ordered[1:]):
+            if current.start_seconds <= previous.end_seconds:
+                findings.append(
+                    ValidationFinding(
+                        FindingSeverity.ERROR,
+                        "temporal_block_overlap_or_gap",
+                        "Temporal blocks must not overlap and must keep a positive gap.",
+                        clip_id=clip_id,
+                    )
+                )
+                break
+    for frame in frames:
+        if frame.source_timestamp_seconds is None:
+            findings.append(
+                _finding(
+                    FindingSeverity.ERROR,
+                    "missing_source_timestamp",
+                    "Temporal-blocked manifests require source timestamps for every frame.",
+                    frame,
+                )
+            )
+            continue
+        if frame.temporal_block_id is None:
+            findings.append(
+                _finding(
+                    FindingSeverity.ERROR,
+                    "missing_temporal_block",
+                    "Temporal-blocked manifests require a temporal block for every frame.",
+                    frame,
+                )
+            )
+            continue
+        block = blocks_by_id.get(frame.temporal_block_id)
+        if block is None:
+            findings.append(
+                _finding(
+                    FindingSeverity.ERROR,
+                    "unknown_temporal_block",
+                    "Frame references an unknown temporal block.",
+                    frame,
+                )
+            )
+            continue
+        if frame.clip_id != block.clip_id or frame.split is not block.split:
+            findings.append(
+                _finding(
+                    FindingSeverity.ERROR,
+                    "temporal_block_mismatch",
+                    "Frame split or clip does not match its temporal block.",
+                    frame,
+                )
+            )
+        if not block.start_seconds <= frame.source_timestamp_seconds <= block.end_seconds:
+            findings.append(
+                _finding(
+                    FindingSeverity.ERROR,
+                    "timestamp_outside_temporal_block",
+                    "Frame timestamp falls outside its declared temporal block.",
+                    frame,
+                )
+            )
 
 
 def _validate_duplicate_frame_locations(

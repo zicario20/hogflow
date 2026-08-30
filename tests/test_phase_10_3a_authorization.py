@@ -150,6 +150,17 @@ def test_writer_round_trips_and_keeps_roles_explicit(tmp_path: Path) -> None:
     }
 
 
+def test_writer_rejects_non_ignored_repository_destination(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    (repository_root / ".git").write_text("gitdir: mock\n", encoding="utf-8")
+    tracked_destination = repository_root / "docs" / "authorization.json"
+    manifest = ProvisionalVideoManifest.for_basenames("a.mp4", "b.mp4")
+
+    with pytest.raises(InputDataError, match="ignored and untracked"):
+        write_provisional_video_manifest(manifest, tracked_destination)
+
+
 def test_repository_rules_ignore_local_training_manifest_and_media() -> None:
     repository_root = Path(__file__).resolve().parents[1]
     candidates = (

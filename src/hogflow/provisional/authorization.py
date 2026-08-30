@@ -121,6 +121,9 @@ def write_provisional_video_manifest(manifest: ProvisionalVideoManifest, path: s
     if not isinstance(manifest, ProvisionalVideoManifest):
         raise InputDataError("manifest must be a ProvisionalVideoManifest.")
     destination = Path(path)
+    repository_root = _repository_root(destination.parent)
+    if repository_root is not None:
+        _require_manifest_destination(destination, repository_root)
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "format_version": PROVISIONAL_MANIFEST_FORMAT_VERSION,
@@ -183,6 +186,18 @@ def _require_ignored_untracked(path: Path, repository_root: Path) -> None:
         raise InputDataError("Authorized provisional videos must remain ignored and untracked.")
     if _git_status(repository_root, "ls-files", "--error-unmatch", relative):
         raise InputDataError("Authorized provisional videos must remain ignored and untracked.")
+
+
+def _require_manifest_destination(path: Path, repository_root: Path) -> None:
+    relative = path.relative_to(repository_root).as_posix()
+    if not _git_status(repository_root, "check-ignore", relative):
+        raise InputDataError(
+            "Provisional authorization manifests must remain in an ignored and untracked local root."
+        )
+    if _git_status(repository_root, "ls-files", "--error-unmatch", relative):
+        raise InputDataError(
+            "Provisional authorization manifests must remain in an ignored and untracked local root."
+        )
 
 
 def _git_status(repository_root: Path, *arguments: str) -> bool:

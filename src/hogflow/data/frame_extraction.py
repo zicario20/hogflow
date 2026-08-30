@@ -54,6 +54,7 @@ class ExtractedFrameRecord:
     image_relative_path: str
     planned_timestamp_seconds: float
     actual_timestamp_seconds: float | None
+    temporal_block_id: str | None
     width: int
     height: int
     checksum_sha256: str
@@ -84,6 +85,8 @@ class ExtractedFrameRecord:
             or self.actual_timestamp_seconds < 0
         ):
             raise InputDataError("actual_timestamp_seconds must be non-negative when present.")
+        if self.temporal_block_id is not None and not isinstance(self.temporal_block_id, str):
+            raise InputDataError("temporal_block_id must be string or None.")
         if (
             not isinstance(self.width, int)
             or isinstance(self.width, bool)
@@ -207,6 +210,7 @@ def write_extraction_report(report: FrameExtractionReport, path: str | Path) -> 
                 "planned_timestamp_seconds": record.planned_timestamp_seconds,
                 "split": record.split.value,
                 "status": record.status.value,
+                "temporal_block_id": record.temporal_block_id,
                 "width": record.width,
             }
             for record in report.records
@@ -319,6 +323,7 @@ def _extract_clip_frames(
                     image_relative_path=image_relative_path,
                     planned_timestamp_seconds=planned.planned_timestamp_seconds,
                     actual_timestamp_seconds=actual_seconds,
+                    temporal_block_id=planned.temporal_block_id,
                     width=int(width),
                     height=int(height),
                     checksum_sha256=hashlib.sha256(content).hexdigest(),
