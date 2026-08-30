@@ -227,13 +227,21 @@ def prepare_manifest(
     *,
     extraction_report_path: str | Path,
     status_map_path: str | Path,
+    frame_plan_path: str | Path | None = None,
     output_path: str | Path,
 ) -> AnnotationDatasetManifest:
     """Load local sanitized inputs, build a manifest, and write it."""
 
+    split_policy = AnnotationSplitPolicy.SOURCE_ISOLATED
+    temporal_blocks: tuple[TemporalBlock, ...] = ()
+    if frame_plan_path is not None:
+        temporal_blocks = _load_temporal_blocks_from_frame_plan(frame_plan_path)
+        split_policy = AnnotationSplitPolicy.TEMPORAL_BLOCKED
     manifest = build_annotation_manifest(
         _load_json_object(extraction_report_path, description="extraction report"),
         _load_json_object(status_map_path, description="annotation status map"),
+        split_policy=split_policy,
+        temporal_blocks=temporal_blocks,
     )
     write_annotation_manifest(manifest, output_path)
     return manifest
@@ -247,6 +255,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--extraction-report", type=Path, required=True)
     parser.add_argument("--status-map", type=Path, required=True)
+    parser.add_argument("--frame-plan", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -261,6 +270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         manifest = prepare_manifest(
             extraction_report_path=arguments.extraction_report,
             status_map_path=arguments.status_map,
+            frame_plan_path=arguments.frame_plan,
             output_path=arguments.output,
         )
     except HogFlowError as exc:
@@ -290,6 +300,41 @@ def _load_json_object(path: str | Path, *, description: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise InputDataError(f"The local {description} must contain one JSON object.")
     return payload
+
+
+def _load_temporal_blocks_from_frame_plan(path: str | Path) -> tuple[TemporalBlock, ...]:
+    payload = _load_json_object(path, description="frame plan")
+    block_plan = payload.get("phase10_3a_block_plan")
+    if not isinstance(block_plan, dict):
+        raise InputDataError(
+            "The local frame plan must contain phase10_3a_block_plan.blocks."
+        )
+    blocks_payload = block_plan.get("blocks")
+    if not isinstance(blocks_payload, list) or not blocks_payload:
+        raise InputDataError(
+            "The local frame plan must contain phase10_3a_block_plan.blocks."
+        )
+    temporal_blocks: list[TemporalBlock] = []
+    for item in blocks_payload:
+        if not isinstance(item, dict):
+            raise InputDataError(
+                "The local frame plan contains an invalid phase10_3a_block_plan.blocks entry."
+            )
+        try:
+            temporal_blocks.append(
+                TemporalBlock(
+                    block_id=item["block_id"],
+                    clip_id=item["clip_id"],
+                    split=DatasetSplit(item["split"]),
+                    start_seconds=item["start_seconds"],
+                    end_seconds=item["end_seconds"],
+                )
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise InputDataError(
+                "The local frame plan contains an invalid phase10_3a_block_plan.blocks entry."
+            ) from exc
+    return tuple(temporal_blocks)
 
 
 def _atomic_write_json(path: Path, payload: Mapping[str, Any], *, description: str) -> None:
