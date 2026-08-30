@@ -114,7 +114,7 @@ def test_eof_enables_restart_video_and_exposes_completion_status(tmp_path: Path)
     assert len(sources) == 2
 
 
-def test_replay_keeps_session_counting_sequence_monotonic(tmp_path: Path) -> None:
+def test_replay_is_blocked_while_session_counting_is_active(tmp_path: Path) -> None:
     video = _local_video(tmp_path)
     processor = ScriptedCrossingProcessor(event_sequences=(1, 3), tracker_id=42)
     runtime = build_operator_runtime(
@@ -130,13 +130,13 @@ def test_replay_keeps_session_counting_sequence_monotonic(tmp_path: Path) -> Non
 
     application.start_counting_pipeline()
     wait_for_status(runtime.counting_pipeline, CountingPipelineStatus.STOPPED)
-    application.restart_video()
-    wait_for_status(runtime.counting_pipeline, CountingPipelineStatus.STOPPED)
+    with pytest.raises(CameraPipelineLifecycleError, match="active counting session"):
+        application.restart_video()
 
     assert application.snapshot().counting_lane.current_session_count == 1
     assert runtime.counting_pipeline.snapshot().stale_results_rejected == 0
     assert runtime.counter.statistics().positives_counted == 1
-    assert runtime.counter.statistics().duplicate_positives == 1
+    assert runtime.counter.statistics().duplicate_positives == 0
 
 
 def test_last_preview_frame_is_retained_after_local_video_eof(tmp_path: Path) -> None:

@@ -427,6 +427,7 @@ def _action_state(
         and snapshot.counting_lane.occupied
         and snapshot.counting_lane.active_dock_id is selected_dock
     )
+    replay_safe = not snapshot.counting_lane.occupied
     return OperatorActionState(
         register_truck=runtime_open and dock.available,
         start_truck=runtime_open and dock.runtime_status is DockRuntimeStatus.PLANNED,
@@ -447,7 +448,7 @@ def _action_state(
         and pipeline.status is CountingPipelineStatus.STOPPED
         and (
             pipeline.camera.status is CameraStatus.CLOSED
-            or (local_file and pipeline.camera.source_exhausted)
+            or (local_file and pipeline.camera.source_exhausted and replay_safe)
         ),
         stop_pipeline=runtime_open
         and pipeline.worker_alive
@@ -461,7 +462,8 @@ def _action_state(
         and pipeline.status is CountingPipelineStatus.STOPPED
         and not pipeline.worker_alive
         and local_file
-        and pipeline.camera.source_exhausted,
+        and pipeline.camera.source_exhausted
+        and replay_safe,
         refresh=True,
         exit=True,
     )

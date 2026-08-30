@@ -4,9 +4,9 @@
 > `AGENTS.md`, no en sustitución de sus reglas normativas.
 
 Última reconstrucción integral: 25 de julio de 2026.
-Última actualización incremental: preparación local provisional Phase 10.3A
-(autorización exacta, split temporal, planeación A/B y anotador), 30 de agosto
-de 2026.
+Última actualización incremental: ejecución provisional Phase 10.3A
+(anotación humana, training YOLO11n, holdout independiente, integración HMI y
+guard de replay), 30 de agosto de 2026.
 
 Línea base técnica de Phase 10.3:
 `e14bf5b5d73b886ff9834b606787ca58872c65b2`
@@ -1008,7 +1008,7 @@ Resumen de madurez:
 - **Estado:** infraestructura técnica implementada; validación empírica del
   detector/tracking/counting bloqueada por modelo y ground truth ausentes.
 
-### 5.27 Phase 10.3A — Provisional Pig Dataset & Demo Model Preparation
+### 5.27 Phase 10.3A — Provisional Pig Dataset & Demo Model Training
 
 - **Objetivo:** desbloquear la primera validación empírica pig-specific sin
   alterar el catálogo estricto de Phase 10.3 ni convertir la validación en
@@ -1028,28 +1028,40 @@ Resumen de madurez:
   temporal y `demo_video_b` como holdout independiente; el catálogo estricto de
   Phase 10.3 permanece sin cambios; si faltan cajas humanas, el flujo debe
   detenerse en `HUMAN ANNOTATION REQUIRED` en vez de fabricar labels o entrenar.
-- **Evidencia local:** ambos videos autorizados existen y son legibles. Metadata
-  inspeccionada: ambos HEVC, 1320×2868; `video A.mp4` 557 frames,
-  11.173333 s, `avg_frame_rate 83550/1769`; `video B.mp4` 583 frames,
-  18.098333 s, `avg_frame_rate 174900/5591`. El workspace ignorado
-  `data/annotations/phase10_3a_tolerance/` fue reconstruido localmente con
-  `48` frames `train`, `16` `validation` y `36` `test`; el peor desvío absoluto
-  entre timestamp planificado y resuelto fue `0.07828556233333295 s`, con `0`
-  frames por encima de `0.1 s`.
-- **Estado:** preparación técnica local implementada y material de anotación
-  listo; training del detector, artifact final, integración end-to-end y
-  métricas de conteo siguen bloqueados hasta completar bounding boxes humanas
-  validadas. Los manual crossing totals continúan `UNKNOWN` y no deben
-  fabricarse.
+- **Evidencia local:** ambos videos autorizados existen, son HEVC legibles y
+  presentan cámaras probablemente estáticas. La inspección actual reporta
+  `demo_video_a` con 557 frames, 47.23 FPS y 11.793 s, y `demo_video_b` con
+  583 frames, 31.28 FPS y 18.637 s; la advertencia de decode acotado fue
+  recuperada por el extractor. El workspace ignorado contiene 48 frames de
+  train, 16 de calibration y 36 de holdout, con un máximo de desviación
+  plan/actual de `0.07828556233333295 s`. Las 100 imágenes fueron revisadas
+  por una persona: 1,441 cajas `pig` (clase 0), 8 negativos naturales y cero
+  etiquetas inválidas.
+- **Training/evaluación:** se ajustó el checkpoint oficial YOLO11n en CPU
+  durante 75 épocas con configuración congelada. En calibración A se obtuvo
+  TP=22, FP=14, FN=0, precision=0.6111, recall=1.0 y F1=0.7586. El holdout
+  independiente B se ejecutó una sola vez y obtuvo TP=15, FP=20, FN=499,
+  precision=0.4286, recall=0.0292 y F1=0.0546; la generalización es
+  insuficiente y queda documentada sin filtrar.
+- **Artifact/integración:** existe localmente un único artifact final
+  `hogflow_pig_demo` con gate `AVAILABLE`, provenance path-free completa y
+  target `pig` clase 0. El smoke HMI A ejecutó detector → ByteTrack →
+  crossing → contador de carril compartido → presenter, con 539 frames
+  procesados, 8,595 detecciones y cero fallos de tracker/crossing. El replay
+  de archivo durante una sesión activa ahora está bloqueado.
+- **Estado:** la subfase está parcialmente completa: training, anotación,
+  validación de detección, artifact e integración técnica están entregados;
+  la precisión de conteo permanece `BLOCKED — MANUAL CROSSING GROUND TRUTH
+  MISSING`. El modelo es un demo y no está validado para producción.
 
 ### 5.28 Estado de las fases posteriores
 
 Phase 9 está técnicamente completada según sus subfases autorizadas; Phase
 10.1 implementa runtime supervision, Phase 10.2 integra el boundary local de
-detector y Phase 10.3 implementa el workflow de validación sin completar la
-evidencia empírica. Phase 10.3A añade solo la preparación local provisional y
-permanece bloqueada en anotación humana. Persistencia Phase 10, Phase 10.4 y
-Phase 11–16 no están iniciadas:
+detector y Phase 10.3 implementa el workflow de validación controlada. Phase
+10.3A ya ejecutó la primera evidencia pig-specific con datos autorizados,
+pero queda limitada por el holdout débil y la ausencia de totales humanos de
+cruces. Persistencia Phase 10, Phase 10.4 y Phase 11–16 no están iniciadas:
 
 | Fase | Alcance normativo | Estado |
 | --- | --- | --- |
@@ -1416,12 +1428,12 @@ demás deudas permanecen explícitas.
 | Videos reales | **DECISIÓN HISTÓRICA:** se inventariaron localmente clips autorizados y se crearon sidecars; Git no los contiene. | Verificar existencia actual, ampliar diversidad y documentar autorización fuera de Git. |
 | Revisión manual | Históricamente, dos clips se consideraron candidatos de conteo (uno más fuerte, uno más difícil) y otro solo detección/tracking por movimiento irregular. | Esa clasificación no prueba accuracy ni está disponible en el repo. |
 | Inventario | Tooling y outputs locales JSON/CSV/Markdown. | Output actual es ignorado; no se auditó en esta reconstrucción. |
-| Anotaciones | Política y tooling YOLO. | No hay confirmación de dataset real completamente anotado. |
-| Splits | Planner por source video. | No hay split real final verificado; pocos sources pueden exigir `preparation`. |
-| Ground truth | Modelos/evaluador y reglas. | No existe ground truth de detección/tracking/conteo representativo confirmado. |
-| Training | Pipeline reemplazable. | No se ejecutó training real confirmado; no checkpoint pig-specific. |
-| Checkpoints | Workspaces/protecciones e ignore rules; Phase 10.2 no encontró un artefacto compatible en los directorios locales aprobados. | Ningún checkpoint pig-specific validado disponible; no se descargaron ni generaron pesos. |
-| Métricas | IoU, matching, precision/recall/F1 implementados. | No métricas reales de cerdos, tracking o conteo. |
+| Anotaciones | 100 frames locales revisados por una persona; 1,441 cajas `pig` y 8 negativos naturales; labels ignorados y no versionados. | Ampliar diversidad y revisar más muestras antes de cualquier claim de generalización. |
+| Splits | Planner temporal explícito: A train/calibration y B holdout independiente; fingerprints separados. | Más vídeos representativos para validar dominio real. |
+| Ground truth | Ground truth de detección disponible en los 100 frames seleccionados. | Totales humanos de cruces para A y B siguen ausentes; count accuracy bloqueada. |
+| Training | YOLO11n oficial fine-tuned en CPU, 75 épocas, configuración congelada; pipeline reproducible. | Evaluar nuevas fuentes/modelos solo como experimentos futuros explícitos. |
+| Checkpoints | Un único `hogflow_pig_demo` local ignorado, con SHA y provenance completa; gate Phase 10.3 `AVAILABLE`. | No es un checkpoint de producción ni debe versionarse. |
+| Métricas | Calibración A y holdout B tienen TP/FP/FN, precision/recall/F1; framework mAP separado. | Métricas de conteo, tracking e ID-switch requieren ground truth temporal y revisión adicional. |
 
 Los nombres privados de videos, source references y review notes no pertenecen
 a esta memoria. Son datos locales y no deben publicarse.
@@ -1464,7 +1476,7 @@ de cerdos, tracking real, conteo ni producción.
 
 ### 11.1 Detección
 
-Implementadas como infraestructura, pero sin resultado real de cerdos:
+Implementadas y ejercitadas con un modelo pig-specific provisional:
 
 - `IoU = intersection_area / union_area`;
 - `precision = TP / (TP + FP)`;
@@ -1507,8 +1519,10 @@ Métricas objetivo del sistema completo:
 - exactitud por sesión/sección;
 - resultados estratificados por densidad, oclusión, iluminación y perspectiva.
 
-El KPI primario es error de conteo, no precision de detección aislada. Ninguna
-de estas métricas de conteo tiene todavía resultado empírico con cerdos.
+El KPI primario es error de conteo, no precision de detección aislada. El smoke
+HMI A produjo un live count técnico, pero no es accuracy: faltan los dos
+totales humanos de cruces. Por tanto, ninguna métrica de error de conteo tiene
+todavía resultado empírico reportable.
 
 ---
 
@@ -1516,23 +1530,19 @@ de estas métricas de conteo tiene todavía resultado empírico con cerdos.
 
 ### 12.1 Siguiente trabajo confirmado
 
-**HECHO VERIFICADO:** Phase 10.3 implementa un workflow offline que verifica
-tres videos exactos, sus sidecars/ignore rules, un modelo local compatible,
-calibración independiente y reportes path-free antes de permitir inferencia.
-La ejecución local encontró cero modelos compatibles y cero ground truth, no
-invocó el backend y emitió tres resultados separados bloqueados.
-
-**Recomendación actual:** auditar Phase 10.3 antes de comenzar Phase 10.4. Para
-reanudar evidencia empírica se requiere un modelo pig-specific autorizado y
-compatible más ground truth independiente; no sustituirlos con fakes ni totals
-inferidos.
+**HECHO VERIFICADO:** Phase 10.3A ya ejecutó entrenamiento provisional,
+calibración A, holdout independiente B y smoke HMI con un modelo local
+compatible. La siguiente acción acotada es registrar los dos conteos humanos
+de cruce y, después, comparar el conteo del sistema sin modificar las reglas.
+El holdout B mostró recall bajo y no sustenta una afirmación de generalización.
 
 ### 12.2 Siguiente fase normativa
 
 Phase 9.1–9.4 implementan el workflow desktop, Phase 10.1 implementa runtime
-supervision, Phase 10.2 implementa el detector boundary y Phase 10.3 el
-workflow de validación controlada. El siguiente trabajo debe ser una auditoría
-de Phase 10.3. Phase 10.4 y Phase 11 no están iniciadas.
+supervision, Phase 10.2 implementa el detector boundary, Phase 10.3 el
+workflow de validación controlada y Phase 10.3A la primera evidencia
+pig-specific provisional. El siguiente trabajo acotado es completar el
+ground truth manual de cruces; Phase 10.4 y Phase 11 no están iniciadas.
 
 Fuera del siguiente trabajo salvo aprobación expresa:
 

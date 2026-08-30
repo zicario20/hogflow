@@ -319,6 +319,10 @@ class CountingPipelineController:
                 raise CameraPipelineLifecycleError(
                     "Exhausted local video has no reusable processing lifecycle."
                 )
+            if self._runtime.active_binding() is not None:
+                raise CameraPipelineLifecycleError(
+                    "Cannot replay a local video while an active counting session owns the lane."
+                )
         try:
             prospective_source = self._source_factory(configuration)
         except Exception as exc:
