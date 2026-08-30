@@ -7,6 +7,7 @@ from hogflow.provisional.authorization import (
     load_provisional_video_manifest,
     write_provisional_video_manifest,
 )
+from hogflow.provisional.artifact import write_demo_model_provenance
 
 __all__ = [
     "AuthorizedProvisionalVideo",
@@ -14,4 +15,5 @@ __all__ = [
     "ProvisionalVideoRole",
     "load_provisional_video_manifest",
     "write_provisional_video_manifest",
+    "write_demo_model_provenance",
 ]
