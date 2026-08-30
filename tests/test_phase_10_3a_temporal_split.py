@@ -6,7 +6,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from hogflow.annotation.manifest import build_annotation_manifest
 from hogflow.annotation.models import (
     ANNOTATION_POLICY_VERSION,
     AnnotationDatasetManifest,
@@ -20,6 +19,7 @@ from hogflow.annotation.validation import validate_annotation_dataset
 from hogflow.annotation.yolo import write_yolo_label
 
 CLIP_ID = "1" * 24
+SECOND_CLIP_ID = "2" * 24
 FRAME_A = "a" * 24
 FRAME_B = "b" * 24
 
@@ -48,6 +48,47 @@ def test_temporal_policy_rejects_overlap_missing_block_or_nonpositive_gap(tmp_pa
     for manifest, root in manifests:
         report = validate_annotation_dataset(root, manifest)
         assert not report.valid
+
+
+def test_temporal_blocks_reject_more_than_one_source_clip(tmp_path: Path) -> None:
+    first = _record(
+        tmp_path,
+        FRAME_A,
+        DatasetSplit.TRAIN,
+        timestamp=1.0,
+        value=30,
+        block_id="block_a",
+        clip_id=CLIP_ID,
+    )
+    second = _record(
+        tmp_path,
+        FRAME_B,
+        DatasetSplit.VALIDATION,
+        timestamp=6.0,
+        value=60,
+        block_id="block_b",
+        clip_id=SECOND_CLIP_ID,
+    )
+    _write_labels(tmp_path, first, second)
+    manifest = AnnotationDatasetManifest(
+        schema_version=2,
+        dataset_id="synthetic-temporal",
+        annotation_policy_version=ANNOTATION_POLICY_VERSION,
+        class_map=((0, "pig"),),
+        frames=(first, second),
+        split_policy=AnnotationSplitPolicy.TEMPORAL_BLOCKED,
+        temporal_blocks=(
+            TemporalBlock("block_a", CLIP_ID, DatasetSplit.TRAIN, 0.0, 4.0),
+            TemporalBlock("block_b", SECOND_CLIP_ID, DatasetSplit.VALIDATION, 5.0, 9.0),
+        ),
+    )
+
+    report = validate_annotation_dataset(tmp_path, manifest)
+
+    assert "temporal_policy_requires_single_clip" in {
+        finding.code for finding in report.findings
+    }
+    assert not report.valid
 
 
 def _manifest_with_same_clip_in_train_and_validation(root: Path) -> AnnotationDatasetManifest:
@@ -117,6 +158,7 @@ def _record(
     timestamp: float | None,
     value: int,
     block_id: str | None = None,
+    clip_id: str = CLIP_ID,
 ) -> AnnotationFrameRecord:
     relative = f"images/{split.value}/{frame_id}.png"
     image_path = root / Path(*relative.split("/"))
@@ -127,7 +169,7 @@ def _record(
     image_path.write_bytes(content.tobytes())
     return AnnotationFrameRecord(
         frame_id=frame_id,
-        clip_id=CLIP_ID,
+        clip_id=clip_id,
         split=split,
         image_relative_path=relative,
         width=32,

@@ -352,6 +352,14 @@ def _validate_temporal_blocks(
                 )
             )
         blocks_by_clip.setdefault(block.clip_id, []).append(block)
+    if len(blocks_by_clip) != 1:
+        findings.append(
+            ValidationFinding(
+                FindingSeverity.ERROR,
+                "temporal_policy_requires_single_clip",
+                "Temporal-blocked development manifests must use exactly one source clip.",
+            )
+        )
     for clip_id, blocks in blocks_by_clip.items():
         ordered = sorted(blocks, key=lambda block: (block.start_seconds, block.end_seconds))
         for previous, current in zip(ordered, ordered[1:]):

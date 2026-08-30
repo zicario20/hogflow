@@ -4,12 +4,13 @@ from pathlib import Path
 import pytest
 
 from hogflow.annotation.models import DatasetSplit
-from hogflow.core import ConfigurationError, phase4_clip_id
+from hogflow.core import ConfigurationError, InputDataError, phase4_clip_id
 from hogflow.data.dataset_splitting import create_source_split_plan, write_split_plan
 from hogflow.data.frame_selection import (
     ClipSamplingMetadata,
     FrameSelectionSettings,
     FrameSelectionStrategy,
+    PlannedFrame,
     create_frame_selection_plan,
     prepare_frame_selection,
     read_frame_selection_plan,
@@ -88,6 +89,29 @@ def test_frame_ids_are_deterministic_and_clip_order_independent() -> None:
 
     assert first == reverse
     assert len({frame.frame_id for frame in first.frames}) == len(first.frames)
+
+
+def test_planned_frame_temporal_block_id_must_be_an_opaque_identifier() -> None:
+    frame = PlannedFrame(
+        frame_id="f" * 24,
+        clip_id=CLIP_ID,
+        split=DatasetSplit.TRAIN,
+        planned_timestamp_seconds=1.25,
+        selection_strategy=FrameSelectionStrategy.FIXED_INTERVAL,
+        temporal_block_id="block_a",
+    )
+
+    assert frame.temporal_block_id == "block_a"
+
+    with pytest.raises(InputDataError, match="temporal_block_id"):
+        PlannedFrame(
+            frame_id="1" * 24,
+            clip_id=CLIP_ID,
+            split=DatasetSplit.TRAIN,
+            planned_timestamp_seconds=1.5,
+            selection_strategy=FrameSelectionStrategy.FIXED_INTERVAL,
+            temporal_block_id="../private-path",
+        )
 
 
 def test_invalid_frame_selection_configuration_is_rejected() -> None:

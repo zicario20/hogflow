@@ -13,7 +13,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from hogflow.annotation.models import DatasetSplit, validate_phase4_identifier
+from hogflow.annotation.models import (
+    DatasetSplit,
+    validate_opaque_identifier,
+    validate_phase4_identifier,
+)
 from hogflow.core import (
     ConfigurationError,
     HogFlowError,
@@ -121,7 +125,7 @@ class PlannedFrame:
         if not isinstance(self.selection_strategy, FrameSelectionStrategy):
             raise InputDataError("selection_strategy must be FrameSelectionStrategy.")
         if self.temporal_block_id is not None:
-            validate_phase4_identifier(self.clip_id, field_name="clip_id")
+            validate_opaque_identifier(self.temporal_block_id, field_name="temporal_block_id")
         if self.extraction_status is not ExtractionStatus.PLANNED:
             raise InputDataError("New frame plans must use planned extraction status.")
 
