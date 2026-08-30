@@ -123,7 +123,7 @@ class YOLOBaselineTrainer:
                 arguments["resume"] = str(resume)
             if configuration.early_stopping_patience is not None:
                 arguments["patience"] = configuration.early_stopping_patience
-            arguments.update(configuration.augmentation_settings)
+            arguments.update(_framework_augmentation_settings(configuration))
             framework_result = model.train(**arguments)
             checkpoint = _trainer_checkpoint(model)
         except HogFlowError:
@@ -387,6 +387,18 @@ def _framework_split(split: Any) -> str:
     if getattr(split, "value", None) == "test":
         return "test"
     raise InputDataError("YOLO evaluation supports only validation or test splits.")
+
+
+def _framework_augmentation_settings(
+    configuration: TrainingConfiguration,
+) -> dict[str, float | int]:
+    """Adapt framework-neutral augmentation values to Ultralytics types."""
+
+    settings = configuration.augmentation_settings
+    close_mosaic = settings.get("close_mosaic")
+    if isinstance(close_mosaic, float) and close_mosaic.is_integer():
+        settings["close_mosaic"] = int(close_mosaic)
+    return settings
 
 
 def _validation_frame(

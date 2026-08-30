@@ -124,6 +124,27 @@ def test_demo_training_passes_patience_and_moderate_augmentation_to_ultralytics(
         assert arguments[name] == value
 
 
+def test_demo_training_passes_integer_close_mosaic_to_ultralytics(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "dataset"
+    manifest_path = create_prepared_dataset(root)
+    dataset = load_prepared_training_dataset(root, manifest_path)
+    state: dict[str, object] = {}
+    trainer = YOLOBaselineTrainer(
+        "yolo11n.pt",
+        tmp_path / "output",
+        yolo_factory=fake_yolo_factory(state),
+        framework_version="synthetic-1",
+    )
+
+    trainer.train(dataset, TrainingConfiguration.demo_phase_10_3a(epochs=1))
+
+    close_mosaic = state["train_kwargs"]["close_mosaic"]
+    assert type(close_mosaic) is int
+    assert close_mosaic == 10
+
+
 def test_validate_holdout_predicts_only_evaluation_frames(tmp_path: Path) -> None:
     root, manifest_path = _write_evaluation_manifest(tmp_path)
     dataset = load_prepared_evaluation_dataset(root, manifest_path)
