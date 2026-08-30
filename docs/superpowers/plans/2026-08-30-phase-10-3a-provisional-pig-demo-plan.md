@@ -129,10 +129,13 @@ def _write_manifest(root: Path, records: list[dict[str, str]]) -> Path:
 
 
 def test_manifest_accepts_exactly_two_explicit_roles(tmp_path: Path) -> None:
-    manifest_path = _write_manifest(tmp_path, [
-        {"video_id": "demo_video_a", "basename": "a.mp4", "role": "training_development"},
-        {"video_id": "demo_video_b", "basename": "b.mp4", "role": "independent_validation"},
-    ])
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            {"video_id": "demo_video_a", "basename": "a.mp4", "role": "training_development"},
+            {"video_id": "demo_video_b", "basename": "b.mp4", "role": "independent_validation"},
+        ],
+    )
     (tmp_path / "a.mp4").write_bytes(b"a")
     (tmp_path / "b.mp4").write_bytes(b"b")
 
@@ -142,11 +145,14 @@ def test_manifest_accepts_exactly_two_explicit_roles(tmp_path: Path) -> None:
 
 
 def test_manifest_rejects_extra_records_and_missing_media(tmp_path: Path) -> None:
-    manifest_path = _write_manifest(tmp_path, [
-        {"video_id": "demo_video_a", "basename": "a.mp4", "role": "training_development"},
-        {"video_id": "demo_video_b", "basename": "b.mp4", "role": "independent_validation"},
-        {"video_id": "extra", "basename": "c.mp4", "role": "independent_validation"},
-    ])
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            {"video_id": "demo_video_a", "basename": "a.mp4", "role": "training_development"},
+            {"video_id": "demo_video_b", "basename": "b.mp4", "role": "independent_validation"},
+            {"video_id": "extra", "basename": "c.mp4", "role": "independent_validation"},
+        ],
+    )
     with pytest.raises(InputDataError, match="exactly two"):
         load_provisional_video_manifest(manifest_path, tmp_path)
 ```
@@ -162,7 +168,10 @@ Expected: FAIL because the provisional authorization module does not exist.
 ```python
 EXPECTED_IDS = ("demo_video_a", "demo_video_b")
 
-def load_provisional_video_manifest(path: str | Path, raw_root: str | Path) -> ProvisionalVideoManifest:
+
+def load_provisional_video_manifest(
+    path: str | Path, raw_root: str | Path
+) -> ProvisionalVideoManifest:
     payload = _load_object(path)
     records = payload.get("videos")
     if not isinstance(records, list) or len(records) != 2:
@@ -250,6 +259,7 @@ class AnnotationSplitPolicy(str, Enum):
     SOURCE_ISOLATED = "source_isolated"
     TEMPORAL_BLOCKED = "temporal_blocked"
 
+
 @dataclass(frozen=True, slots=True)
 class TemporalBlock:
     block_id: str
@@ -257,6 +267,7 @@ class TemporalBlock:
     split: DatasetSplit
     start_seconds: float
     end_seconds: float
+
 
 # Add this optional field to the existing immutable plan/extraction records:
 temporal_block_id: str | None = None
@@ -309,13 +320,21 @@ def test_plan_is_deterministic_and_contains_no_duplicate_timestamps() -> None:
     second = create_phase10_3a_frame_selection_plan(_metadata(), settings=_settings())
     assert first == second
     assert len({frame.frame_id for frame in first.frames}) == len(first.frames)
-    assert len({(frame.clip_id, frame.planned_timestamp_seconds) for frame in first.frames}) == len(first.frames)
+    assert len({(frame.clip_id, frame.planned_timestamp_seconds) for frame in first.frames}) == len(
+        first.frames
+    )
 
 
 def test_video_b_frames_are_holdout_only() -> None:
     plan = create_phase10_3a_frame_selection_plan(_metadata(), settings=_settings())
-    assert all(frame.clip_id == DEMO_A_CLIP_ID for frame in plan.frames if frame.split in {DatasetSplit.TRAIN, DatasetSplit.VALIDATION})
-    assert all(frame.split is DatasetSplit.TEST for frame in plan.frames if frame.clip_id == DEMO_B_CLIP_ID)
+    assert all(
+        frame.clip_id == DEMO_A_CLIP_ID
+        for frame in plan.frames
+        if frame.split in {DatasetSplit.TRAIN, DatasetSplit.VALIDATION}
+    )
+    assert all(
+        frame.split is DatasetSplit.TEST for frame in plan.frames if frame.clip_id == DEMO_B_CLIP_ID
+    )
 ```
 
 - [ ] **Step 2: Run the focused tests and verify the missing helper failure**
@@ -331,11 +350,7 @@ Use `create_frame_selection_plan` for each explicitly declared temporal block, t
 ```python
 def create_phase10_3a_frame_selection_plan(metadata, *, settings):
     blocks = _declared_blocks(metadata)
-    planned = tuple(
-        frame
-        for block in blocks
-        for frame in _plan_block(block, settings=settings)
-    )
+    planned = tuple(frame for block in blocks for frame in _plan_block(block, settings=settings))
     return FrameSelectionPlan(settings=settings, frames=tuple(sorted(planned, key=_frame_sort_key)))
 ```
 
@@ -404,12 +419,19 @@ Expected: FAIL because the development helper does not exist.
 - [ ] **Step 3: Implement the non-UI helper functions first**
 
 ```python
-def normalized_box(native_width: int, native_height: int, x0: int, y0: int, x1: int, y1: int) -> tuple[float, float, float, float]:
+def normalized_box(
+    native_width: int, native_height: int, x0: int, y0: int, x1: int, y1: int
+) -> tuple[float, float, float, float]:
     left, right = sorted((max(0, x0), min(native_width, x1)))
     top, bottom = sorted((max(0, y0), min(native_height, y1)))
     if left >= right or top >= bottom:
         raise ValueError("A pig box must have positive area.")
-    return ((left + right) / (2 * native_width), (top + bottom) / (2 * native_height), (right - left) / native_width, (bottom - top) / native_height)
+    return (
+        (left + right) / (2 * native_width),
+        (top + bottom) / (2 * native_height),
+        (right - left) / native_width,
+        (bottom - top) / native_height,
+    )
 ```
 
 Route serialization through `hogflow.annotation.yolo` where possible, reject every class other than 0, preserve native dimensions, and never infer boxes.
