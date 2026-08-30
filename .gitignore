@@ -104,3 +104,4 @@ camera*.local.*
 *.safetensors
 *.tflite
 *.pb
+.worktrees/
