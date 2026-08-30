@@ -15,6 +15,7 @@ from typing import Any, Mapping, Sequence
 
 from hogflow.annotation.models import (
     DatasetSplit,
+    validate_opaque_identifier,
     validate_phase4_identifier,
     validate_relative_workspace_path,
 )
@@ -85,8 +86,8 @@ class ExtractedFrameRecord:
             or self.actual_timestamp_seconds < 0
         ):
             raise InputDataError("actual_timestamp_seconds must be non-negative when present.")
-        if self.temporal_block_id is not None and not isinstance(self.temporal_block_id, str):
-            raise InputDataError("temporal_block_id must be string or None.")
+        if self.temporal_block_id is not None:
+            validate_opaque_identifier(self.temporal_block_id, field_name="temporal_block_id")
         if (
             not isinstance(self.width, int)
             or isinstance(self.width, bool)

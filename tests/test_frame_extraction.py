@@ -9,6 +9,7 @@ import pytest
 from hogflow.annotation.models import DatasetSplit
 from hogflow.core import InputDataError
 from hogflow.data.frame_extraction import (
+    ExtractedFrameRecord,
     ExtractedFrameStatus,
     ImageFormat,
     extract_frames,
@@ -148,3 +149,36 @@ def test_extraction_report_is_sanitized_and_deterministic(tmp_path: Path) -> Non
     assert output.read_text(encoding="utf-8") == first
     assert str(source) not in first
     assert source.name not in first
+
+
+def test_extracted_frame_temporal_block_id_must_be_opaque() -> None:
+    record = ExtractedFrameRecord(
+        frame_id="4" * 24,
+        clip_id=CLIP_ID,
+        split=DatasetSplit.TRAIN,
+        image_relative_path=f"images/train/{'4' * 24}.png",
+        planned_timestamp_seconds=1.0,
+        actual_timestamp_seconds=1.05,
+        temporal_block_id="block_a",
+        width=64,
+        height=48,
+        checksum_sha256="a" * 64,
+        status=ExtractedFrameStatus.EXTRACTED,
+    )
+
+    assert record.temporal_block_id == "block_a"
+
+    with pytest.raises(InputDataError, match="temporal_block_id"):
+        ExtractedFrameRecord(
+            frame_id="5" * 24,
+            clip_id=CLIP_ID,
+            split=DatasetSplit.TRAIN,
+            image_relative_path=f"images/train/{'5' * 24}.png",
+            planned_timestamp_seconds=1.0,
+            actual_timestamp_seconds=1.05,
+            temporal_block_id="../private",
+            width=64,
+            height=48,
+            checksum_sha256="b" * 64,
+            status=ExtractedFrameStatus.EXTRACTED,
+        )
