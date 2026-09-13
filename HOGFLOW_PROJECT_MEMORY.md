@@ -1090,7 +1090,36 @@ Resumen de madurez:
   independiente. Los conteos manuales A/B siguen UNKNOWN; no se deriva error
   de conteo. Modelo: **DEMO MODEL — NOT PRODUCTION VALIDATED**.
 
-### 5.29 Estado de las fases posteriores
+### 5.29 Phase 10.3C — Independent Detector and End-to-End Counting Validation
+
+- **Baseline/freeze:** el baseline confirmado es
+  `3cd3a1ed878c614204aa3e88387c40008766fa44`, con `main` limpio y sincronizado
+  con `origin/main`. V2 quedó congelado antes de cualquier autorización C:
+  artifact SHA `892a15ce4c739a819b17900700bd17c8473c44b6734b954869bf5470a633cc8c`,
+  YOLO11n, `pig` clase 0, `imgsz=640`, confidence `0.25`, NMS IoU `0.5`,
+  `max_det=300`. Su fingerprint de detector es
+  `611a4b66efe97b38ef1aa07f5cace4d57aa366ccf1d9b4e4f50a703fc11191c0` y el
+  receipt congelado 10.3C es
+  `5f25e50e009de76496f4644d8aa4d4b5d1a24ae2f6f4a9b6049875f43dfb1ba0`.
+- **Entorno:** la validación GPU reproducible registrada usa Python `3.12.14`,
+  Torch `2.11.0+cu128`, CUDA `12.8`, Ultralytics `8.4.135`, OpenCV
+  `4.14.0.94`, Supervision `0.29.1`, LAP `0.5.13`, NumPy `2.5.2` y RTX 5070
+  Ti Laptop GPU; fingerprint de entorno
+  `c9b694c500915733c2cf2c142bbe6392b559e7fb0d985f1de559848fa6befa92`.
+- **Conteo/calibración:** no existen sidecars ni totales humanos A/B. La
+  calibración de línea queda `BLOCKED — A/B MANUAL CROSSING GROUND TRUTH
+  REQUIRED`; el tracker ByteTrack permanece sin cambios. El movimiento
+  observado es top-to-bottom y la familia operativa prevista es horizontal.
+- **Video C:** `data/raw` contiene A, B, tres históricos conocidos y 11 MP4
+  adicionales no clasificados. Ninguno fue escogido automáticamente ni
+  inspeccionado visualmente para C. La fase queda `BLOCKED — VIDEO C
+  AUTHORIZATION REQUIRED` hasta que el usuario seleccione exactamente uno y
+  lo autorice como `demo_video_c`; después se requieren 30–60 cajas humanas.
+- **Alcance:** no se ejecutó evaluación detectora C ni conteo end-to-end C, no
+  se ajustó V2/tracker/línea y no se inició Phase 10.4, persistencia ni Phase
+  11. Modelo: **DEMO MODEL — NOT PRODUCTION VALIDATED**.
+
+### 5.30 Estado de las fases posteriores
 
 Phase 9 está técnicamente completada según sus subfases autorizadas; Phase
 10.1 implementa runtime supervision, Phase 10.2 integra el boundary local de
