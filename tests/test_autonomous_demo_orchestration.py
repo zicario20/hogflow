@@ -8,6 +8,9 @@ from hogflow.calibration import (
     CalibrationStatus,
     run_autonomous_demo,
 )
+from hogflow.calibration.models import DirectionVector, LineCandidate
+from hogflow.calibration.orchestration import _shift_candidate
+from hogflow.counting import LiveCrossingDirection, NormalizedLine, NormalizedPoint
 from hogflow.detection import DetectorBackend, PigDetectorConfiguration
 from hogflow.detection.inference import FrameDetections, ModelArtifactMetadata
 from hogflow.models import BoundingBox, Detection, Track
@@ -192,3 +195,15 @@ def test_inconclusive_calibration_never_starts_counting() -> None:
     assert result.calibration.status is CalibrationStatus.INCONCLUSIVE
     assert result.primary_count is None
     assert result.pass_two_first_frame_sequence is None
+
+
+def test_neighbor_line_outside_image_is_marked_unavailable() -> None:
+    candidate = LineCandidate(
+        candidate_id="line_01",
+        line=NormalizedLine(NormalizedPoint(0.01, 0.2), NormalizedPoint(0.01, 0.8)),
+        along_position=0.5,
+        positive_direction=LiveCrossingDirection.NEGATIVE_TO_POSITIVE,
+        edge_penalty=0.8,
+    )
+
+    assert _shift_candidate(candidate, DirectionVector(1.0, 0.0), -0.1, "n") is None

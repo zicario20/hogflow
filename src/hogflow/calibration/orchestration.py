@@ -317,14 +317,22 @@ def _shift_candidate(
     direction,
     offset: float,
     identifier: str,
-) -> LineCandidate:
-    start = NormalizedPoint(
+) -> LineCandidate | None:
+    raw_start = (
         candidate.line.start.x + direction.dx * offset,
         candidate.line.start.y + direction.dy * offset,
     )
-    end = NormalizedPoint(
+    raw_end = (
         candidate.line.end.x + direction.dx * offset,
         candidate.line.end.y + direction.dy * offset,
+    )
+    if not all(0.0 <= value <= 1.0 for value in (*raw_start, *raw_end)):
+        return None
+    start = NormalizedPoint(
+        *raw_start,
+    )
+    end = NormalizedPoint(
+        *raw_end,
     )
     return LineCandidate(
         candidate_id=identifier,
@@ -421,13 +429,14 @@ def _build_calibration_result(
     metrics: list[LineCandidateMetrics] = []
     for candidate in candidates:
         neighbor_counts = tuple(
-            _forward_count(
-                _shift_candidate(
+            0
+            if (
+                shifted := _shift_candidate(
                     candidate, direction, offset, f"{candidate.candidate_id}_n{index}"
-                ),
-                primary.summaries,
-                settings,
+                )
             )
+            is None
+            else _forward_count(shifted, primary.summaries, settings)
             for index, offset in enumerate(settings.neighbor_offsets, start=1)
         )
         perturbation_counts = tuple(
