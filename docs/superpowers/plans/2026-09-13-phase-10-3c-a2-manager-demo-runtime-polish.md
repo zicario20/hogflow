@@ -194,7 +194,7 @@ Run pytest, Ruff check/format, compileall, pip check, git diff check, CLI help, 
 
 Confirm no formal C work, no algorithm drift, no media/model files, no second runtime, no persistence, and no business-count mutation.
 
-- [ ] **Step 4: Commit, push, and verify CI.**
+- [x] **Step 4: Commit, push, and verify CI.**
 
 Use a descriptive commit, push `origin/main`, verify `HEAD == origin/main`, and retrieve the actual GitHub Actions run conclusion.
 
