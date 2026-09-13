@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Sequence
 from pathlib import Path
 
+from hogflow.adapters.camera_source_factory import create_camera_source
 from hogflow.application import OperatorInputError, VideoSourceRequest
 from hogflow.bootstrap import compose_operator_desktop
+from hogflow.calibration import (
+    AutonomousDemoConfiguration,
+    CalibrationStatus,
+    run_autonomous_demo,
+)
 from hogflow.camera import PreviewConfiguration
 from hogflow.core import HogFlowError
 from hogflow.detection import (
@@ -15,6 +22,7 @@ from hogflow.detection import (
     DetectorConfigurationError,
     PigDetectorConfiguration,
 )
+from hogflow.streaming import StreamConfiguration
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,8 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
         "command",
         nargs="?",
         default="run",
-        choices=("run",),
-        help="Run the local Operator MVP desktop (default: run).",
+        choices=("run", "autonomous-demo"),
+        help="Run the local Operator MVP or the bounded autonomous demo.",
     )
     sources = parser.add_mutually_exclusive_group()
     sources.add_argument(
@@ -85,6 +93,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     arguments = parser.parse_args(argv)
     try:
+        if arguments.command == "autonomous-demo":
+            return _run_autonomous_demo_command(arguments, parser)
         detector_configuration = _detector_configuration(arguments)
         source = None
         if arguments.camera is not None:
@@ -106,6 +116,65 @@ def main(argv: Sequence[str] | None = None) -> int:
         composition.run()
     except (HogFlowError, OperatorInputError) as exc:
         parser.error(str(exc))
+    return 0
+
+
+def _run_autonomous_demo_command(
+    arguments: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> int:
+    if arguments.video is None:
+        raise OperatorInputError("autonomous-demo requires an explicit --video source.")
+    if arguments.camera is not None:
+        raise OperatorInputError("autonomous-demo does not accept --camera.")
+    if arguments.real_time_video:
+        raise OperatorInputError("autonomous-demo does not use real-time playback pacing.")
+    if arguments.detector != DetectorBackend.ULTRALYTICS.value:
+        raise DetectorConfigurationError(
+            "autonomous-demo requires the frozen Ultralytics pig detector configuration."
+        )
+    detector_configuration = _detector_configuration(arguments)
+    if (
+        detector_configuration.target_class_name != "pig"
+        or detector_configuration.target_class_ids != (0,)
+        or detector_configuration.confidence_threshold != 0.25
+        or detector_configuration.iou_threshold != 0.5
+        or detector_configuration.inference_image_size != 640
+        or detector_configuration.maximum_detections != 300
+        or detector_configuration.half_precision
+    ):
+        raise DetectorConfigurationError(
+            "autonomous-demo requires frozen V2 settings: pig/0, confidence 0.25, "
+            "IoU 0.50, image size 640, max detections 300, and no half precision."
+        )
+    demo_id = "autonomous_demo_video_1"
+    video_path = Path(arguments.video)
+
+    def source_factory(_configuration: StreamConfiguration):
+        return create_camera_source(StreamConfiguration.file(demo_id, video_path))
+
+    result = run_autonomous_demo(
+        AutonomousDemoConfiguration(
+            demo_id=demo_id,
+            detector_configuration=detector_configuration,
+        ),
+        source_factory=source_factory,
+    )
+    summary = {
+        "confidence": result.calibration.confidence.value,
+        "counting_crossing_events": result.counting_crossing_events,
+        "demo_id": result.demo_id,
+        "direction_purity": result.calibration.direction_purity,
+        "eligible_track_count": result.calibration.eligible_track_count,
+        "hmi_state": result.hmi_state,
+        "limitations": result.limitations,
+        "primary_count": result.primary_count,
+        "selected_score": result.calibration.selected_score,
+        "status": result.calibration.status.value,
+    }
+    print(json.dumps(summary, sort_keys=True))
+    if result.calibration.status is not CalibrationStatus.READY:
+        return 2
     return 0
 
 
