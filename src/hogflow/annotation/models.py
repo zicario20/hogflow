@@ -49,6 +49,7 @@ class AnnotationSplitPolicy(str, Enum):
 
     SOURCE_ISOLATED = "source_isolated"
     TEMPORAL_BLOCKED = "temporal_blocked"
+    MULTI_SOURCE_TEMPORAL_BLOCKED = "multi_source_temporal_blocked"
 
 
 def validate_opaque_identifier(value: object, *, field_name: str) -> None:

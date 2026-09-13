@@ -152,7 +152,11 @@ def manifest_to_dict(manifest: AnnotationDatasetManifest) -> dict[str, Any]:
                     for block in manifest.temporal_blocks
                 ],
             }
-            if manifest.split_policy is AnnotationSplitPolicy.TEMPORAL_BLOCKED
+            if manifest.split_policy
+            in {
+                AnnotationSplitPolicy.TEMPORAL_BLOCKED,
+                AnnotationSplitPolicy.MULTI_SOURCE_TEMPORAL_BLOCKED,
+            }
             else {}
         ),
     }

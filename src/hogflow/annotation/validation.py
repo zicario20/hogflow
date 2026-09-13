@@ -163,6 +163,13 @@ def validate_annotation_dataset(
 
     if manifest.split_policy is AnnotationSplitPolicy.SOURCE_ISOLATED:
         _validate_source_split_isolation(manifest.frames, findings)
+    elif manifest.split_policy is AnnotationSplitPolicy.MULTI_SOURCE_TEMPORAL_BLOCKED:
+        _validate_temporal_blocks(
+            manifest.frames,
+            manifest.temporal_blocks,
+            findings,
+            allow_multiple_sources=True,
+        )
     else:
         _validate_temporal_blocks(manifest.frames, manifest.temporal_blocks, findings)
     _validate_duplicate_frame_locations(images, findings)
@@ -376,6 +383,8 @@ def _validate_temporal_blocks(
     frames: Sequence[AnnotationFrameRecord],
     temporal_blocks: Sequence[TemporalBlock],
     findings: list[ValidationFinding],
+    *,
+    allow_multiple_sources: bool = False,
 ) -> None:
     blocks_by_id = {block.block_id: block for block in temporal_blocks}
     blocks_by_clip: dict[str, list[TemporalBlock]] = {}
@@ -390,7 +399,7 @@ def _validate_temporal_blocks(
                 )
             )
         blocks_by_clip.setdefault(block.clip_id, []).append(block)
-    if len(blocks_by_clip) != 1:
+    if not allow_multiple_sources and len(blocks_by_clip) != 1:
         findings.append(
             ValidationFinding(
                 FindingSeverity.ERROR,

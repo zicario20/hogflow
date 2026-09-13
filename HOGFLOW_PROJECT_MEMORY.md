@@ -4,9 +4,9 @@
 > `AGENTS.md`, no en sustitución de sus reglas normativas.
 
 Última reconstrucción integral: 25 de julio de 2026.
-Última actualización incremental: ejecución provisional Phase 10.3A
-(anotación humana, training YOLO11n, holdout independiente, integración HMI y
-guard de replay), 30 de agosto de 2026.
+Última actualización incremental: Phase 10.3B (error analysis V1, entrenamiento
+provisional V2 en GPU, integración HMI y bloqueo honesto a holdout C), 13 de
+septiembre de 2026.
 
 Línea base técnica de Phase 10.3:
 `e14bf5b5d73b886ff9834b606787ca58872c65b2`
@@ -1054,7 +1054,43 @@ Resumen de madurez:
   la precisión de conteo permanece `BLOCKED — MANUAL CROSSING GROUND TRUTH
   MISSING`. El modelo es un demo y no está validado para producción.
 
-### 5.28 Estado de las fases posteriores
+### 5.28 Phase 10.3B — Detector Error Analysis & Generalization Improvement
+
+- **Baseline preservada:** SHA `995897b32ebe3e8034fd980ac36fb6ab69ee70b1`,
+  V1 `hogflow_pig_demo` y su SHA
+  `93416e3c0d00fa9b588547f6fa3e92e3afbdecbb836ebca3ad69f5199865144a` siguen
+  reproducibles. La evaluación independiente histórica B de V1 permanece
+  inmutable: TP=15, FP=20, FN=499, precision=0.4286, recall=0.0292, F1=0.0546.
+- **Diagnóstico:** la auditoría exacta de las 36 imágenes B encontró cero
+  defectos de imagen/label, dimensiones, orientación o timestamps. La causa
+  es **MIXED**, con primaria de shift de escena/iluminación/composición y
+  sesgo de cobertura espacial de A; B además mostró mayor crowding. No se
+  sustentaron resolución, max-det o bug del evaluador como causa primaria.
+- **Reclasificación:** B fue holdout independiente para V1, pero es evidencia
+  de desarrollo consumida para V2 y nunca puede llamarse holdout independiente
+  de V2.
+- **V2:** se añadió la política fuente-aware
+  `multi_source_temporal_blocked` sin debilitar `temporal_blocked`; sus tests
+  cubren serialización y separación temporal multi-fuente. El dataset local
+  A+B tiene fingerprint
+  `948a43612c32d734cb27333b36ac00da5212645b78c4c9a3fe14cbceac24e47a`, 79
+  frames de training, 21 de calibration, 1,320/121 boxes y cero labels
+  inválidos. YOLO11n oficial fue ajustado 75 épocas en la GPU RTX 5070 Ti
+  (`torch 2.11.0+cu128`); la calibración interna obtuvo TP=86, FP=31, FN=35,
+  precision=0.7350, recall=0.7107, F1=0.7227.
+- **Artefacto/integración:** el candidato local `hogflow_pig_demo_v2` tiene
+  SHA `892a15ce4c739a819b17900700bd17c8473c44b6734b954869bf5470a633cc8c`,
+  provenance completa, gate `AVAILABLE` con exactamente un candidato activo y
+  carga por el boundary existente Phase 10.2. El smoke A procesó 539/539
+  frames, 7,001 detecciones, cero fallos de detector/tracker/crossing y
+  23.39 FPS de pipeline.
+- **Estado:** parcial. V2 mejora materialmente la evidencia de desarrollo y
+  el pipeline real, pero requiere un nuevo vídeo `demo_video_c` explícitamente
+  autorizado y 30–60 frames con cajas humanas para medir generalización
+  independiente. Los conteos manuales A/B siguen UNKNOWN; no se deriva error
+  de conteo. Modelo: **DEMO MODEL — NOT PRODUCTION VALIDATED**.
+
+### 5.29 Estado de las fases posteriores
 
 Phase 9 está técnicamente completada según sus subfases autorizadas; Phase
 10.1 implementa runtime supervision, Phase 10.2 integra el boundary local de
@@ -1530,19 +1566,22 @@ todavía resultado empírico reportable.
 
 ### 12.1 Siguiente trabajo confirmado
 
-**HECHO VERIFICADO:** Phase 10.3A ya ejecutó entrenamiento provisional,
-calibración A, holdout independiente B y smoke HMI con un modelo local
-compatible. La siguiente acción acotada es registrar los dos conteos humanos
-de cruce y, después, comparar el conteo del sistema sin modificar las reglas.
-El holdout B mostró recall bajo y no sustenta una afirmación de generalización.
+**HECHO VERIFICADO:** Phase 10.3A ejecutó entrenamiento provisional,
+calibración A, holdout independiente B y smoke HMI. Phase 10.3B auditó la
+caída de V1, entrenó V2 con A+B como desarrollo y verificó el pipeline real;
+la siguiente acción acotada es autorizar un único vídeo C nuevo, etiquetar
+30–60 frames y ejecutar una evaluación congelada. Los dos conteos humanos de
+cruce A/B siguen siendo necesarios para cualquier error de conteo. B mostró
+recall V1 bajo y ya no es holdout independiente de V2.
 
 ### 12.2 Siguiente fase normativa
 
 Phase 9.1–9.4 implementan el workflow desktop, Phase 10.1 implementa runtime
 supervision, Phase 10.2 implementa el detector boundary, Phase 10.3 el
-workflow de validación controlada y Phase 10.3A la primera evidencia
-pig-specific provisional. El siguiente trabajo acotado es completar el
-ground truth manual de cruces; Phase 10.4 y Phase 11 no están iniciadas.
+workflow de validación controlada y Phase 10.3A/10.3B la evidencia
+pig-specific provisional. El siguiente trabajo acotado es autorizar y
+etiquetar C para generalización independiente, además de completar el ground
+truth manual de cruces; Phase 10.4 y Phase 11 no están iniciadas.
 
 Fuera del siguiente trabajo salvo aprobación expresa:
 
