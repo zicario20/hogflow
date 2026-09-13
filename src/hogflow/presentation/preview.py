@@ -88,6 +88,7 @@ def build_preview_render_plan(
     diagnostic_lines: tuple[str, ...] = (),
     maximum_width: int = 800,
     maximum_height: int = 450,
+    show_line: bool = True,
 ) -> PreviewRenderPlan:
     """Map normalized diagnostics to a deterministic bounded canvas plan."""
 
@@ -99,6 +100,8 @@ def build_preview_render_plan(
     ):
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise InputDataError(f"Preview {label} must be positive.")
+    if not isinstance(show_line, bool):
+        raise InputDataError("Preview line visibility must be boolean.")
     if not isinstance(diagnostic_lines, tuple) or not all(
         isinstance(item, str) and item for item in diagnostic_lines
     ):
@@ -115,15 +118,16 @@ def build_preview_render_plan(
         return (x * display_width, y * display_height)
 
     primitives: list[PreviewPrimitive] = []
-    primitives.append(
-        PreviewPrimitive(
-            PreviewPrimitiveKind.LINE,
-            (
-                *point(frame.line.start.x, frame.line.start.y),
-                *point(frame.line.end.x, frame.line.end.y),
-            ),
+    if show_line:
+        primitives.append(
+            PreviewPrimitive(
+                PreviewPrimitiveKind.LINE,
+                (
+                    *point(frame.line.start.x, frame.line.start.y),
+                    *point(frame.line.end.x, frame.line.end.y),
+                ),
+            )
         )
-    )
     for track in frame.tracks:
         primitives.append(
             PreviewPrimitive(

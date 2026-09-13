@@ -79,6 +79,23 @@ class OperatorPresenter:
             OperatorStatus.READY,
         )
 
+    def cancel_autonomous_demo(
+        self,
+        dock_id: DockId = DockId.DOCK_1,
+    ) -> OperatorScreen:
+        """Request cooperative Auto Demo cancellation through the app boundary."""
+
+        try:
+            self._application.cancel_autonomous_demo()
+        except ExpectedOperatorError as exc:
+            self._view.show_error(str(exc))
+            raise
+        return self._render(
+            self._application.snapshot(),
+            dock_id,
+            OperatorStatus.READY,
+        )
+
     def configure_video_source(
         self,
         request: VideoSourceRequest,
@@ -302,22 +319,30 @@ class OperatorPresenter:
             dock_id=dock_id,
             status=status,
             autonomous_demo=self._autonomous_snapshot(),
+            autonomous_demo_available=self._autonomous_available(),
         )
         self._view.render(screen)
-        self._render_preview(screen, preview)
+        self._render_preview(screen, preview, self._autonomous_snapshot())
         return screen
 
     def _render_preview(
         self,
         screen: OperatorScreen,
         preview: PreviewSnapshot,
+        autonomous_demo: AutonomousDemoSnapshot | None = None,
     ) -> None:
         if not isinstance(self._view, OperatorPreviewView):
             return
-        if preview.health_state is PreviewHealthState.FAILED:
-            return
         try:
-            frame = self._application.latest_preview_frame()
+            auto = autonomous_demo or AutonomousDemoSnapshot()
+            autonomous_frame = (
+                auto.latest_preview
+                if auto.state is not AutonomousDemoState.IDLE and auto.latest_preview is not None
+                else None
+            )
+            if autonomous_frame is None and preview.health_state is PreviewHealthState.FAILED:
+                return
+            frame = autonomous_frame or self._application.latest_preview_frame()
             plan = (
                 None
                 if frame is None
@@ -329,6 +354,7 @@ class OperatorPresenter:
                     ),
                     maximum_width=_OPERATOR_PREVIEW_MAXIMUM_WIDTH,
                     maximum_height=_OPERATOR_PREVIEW_MAXIMUM_HEIGHT,
+                    show_line=autonomous_frame is None or auto.line_locked,
                 )
             )
             self._view.render_preview(plan, screen.camera_pipeline)
@@ -342,6 +368,15 @@ class OperatorPresenter:
             return None
         return method()
 
+    def _autonomous_available(self) -> bool | None:
+        method = getattr(self._application, "autonomous_demo_available", None)
+        if not callable(method):
+            return None
+        try:
+            return bool(method())
+        except Exception:
+            return False
+
 
 def screen_from_snapshot(
     snapshot: MultiDockRuntimeSnapshot,
@@ -351,6 +386,7 @@ def screen_from_snapshot(
     dock_id: DockId = DockId.DOCK_1,
     status: OperatorStatus | None = None,
     autonomous_demo: AutonomousDemoSnapshot | None = None,
+    autonomous_demo_available: bool | None = None,
 ) -> OperatorScreen:
     """Create a transient workflow-safe display projection from one snapshot."""
 
@@ -428,6 +464,8 @@ def screen_from_snapshot(
         preview_failures=preview.publication_failures + preview.render_failures,
         last_error=_text(pipeline.failure_message),
         active_crossing_lifecycle=_text(pipeline.active_crossing_lifecycle_id),
+        detector_status=_detector_status(pipeline, autonomous_demo),
+        detector_detail=_detector_detail(pipeline, autonomous_demo),
     )
     return OperatorScreen(
         counting_lane=lane_panel,
@@ -435,7 +473,13 @@ def screen_from_snapshot(
         totals=totals,
         camera_pipeline=camera_panel,
         selected_dock_id=selected_dock.value,
-        actions=_action_state(snapshot, selected_dock, pipeline, autonomous_demo),
+        actions=_action_state(
+            snapshot,
+            selected_dock,
+            pipeline,
+            autonomous_demo,
+            autonomous_demo_available,
+        ),
         status_message=current_status.value,
         generated_at=snapshot.generated_at.isoformat(),
         autonomous_demo=_autonomous_panel(autonomous_demo),
@@ -447,6 +491,7 @@ def _action_state(
     selected_dock: DockId,
     pipeline: CountingPipelineSnapshot,
     autonomous_demo: AutonomousDemoSnapshot | None = None,
+    autonomous_demo_available: bool | None = None,
 ) -> OperatorActionState:
     local_file = (
         pipeline.camera.source_type is not None and pipeline.camera.source_type.value == "file"
@@ -460,20 +505,39 @@ def _action_state(
     )
     replay_safe = not snapshot.counting_lane.occupied
     auto = autonomous_demo or AutonomousDemoSnapshot()
-    auto_available = auto.state not in (
-        AutonomousDemoState.CALIBRATING,
-        AutonomousDemoState.COUNTING,
+    auto_running = (
+        auto.state
+        in (
+            AutonomousDemoState.CALIBRATING,
+            AutonomousDemoState.COUNTING,
+        )
+        or auto.worker_alive
     )
+    if autonomous_demo_available is None:
+        # Protocol fakes and source-only tests may not expose the optional gate.
+        detector = pipeline.detector
+        auto_available = (
+            local_file
+            and replay_safe
+            and not pipeline.worker_alive
+            and not auto_running
+            and detector.configured
+            and detector.target_class_name.casefold() == "pig"
+            and detector.target_class_ids == (0,)
+        )
+    else:
+        auto_available = autonomous_demo_available
     return OperatorActionState(
         register_truck=runtime_open and dock.available,
         start_truck=runtime_open and dock.runtime_status is DockRuntimeStatus.PLANNED,
-        start_session=runtime_open and dock.operation_can_start_session,
+        start_session=runtime_open and not auto_running and dock.operation_can_start_session,
         complete_session=owns_lane,
         cancel_session=owns_lane,
         complete_truck=runtime_open and dock.operation_can_complete,
         cancel_truck=runtime_open
         and dock.operation_status in (TruckOperationStatus.PLANNED, TruckOperationStatus.ACTIVE),
         configure_source=runtime_open
+        and not auto_running
         and pipeline.status
         not in (
             CountingPipelineStatus.STARTING,
@@ -482,6 +546,7 @@ def _action_state(
         ),
         start_pipeline=runtime_open
         and pipeline.status is CountingPipelineStatus.STOPPED
+        and not auto_running
         and (
             pipeline.camera.status is CameraStatus.CLOSED
             or (local_file and pipeline.camera.source_exhausted and replay_safe)
@@ -497,6 +562,7 @@ def _action_state(
         restart_video=runtime_open
         and pipeline.status is CountingPipelineStatus.STOPPED
         and not pipeline.worker_alive
+        and not auto_running
         and local_file
         and pipeline.camera.source_exhausted
         and replay_safe,
@@ -506,7 +572,9 @@ def _action_state(
         and local_file
         and replay_safe
         and not pipeline.worker_alive
+        and not auto_running
         and auto_available,
+        cancel_autonomous_demo=runtime_open and auto_running,
     )
 
 
@@ -539,20 +607,25 @@ def _autonomous_panel(snapshot: AutonomousDemoSnapshot) -> AutonomousDemoPanel:
             calibration.selected_line.end.x,
             calibration.selected_line.end.y,
         )
+    state_label = snapshot.state.value
+    if snapshot.state is AutonomousDemoState.LOW_CONFIDENCE:
+        state_label = "LOW CONSISTENCY"
     return AutonomousDemoPanel(
-        state=snapshot.state.value,
+        state=state_label,
         direction=direction,
         counting_line="LOCKED" if line_locked else "UNLOCKED",
         consistency=calibration.confidence.value.upper(),
         observed_count_range=count_range,
         message=snapshot.message,
         live_count=(
-            snapshot.primary_count
+            snapshot.live_count
             if snapshot.state in (AutonomousDemoState.COUNTING, AutonomousDemoState.COMPLETE)
             else None
         ),
         line_locked=line_locked,
         line_coordinates=line_coordinates,
+        frames_processed=snapshot.frames_processed,
+        crossing_events=snapshot.crossing_events,
     )
 
 
@@ -596,6 +669,35 @@ def _pig_type_label(pig_type: PigType | None) -> str:
 
 def _text(value: str | None) -> str:
     return "—" if value is None else value
+
+
+def _detector_status(
+    pipeline: CountingPipelineSnapshot,
+    autonomous_demo: AutonomousDemoSnapshot | None = None,
+) -> str:
+    detector = pipeline.detector
+    if autonomous_demo is not None and autonomous_demo.detector_ready:
+        return "DEMO MODEL LOADED"
+    if detector.configured and detector.model_loaded:
+        return "DEMO MODEL LOADED"
+    if detector.configured:
+        return "DEMO MODEL READY"
+    return "NOT LOADED"
+
+
+def _detector_detail(
+    pipeline: CountingPipelineSnapshot,
+    autonomous_demo: AutonomousDemoSnapshot | None = None,
+) -> str:
+    detector = pipeline.detector
+    if autonomous_demo is not None and autonomous_demo.detector_ready:
+        return "pig · DEMO"
+    if detector.configured and detector.model_loaded:
+        device = detector.runtime_device.upper()
+        return f"{detector.target_class_name} · {device}"
+    if detector.configured:
+        return "pig · frozen V2"
+    return "Auto Demo unavailable"
 
 
 def _not_configured_pipeline() -> CountingPipelineSnapshot:

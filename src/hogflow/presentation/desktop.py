@@ -183,6 +183,7 @@ class TkOperatorView:
                 "preview",
                 "last_error",
                 "lifecycle",
+                "detector_status",
             )
         }
         self._preview_status_value = tk.StringVar(value="Preview Waiting")
@@ -222,6 +223,7 @@ class TkOperatorView:
         self._top_status_frame: Any = None
         self._lane_panel: Any = None
         self._lane_status_widget: Any = None
+        self._lane_count_title_value: Any = None
         self._lane_count_widget: Any = None
         self._pipeline_panel: Any = None
         self._pipeline_field_widgets: list[tuple[Any, Any]] = []
@@ -281,6 +283,19 @@ class TkOperatorView:
         autonomous = screen.autonomous_demo
         self._autonomous_line_coordinates = autonomous.line_coordinates
         self._autonomous_line_visible = autonomous.state != "AUTO CALIBRATION IDLE"
+        lane_count_title = getattr(self, "_lane_count_title_value", None)
+        if lane_count_title is not None:
+            lane_count_title.set(
+                "AUTONOMOUS DEMO COUNT"
+                if autonomous.state
+                not in {
+                    "AUTO CALIBRATION IDLE",
+                    "AUTOCALIBRATION INCONCLUSIVE",
+                    "CANCELLED",
+                    "FAILED",
+                }
+                else "LIVE COUNT"
+            )
         if autonomous.state == "CALIBRATING":
             self._lane_values["count"].set("CALIBRATING…")
         elif autonomous.live_count is not None:
@@ -296,7 +311,10 @@ class TkOperatorView:
             ):
                 self._autonomous_values[key].set(value)
         if getattr(self, "_autonomous_state_widget", None) is not None:
-            self._apply_status_tone(self._autonomous_state_widget, autonomous.state)
+            self._apply_status_tone(
+                self._autonomous_state_widget,
+                "LOW CONSISTENCY" if autonomous.consistency == "LOW" else autonomous.state,
+            )
         if hasattr(self, "_lane_status_widget") and self._lane_status_widget is not None:
             self._apply_status_tone(self._lane_status_widget, lane.status)
             self._lane_count_widget.configure(
@@ -321,12 +339,24 @@ class TkOperatorView:
                 ("preview", camera.preview_status),
                 ("last_error", camera.last_error),
                 ("lifecycle", camera.active_crossing_lifecycle),
+                (
+                    "detector_status",
+                    f"{camera.detector_status} · {camera.detector_detail}"
+                    if camera.detector_detail != "Auto Demo unavailable"
+                    else camera.detector_status,
+                ),
             )
             for key, value in pipeline_values:
                 self._pipeline_values[key].set(value)
             for key, widget in self._pipeline_metric_widgets.items():
                 status_value = self._pipeline_values[key].get()
-                if key in {"camera_status", "pipeline_status", "worker", "preview"}:
+                if key in {
+                    "camera_status",
+                    "pipeline_status",
+                    "worker",
+                    "preview",
+                    "detector_status",
+                }:
                     self._apply_status_tone(widget, status_value)
         for panel, dock in zip(screen.docks, DockId, strict=True):
             flags = tuple(
@@ -416,9 +446,7 @@ class TkOperatorView:
         camera: CameraPipelinePanel,
         system_status: str,
     ) -> None:
-        mode_tone = (
-            SemanticTone.SUCCESS if mode is OperatorMode.LIVE_MODE else SemanticTone.INFORMATION
-        )
+        mode_tone = SemanticTone.INFORMATION
         self._mode_badge.configure(foreground=HMI_THEME.tone_color(mode_tone))
         self._apply_status_tone(self._system_state_widget, system_status)
         self._apply_status_tone(self._camera_state_widget, camera.camera_status)
@@ -762,9 +790,10 @@ class TkOperatorView:
             ).grid(row=1, column=0, sticky="w")
         live_count = tk.Frame(lane, background=colors.panel)
         live_count.grid(row=0, column=6, sticky="e", padx=(spacing.medium, 0))
+        self._lane_count_title_value = tk.StringVar(value="LIVE COUNT")
         tk.Label(
             live_count,
-            text="LIVE COUNT",
+            textvariable=self._lane_count_title_value,
             background=colors.panel,
             foreground=colors.text_secondary,
             font=typography.font(typography.micro_size, "bold"),
@@ -820,8 +849,9 @@ class TkOperatorView:
             ("Preview", "preview"),
             ("Lifecycle", "lifecycle"),
             ("Last Error", "last_error"),
+            ("Detector", "detector_status"),
         )
-        pipeline_value_widths = (18, 12, 12, 7, 7, 6, 7, 6, 8, 7, 12, 16, 20)
+        pipeline_value_widths = (18, 12, 12, 7, 7, 6, 7, 6, 8, 7, 12, 16, 20, 28)
         for (label, key), width in zip(
             pipeline_fields,
             pipeline_value_widths,
@@ -1249,6 +1279,11 @@ class TkOperatorView:
                 self._start_autonomous_demo,
             ),
             (
+                OperatorAction.CANCEL_AUTONOMOUS_DEMO,
+                "CANCEL AUTO DEMO",
+                self._cancel_autonomous_demo,
+            ),
+            (
                 OperatorAction.REFRESH,
                 "Refresh Snapshot",
                 self._refresh_selected_dock,
@@ -1274,6 +1309,7 @@ class TkOperatorView:
             OperatorAction.REFRESH: (0, 0),
             OperatorAction.EXIT: (0, 1),
             OperatorAction.START_AUTONOMOUS_DEMO: (1, 0),
+            OperatorAction.CANCEL_AUTONOMOUS_DEMO: (1, 1),
         }
         for action, label, callback in callbacks:
             if action in truck_positions:
@@ -1426,6 +1462,7 @@ class TkOperatorView:
         destructive = action in {
             OperatorAction.CANCEL_SESSION,
             OperatorAction.CANCEL_TRUCK,
+            OperatorAction.CANCEL_AUTONOMOUS_DEMO,
             OperatorAction.EXIT,
         }
         primary = action in {
@@ -1645,6 +1682,9 @@ class TkOperatorView:
 
     def _start_autonomous_demo(self) -> None:
         self._invoke(self._require_presenter().start_autonomous_demo, self._dock())
+
+    def _cancel_autonomous_demo(self) -> None:
+        self._invoke(self._require_presenter().cancel_autonomous_demo, self._dock())
 
     def _refresh_selected_dock(self) -> None:
         self._invoke(self._require_presenter().refresh, self._dock())

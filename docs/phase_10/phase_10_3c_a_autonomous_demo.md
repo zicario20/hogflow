@@ -125,6 +125,43 @@ formal Phase 10.3C verdict remains blocked.
 
 **DEMO MODEL — NOT PRODUCTION VALIDATED.**
 
+## Phase 10.3C-A.2 — Manager Demo Runtime Polish
+
+The autonomous demo now uses the existing `LatestPreviewFrameChannel` as a
+single replaceable slot shared with the normal preview path. During both
+passes, the worker publishes only the newest immutable `PreviewFrame`; the Tk
+thread consumes it on the existing bounded refresh cadence. Calibration keeps
+candidate geometry hidden. After a READY or LOW lock, exactly the selected
+finite line is rendered.
+
+PASS 2 emits bounded `AutonomousDemoProgress` values for each processed frame.
+The application snapshot carries the current technical `live_count`, frame
+progress, crossing-event total, and latest preview. The manager therefore sees
+the video restart and the LIVE COUNT advance during COUNTING; the value never
+mutates Phase 8 lane, dock, truck, or session totals.
+
+`AutonomousDemoController` owns a cooperative `threading.Event`. `CANCEL AUTO
+DEMO` and application shutdown request the stop, the orchestration checks it
+between frames and passes, and the non-daemon worker is joined with a bounded
+timeout. Cancellation is represented as `CANCELLED`, not `FAILED`; stale
+autonomous preview is cleared before normal mode resumes.
+
+The Auto Demo action is gated on an explicit local frozen V2 configuration:
+`pig` class 0, confidence 0.25, IoU 0.50, image size 640, `max_det` 300, no
+half precision, and the expected V2 artifact fingerprint. Empty or mismatched
+detector configuration remains unavailable. The pipeline panel shows a compact
+`DEMO MODEL LOADED`/`NOT LOADED` status and keeps the informational LIVE MODE
+badge blue.
+
+The HMI states are `CALIBRATING`, `AUTO CALIBRATION READY`, `COUNTING`,
+`COMPLETE`, `LOW CONSISTENCY`, `AUTOCALIBRATION INCONCLUSIVE`, and
+`CANCELLED`. LOW remains an amber warning through completion; INCONCLUSIVE
+never starts PASS 2. The runtime remains a technical self-consistency demo:
+
+**AUTONOMOUS AI VALIDATION — HUMAN GROUND TRUTH NOT MEASURED**
+
+**DEMO MODEL — NOT PRODUCTION VALIDATED.**
+
 The result is useful as an operator/demo consistency check and as evidence that
 the frozen detector can feed HogFlow's existing tracker, crossing, counter, and
 HMI path. It is not a deployment approval, certification, or a measured human
@@ -162,3 +199,16 @@ controlled non-daemon application worker and no frame/history store or second
 counter architecture.
 
 **DEMO MODEL — NOT PRODUCTION VALIDATED.**
+
+### Local A.2 verification
+
+The existing selected autonomous demo video was replayed through the frozen
+V2 CLI after the runtime changes. It completed with the historical technical
+result `primary_count=6`, `confidence=low`, and `hmi_state=LIVE COUNT`; no
+model, threshold, or calibration mathematics changed. A real application
+composition smoke then requested cancellation during calibration and shut
+down cleanly with `CANCELLED` and `worker_alive=false`. Synthetic HMI/layout
+regression tests cover the 1920 and 1366 target widths, bounded latest-frame
+replacement, hidden pre-lock geometry, selected-line lock, intermediate live
+count, LOW persistence, and INCONCLUSIVE behavior. No screenshots or media
+were retained.

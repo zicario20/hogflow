@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -32,6 +33,7 @@ from hogflow.calibration.models import (
     TrajectoryObservation,
     TrajectorySummary,
 )
+from hogflow.camera.preview_models import PreviewCrossing, PreviewFrame, PreviewTrack
 from hogflow.counting import (
     LifecycleDirectionalCounter,
     LiveCountingConfiguration,
@@ -121,6 +123,7 @@ class AutonomousDemoResult:
     hmi_state: str
     failures: tuple[str, ...]
     limitations: tuple[str, ...]
+    cancelled: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.demo_id, str) or fullmatch(_IDENTIFIER, self.demo_id) is None:
@@ -160,6 +163,45 @@ class AutonomousDemoResult:
                 isinstance(item, str) and item.strip() for item in value
             ):
                 raise ValueError(f"{name} must be non-empty text tuples.")
+        if not isinstance(self.cancelled, bool):
+            raise ValueError("cancelled must be boolean.")
+
+
+@dataclass(frozen=True, slots=True)
+class AutonomousDemoProgress:
+    """Bounded per-frame progress emitted by the autonomous worker.
+
+    The progress value contains one optional latest preview frame and scalar
+    counters only. It deliberately carries no frame history, framework object,
+    filesystem path, or business/session state.
+    """
+
+    stage: str
+    frame_sequence: int | None = None
+    current_count: int | None = None
+    crossing_events: int = 0
+    frames_processed: int = 0
+    preview_frame: PreviewFrame | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.stage, str) or not self.stage.strip() or len(self.stage) > 64:
+            raise ValueError("Autonomous progress stage must be bounded text.")
+        for name in ("frame_sequence", "current_count"):
+            value = getattr(self, name)
+            if value is not None and (
+                not isinstance(value, int) or isinstance(value, bool) or value < 0
+            ):
+                raise ValueError(f"Autonomous progress {name} must be non-negative.")
+        for name in ("crossing_events", "frames_processed"):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"Autonomous progress {name} must be non-negative.")
+        if self.preview_frame is not None and not isinstance(self.preview_frame, PreviewFrame):
+            raise ValueError("Autonomous progress preview must be a PreviewFrame.")
+
+
+class _AutonomousStopRequested(Exception):
+    """Internal control flow for cooperative autonomous cancellation."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +266,96 @@ def _tracker_fingerprint(tracker: LiveTracker, configuration: ByteTrackConfigura
     )
 
 
+def _check_stop(should_stop: Callable[[], bool] | None) -> None:
+    if should_stop is not None and should_stop():
+        raise _AutonomousStopRequested
+
+
+def _notify_progress(
+    callback: Callable[..., None] | None,
+    stage: str,
+    calibration: AutonomousCalibrationResult | None,
+    update: AutonomousDemoProgress | None = None,
+) -> None:
+    """Notify old two-argument callbacks and new bounded progress consumers."""
+
+    if callback is None:
+        return
+    try:
+        parameters = inspect.signature(callback).parameters.values()
+        accepts_progress = any(
+            parameter.kind is inspect.Parameter.VAR_POSITIONAL
+            or parameter.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
+            and index >= 2
+            for index, parameter in enumerate(parameters)
+        )
+    except (TypeError, ValueError):
+        accepts_progress = True
+    if accepts_progress:
+        callback(stage, calibration, update)
+    else:
+        callback(stage, calibration)
+
+
+def _preview_for_tracking(
+    frame: FramePacket,
+    tracking,
+    line: NormalizedLine,
+    crossing=None,
+) -> PreviewFrame:
+    observations = (
+        {} if crossing is None else {item.tracker_id: item for item in crossing.observations}
+    )
+    tracks = []
+    for tracked_object in tracking.tracked_objects:
+        track = tracked_object.track
+        detection = track.detection
+        box = detection.bounding_box
+        observation = observations.get(track.tracker_id)
+        anchor = (
+            observation.point
+            if observation is not None
+            else NormalizedPoint(
+                ((box.x_min + box.x_max) / 2.0) / tracking.frame_width,
+                box.y_max / tracking.frame_height,
+            )
+        )
+        side = observation.side if observation is not None else line.classify(anchor, 0.005)
+        tracks.append(
+            PreviewTrack(
+                tracker_id=track.tracker_id,
+                class_id=detection.class_id,
+                class_name=detection.class_name,
+                confidence=detection.confidence,
+                x_min=box.x_min / tracking.frame_width,
+                y_min=box.y_min / tracking.frame_height,
+                x_max=box.x_max / tracking.frame_width,
+                y_max=box.y_max / tracking.frame_height,
+                anchor=anchor,
+                side=side,
+            )
+        )
+    return PreviewFrame(
+        source_id=frame.stream.stream_id,
+        frame_sequence=frame.sequence_number,
+        captured_at=frame.timestamp.acquired_at,
+        frame_width=frame.dimensions.width,
+        frame_height=frame.dimensions.height,
+        rgb24=frame.payload.data,
+        tracks=tuple(tracks),
+        line=line,
+        crossings=(
+            ()
+            if crossing is None
+            else tuple(PreviewCrossing(item.tracker_id, item.direction) for item in crossing.events)
+        ),
+    )
+
+
 def _close_pass_components(
     source: CameraSource, detector: LiveDetector, tracker: LiveTracker
 ) -> None:
@@ -250,6 +382,9 @@ def _collect_trajectories(
     detector_configuration: PigDetectorConfiguration,
     clock: Callable[[], datetime] | None,
     source_path: Path | None = None,
+    should_stop: Callable[[], bool] | None = None,
+    progress_callback: Callable[..., None] | None = None,
+    publish_preview: bool = False,
 ) -> _PassEvidence:
     source_configuration = (
         StreamConfiguration.file(configuration.demo_id, source_path)
@@ -268,11 +403,13 @@ def _collect_trajectories(
     tracker_fingerprint = byte_track_configuration_fingerprint(configuration.tracker_configuration)
     source.open()
     try:
+        _check_stop(should_stop)
         detector.load()
         tracker.start(source.identity.stream_id)
         artifact_fingerprint = _artifact_fingerprint(detector)
         tracker_fingerprint = _tracker_fingerprint(tracker, configuration.tracker_configuration)
         while True:
+            _check_stop(should_stop)
             result = source.read()
             if result.status is StreamReadStatus.TEMPORARY_UNAVAILABLE:
                 continue
@@ -304,6 +441,25 @@ def _collect_trajectories(
                         center=center,
                         confidence=tracked_object.track.detection.confidence,
                     )
+                )
+            if publish_preview and progress_callback is not None:
+                _notify_progress(
+                    progress_callback,
+                    "calibrating",
+                    None,
+                    AutonomousDemoProgress(
+                        stage="calibrating",
+                        frame_sequence=packet.sequence_number,
+                        frames_processed=frames,
+                        preview_frame=_preview_for_tracking(
+                            packet,
+                            tracking,
+                            NormalizedLine(
+                                NormalizedPoint(0.5, 0.0),
+                                NormalizedPoint(0.5, 1.0),
+                            ),
+                        ),
+                    ),
                 )
     finally:
         _close_pass_components(source, detector, tracker)
@@ -557,6 +713,8 @@ def _run_count_pass(
     tracker_factory: Callable[[ByteTrackConfiguration], LiveTracker],
     clock: Callable[[], datetime] | None,
     source_path: Path | None = None,
+    should_stop: Callable[[], bool] | None = None,
+    progress_callback: Callable[..., None] | None = None,
 ) -> tuple[int, int, int | None, float, float, float]:
     geometry = calibration.counting_configuration
     if geometry is None or calibration.selected_line is None:
@@ -592,11 +750,13 @@ def _run_count_pass(
     started = perf_counter()
     source.open()
     try:
+        _check_stop(should_stop)
         detector.load()
         tracker.start(source.identity.stream_id)
         crossing.start(source.identity.stream_id)
         counter.start(source.identity.stream_id, crossing.lifecycle_id)
         while True:
+            _check_stop(should_stop)
             result = source.read()
             if result.status is StreamReadStatus.TEMPORARY_UNAVAILABLE:
                 continue
@@ -619,6 +779,25 @@ def _run_count_pass(
             counting_result = counter.update(crossing_result)
             count = counting_result.lifecycle_directional_count
             frames += 1
+            if progress_callback is not None:
+                _notify_progress(
+                    progress_callback,
+                    "counting",
+                    calibration,
+                    AutonomousDemoProgress(
+                        stage="counting",
+                        frame_sequence=packet.sequence_number,
+                        current_count=count or 0,
+                        crossing_events=crossing_events,
+                        frames_processed=frames,
+                        preview_frame=_preview_for_tracking(
+                            packet,
+                            tracking,
+                            geometry.line,
+                            crossing_result,
+                        ),
+                    ),
+                )
     finally:
         counter.close()
         crossing.close()
@@ -636,8 +815,9 @@ def run_autonomous_demo(
     detector_factory: Callable[[PigDetectorConfiguration], LiveDetector] | None = None,
     tracker_factory: Callable[[ByteTrackConfiguration], LiveTracker] | None = None,
     clock: Callable[[], datetime] | None = None,
-    progress_callback: Callable[[str, AutonomousCalibrationResult | None], None] | None = None,
+    progress_callback: Callable[..., None] | None = None,
     source_path: Path | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> AutonomousDemoResult:
     """Run bounded calibration and, only when ready, one clean count pass."""
 
@@ -662,9 +842,10 @@ def run_autonomous_demo(
         tracker_factory = tracker_factory or _combined_tracker
 
     failures: list[str] = []
-    if progress_callback is not None:
-        progress_callback("calibrating", None)
+    calibration: AutonomousCalibrationResult | None = None
     try:
+        _check_stop(should_stop)
+        _notify_progress(progress_callback, "calibrating", None)
         primary = _collect_trajectories(
             configuration,
             source_factory=source_factory,
@@ -673,33 +854,42 @@ def run_autonomous_demo(
             detector_configuration=configuration.detector_configuration,
             clock=clock,
             source_path=source_path,
+            should_stop=should_stop,
+            progress_callback=progress_callback,
+            publish_preview=True,
         )
-        diagnostics = tuple(
-            (
-                confidence,
-                _collect_trajectories(
-                    configuration,
-                    source_factory=source_factory,
-                    detector_factory=detector_factory,
-                    tracker_factory=tracker_factory,
-                    detector_configuration=replace(
-                        configuration.detector_configuration,
-                        confidence_threshold=confidence,
+        diagnostic_evidence = []
+        for confidence in configuration.calibration_settings.diagnostic_confidences:
+            _check_stop(should_stop)
+            diagnostic_evidence.append(
+                (
+                    confidence,
+                    _collect_trajectories(
+                        configuration,
+                        source_factory=source_factory,
+                        detector_factory=detector_factory,
+                        tracker_factory=tracker_factory,
+                        detector_configuration=replace(
+                            configuration.detector_configuration,
+                            confidence_threshold=confidence,
+                        ),
+                        clock=clock,
+                        source_path=source_path,
+                        should_stop=should_stop,
+                        progress_callback=progress_callback,
+                        publish_preview=True,
                     ),
-                    clock=clock,
-                    source_path=source_path,
-                ),
+                )
             )
-            for confidence in configuration.calibration_settings.diagnostic_confidences
-        )
+        diagnostics = tuple(diagnostic_evidence)
         calibration = _build_calibration_result(configuration, primary, diagnostics)
-        if progress_callback is not None:
-            progress_callback(
-                "calibration_ready"
-                if calibration.status is CalibrationStatus.READY
-                else "calibration_inconclusive",
-                calibration,
-            )
+        _notify_progress(
+            progress_callback,
+            "calibration_ready"
+            if calibration.status is CalibrationStatus.READY
+            else "calibration_inconclusive",
+            calibration,
+        )
         if calibration.status is not CalibrationStatus.READY:
             return AutonomousDemoResult(
                 demo_id=configuration.demo_id,
@@ -724,8 +914,8 @@ def run_autonomous_demo(
                 failures=tuple(failures),
                 limitations=calibration.limitations,
             )
-        if progress_callback is not None:
-            progress_callback("counting", calibration)
+        _check_stop(should_stop)
+        _notify_progress(progress_callback, "counting", calibration)
         (
             count_frames,
             crossing_events,
@@ -741,6 +931,8 @@ def run_autonomous_demo(
             tracker_factory=tracker_factory,
             clock=clock,
             source_path=source_path,
+            should_stop=should_stop,
+            progress_callback=progress_callback,
         )
         return AutonomousDemoResult(
             demo_id=configuration.demo_id,
@@ -764,6 +956,49 @@ def run_autonomous_demo(
             hmi_state="LIVE COUNT",
             failures=tuple(failures),
             limitations=calibration.limitations,
+        )
+    except _AutonomousStopRequested:
+        if calibration is None:
+            calibration = AutonomousCalibrationResult(
+                status=CalibrationStatus.INCONCLUSIVE,
+                confidence=CalibrationConfidence.INCONCLUSIVE,
+                dominant_direction=None,
+                direction_purity=0.0,
+                eligible_track_count=0,
+                selected_line=None,
+                selected_positive_direction=None,
+                selected_score=0.0,
+                corridor=None,
+                candidate_metrics=(),
+                line_band_counts=(),
+                detector_perturbation_counts=(),
+                counting_configuration=None,
+                limitations=(
+                    "autonomous_consistency_only",
+                    "human_ground_truth_not_measured",
+                    "demo_model_not_production_validated",
+                    "cancelled_by_operator",
+                ),
+                algorithm_version=configuration.algorithm_version,
+            )
+        _notify_progress(progress_callback, "cancelled", calibration)
+        return AutonomousDemoResult(
+            demo_id=configuration.demo_id,
+            calibration=calibration,
+            primary_count=None,
+            primary_count_direction=None,
+            calibration_crossing_events=0,
+            counting_crossing_events=0,
+            pass_two_first_frame_sequence=None,
+            calibration_frames=0,
+            counting_frames=0,
+            calibration_fps=0.0,
+            counting_fps=0.0,
+            average_detector_latency_ms=0.0,
+            hmi_state="CANCELLED",
+            failures=(),
+            limitations=calibration.limitations,
+            cancelled=True,
         )
     except Exception as exc:
         failure_type = type(exc).__name__
@@ -816,6 +1051,7 @@ def run_autonomous_demo(
 __all__ = [
     "AUTONOMOUS_CALIBRATION_ALGORITHM_VERSION",
     "AutonomousDemoConfiguration",
+    "AutonomousDemoProgress",
     "AutonomousDemoResult",
     "run_autonomous_demo",
 ]

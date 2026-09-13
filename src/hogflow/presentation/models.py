@@ -24,6 +24,7 @@ class OperatorAction(str, Enum):
     RESTART_VIDEO = "restart_video"
     START_AUTONOMOUS_DEMO = "start_autonomous_demo"
     AUTO_CALIBRATE_COUNT = "start_autonomous_demo"
+    CANCEL_AUTONOMOUS_DEMO = "cancel_autonomous_demo"
     REFRESH = "refresh"
     EXIT = "exit"
 
@@ -91,6 +92,7 @@ class OperatorActionState:
     refresh: bool
     exit: bool
     start_autonomous_demo: bool = True
+    cancel_autonomous_demo: bool = False
 
     def __post_init__(self) -> None:
         if any(
@@ -110,6 +112,7 @@ class OperatorActionState:
                 self.refresh,
                 self.exit,
                 self.start_autonomous_demo,
+                self.cancel_autonomous_demo,
             )
         ):
             raise ValueError("Operator action availability must be boolean.")
@@ -182,6 +185,8 @@ class CameraPipelinePanel:
     preview_failures: int
     last_error: str
     active_crossing_lifecycle: str
+    detector_status: str = "NOT LOADED"
+    detector_detail: str = "Auto Demo unavailable"
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +202,8 @@ class AutonomousDemoPanel:
     live_count: int | None = None
     line_locked: bool = False
     line_coordinates: tuple[float, float, float, float] | None = None
+    frames_processed: int = 0
+    crossing_events: int = 0
 
 
 @dataclass(frozen=True, slots=True)

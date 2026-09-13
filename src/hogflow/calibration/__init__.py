@@ -29,6 +29,7 @@ from hogflow.calibration.models import (
 from hogflow.calibration.orchestration import (
     AUTONOMOUS_CALIBRATION_ALGORITHM_VERSION,
     AutonomousDemoConfiguration,
+    AutonomousDemoProgress,
     AutonomousDemoResult,
     run_autonomous_demo,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "AutonomousCandidateSuitability",
     "AutonomousVideoSelection",
     "AutonomousDemoConfiguration",
+    "AutonomousDemoProgress",
     "AutonomousDemoResult",
     "consistency_confidence",
     "detector_perturbation_agreement",

@@ -162,3 +162,10 @@ def test_overlay_render_plan_contains_line_box_id_anchor_direction_and_dimension
     assert any("crossing=negative_to_positive" in item for item in text)
     assert any("dimensions=4x2" in item for item in text)
     assert plan.ppm_data.startswith(b"P6\n4 2\n255\n")
+
+
+def test_overlay_render_plan_can_hide_unlocked_autonomous_line() -> None:
+    plan = build_preview_render_plan(preview_frame(7), show_line=False)
+
+    assert all(item.kind is not PreviewPrimitiveKind.LINE for item in plan.primitives)
+    assert any(item.kind is PreviewPrimitiveKind.RECTANGLE for item in plan.primitives)

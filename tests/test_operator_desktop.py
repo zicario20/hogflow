@@ -4,13 +4,14 @@ from dataclasses import dataclass, field
 
 from _phase9_helpers import operator_application, registration
 
-from hogflow.application import DockId
+from hogflow.application import AutonomousDemoSnapshot, AutonomousDemoState, DockId
 from hogflow.presentation import (
     ConfirmationRequest,
     OperatorAction,
     OperatorPresenter,
     OperatorScreen,
     TkOperatorView,
+    screen_from_snapshot,
 )
 
 
@@ -59,6 +60,7 @@ def headless_view() -> TkOperatorView:
     view._totals_value = FakeVariable()  # type: ignore[attr-defined]
     view._status_value = FakeVariable()  # type: ignore[attr-defined]
     view._session_value = FakeVariable()  # type: ignore[attr-defined]
+    view._lane_count_title_value = FakeVariable("LIVE COUNT")  # type: ignore[attr-defined]
     view._buttons = {action: FakeButton() for action in OperatorAction}  # type: ignore[attr-defined]
     return view
 
@@ -99,3 +101,19 @@ def test_tk_render_marks_shared_lane_owner_and_enables_terminal_session_actions(
     assert view._buttons[OperatorAction.COMPLETE_SESSION].state == "normal"  # type: ignore[attr-defined]
     assert view._buttons[OperatorAction.CANCEL_SESSION].state == "normal"  # type: ignore[attr-defined]
     assert view._buttons[OperatorAction.COMPLETE_TRUCK].state == "disabled"  # type: ignore[attr-defined]
+
+
+def test_tk_render_contextualizes_autonomous_demo_count() -> None:
+    application, _coordinator = operator_application()
+    view = headless_view()
+
+    view.render(
+        screen_from_snapshot(
+            application.snapshot(),
+            autonomous_demo=AutonomousDemoSnapshot(state=AutonomousDemoState.COUNTING),
+        )
+    )
+    assert view._lane_count_title_value.get() == "AUTONOMOUS DEMO COUNT"  # type: ignore[attr-defined]
+
+    view.render(screen_from_snapshot(application.snapshot()))
+    assert view._lane_count_title_value.get() == "LIVE COUNT"  # type: ignore[attr-defined]

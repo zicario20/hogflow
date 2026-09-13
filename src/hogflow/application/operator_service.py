@@ -86,6 +86,10 @@ class OperatorApplicationService:
     def start_session(self, dock_id: DockId, session_id: str) -> MultiDockRuntimeSnapshot:
         """Bind the shared lane using an externally supplied lifecycle identity."""
 
+        if self.autonomous_demo_snapshot().worker_alive:
+            raise CameraPipelineLifecycleError(
+                "Wait for Auto Demo to finish before starting a counting session."
+            )
         crossing_lifecycle_id = self._crossing_lifecycle_id_factory(dock_id, session_id)
         self._runtime.start_session(
             dock_id,
@@ -93,6 +97,8 @@ class OperatorApplicationService:
             crossing_lifecycle_id,
             self._clock(),
         )
+        if self._autonomous_demo is not None:
+            self._autonomous_demo.reset_for_normal_mode()
         return self.snapshot()
 
     def complete_session(self, dock_id: DockId) -> MultiDockRuntimeSnapshot:
@@ -123,7 +129,11 @@ class OperatorApplicationService:
         """Close the shared counter and cancel only an active lane binding."""
 
         if self._autonomous_demo is not None:
-            self._autonomous_demo.close()
+            autonomous = self._autonomous_demo.close()
+            if autonomous.worker_alive:
+                raise CameraPipelineLifecycleError(
+                    "Auto Demo worker did not stop before application shutdown."
+                )
         if self._counting_pipeline is not None:
             self._counting_pipeline.close()
         self._runtime.close()
@@ -142,6 +152,8 @@ class OperatorApplicationService:
             raise CameraPipelineLifecycleError(
                 "Wait for Auto Demo to finish before changing source."
             )
+        if self._autonomous_demo is not None:
+            self._autonomous_demo.reset_for_normal_mode()
         controller = self._require_counting_pipeline()
         if request.kind is VideoSourceKind.CAMERA:
             assert request.camera_index is not None
@@ -166,17 +178,48 @@ class OperatorApplicationService:
             raise CameraPipelineLifecycleError(
                 "Autonomous demo is unavailable in this composition."
             )
+        if not self._autonomous_demo.detector_ready:
+            raise CameraPipelineLifecycleError(
+                "Auto Demo requires the frozen HogFlow pig demo detector."
+            )
         if self._autonomous_video_path is None:
             raise CameraPipelineLifecycleError("Configure a local video before starting Auto Demo.")
         if self._runtime.snapshot().counting_lane.occupied:
             raise CameraPipelineLifecycleError(
                 "End the active counting session before starting Auto Demo."
             )
-        if self._require_counting_pipeline().snapshot().worker_alive:
+        pipeline = self._require_counting_pipeline().snapshot()
+        if pipeline.status is not CountingPipelineStatus.STOPPED or pipeline.worker_alive:
             raise CameraPipelineLifecycleError(
                 "Stop the shared camera pipeline before starting Auto Demo."
             )
         return self._autonomous_demo.start(self._autonomous_video_path)
+
+    def autonomous_demo_available(self) -> bool:
+        """Return the complete safe action gate for the manager demo."""
+
+        if self._autonomous_demo is None or not self._autonomous_demo.detector_ready:
+            return False
+        if self._autonomous_video_path is None:
+            return False
+        if self._runtime.snapshot().counting_lane.occupied:
+            return False
+        pipeline = self._require_counting_pipeline().snapshot()
+        return (
+            pipeline.status is CountingPipelineStatus.STOPPED
+            and not pipeline.worker_alive
+            and not self.autonomous_demo_snapshot().worker_alive
+        )
+
+    def cancel_autonomous_demo(self) -> AutonomousDemoSnapshot:
+        """Request cooperative Auto Demo cancellation through the app boundary."""
+
+        self._require_runtime_open()
+        if self._autonomous_demo is None:
+            raise CameraPipelineLifecycleError(
+                "Autonomous demo is unavailable in this composition."
+            )
+        return self._autonomous_demo.cancel()
 
     def start_counting_pipeline(self) -> CountingPipelineSnapshot:
         """Start the one shared camera pipeline."""
@@ -186,6 +229,8 @@ class OperatorApplicationService:
             raise CameraPipelineLifecycleError(
                 "Wait for Auto Demo to finish before starting the shared pipeline."
             )
+        if self._autonomous_demo is not None:
+            self._autonomous_demo.reset_for_normal_mode()
         controller = self._require_counting_pipeline()
         snapshot = controller.snapshot()
         if (
@@ -205,7 +250,14 @@ class OperatorApplicationService:
         """Replay the selected local file without changing application configuration."""
 
         self._require_runtime_open()
-        return self._require_counting_pipeline().restart_video()
+        if self.autonomous_demo_snapshot().worker_alive:
+            raise CameraPipelineLifecycleError(
+                "Wait for Auto Demo to finish before replaying the video."
+            )
+        if self._autonomous_demo is not None:
+            self._autonomous_demo.reset_for_normal_mode()
+        snapshot = self._require_counting_pipeline().restart_video()
+        return snapshot
 
     def camera_snapshot(self) -> CameraSnapshot:
         """Return a camera snapshot without exposing infrastructure."""

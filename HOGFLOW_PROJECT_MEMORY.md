@@ -1169,7 +1169,32 @@ Resumen de madurez:
   `AUTONOMOUS AI VALIDATION — HUMAN GROUND TRUTH NOT MEASURED` y
   `DEMO MODEL — NOT PRODUCTION VALIDATED`; no se inspeccionó ni evaluó Video C.
 
-### 5.32 Estado de las fases posteriores
+### 5.32 Phase 10.3C-A.2 — Manager Demo Runtime Polish
+
+- **Runtime:** el Auto Demo conserva un único worker no-daemon, publica la
+  última `PreviewFrame` en el `LatestPreviewFrameChannel` compartido y emite
+  `AutonomousDemoProgress` acotado por frame. PASS 1 muestra el vídeo durante
+  `CALIBRATING`; tras bloquear la geometría se renderiza solo la línea elegida;
+  PASS 2 reinicia el vídeo y proyecta `live_count` incremental en el HMI.
+- **Cancelación y exclusión:** `AutonomousDemoController` usa
+  `threading.Event`, comprueba la solicitud entre frames/pases y expone
+  `CANCELLED`. `shutdown()` solicita cancelación y espera al worker antes de
+  cerrar pipeline/lane; source-change, pipeline normal y Auto Demo siguen
+  siendo mutuamente excluyentes. El slot visual se limpia al cancelar o volver
+  al modo normal y no se retiene historia de frames.
+- **Gate/HMI:** la acción exige la configuración congelada de V2 (`pig`, clase
+  0, confidence 0.25, IoU 0.50, `imgsz` 640, `max_det` 300, sin half) y el
+  SHA `892a15ce4c739a819b17900700bd17c8473c44b6734b954869bf5470a633cc8c`.
+  EmptyDetector o configuración divergente quedan deshabilitados. El panel
+  muestra estado compacto del detector, LIVE MODE permanece informativo/azul,
+  y LOW conserva advertencia ámbar incluso al finalizar.
+- **Alcance/evidencia:** el conteo autónomo sigue siendo técnico y no modifica
+  el lane, docks, trucks ni sesiones. No se cambió el algoritmo
+  `phase_10_3c_a_v2`, no se inspeccionó Video C, no se entrenó V3 y la
+  validación formal 10.3C continúa bloqueada. Modelo: **DEMO MODEL — NOT
+  PRODUCTION VALIDATED**.
+
+### 5.33 Estado de las fases posteriores
 
 Phase 9 está técnicamente completada según sus subfases autorizadas; Phase
 10.1 implementa runtime supervision, Phase 10.2 integra el boundary local de

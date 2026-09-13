@@ -171,7 +171,7 @@ def build_operator_runtime(
         playback_waiter=playback_waiter,
     )
 
-    def run_autonomous_file(video_path, progress_callback):
+    def run_autonomous_file(video_path, progress_callback, should_stop):
         configuration = AutonomousDemoConfiguration(
             demo_id="operator_autonomous_demo",
             detector_configuration=detector_configuration,
@@ -181,9 +181,14 @@ def build_operator_runtime(
             source_factory=resolved_source_factory,
             source_path=video_path,
             progress_callback=progress_callback,
+            should_stop=should_stop,
         )
 
-    autonomous_demo = AutonomousDemoController(run_autonomous_file)
+    autonomous_demo = AutonomousDemoController(
+        run_autonomous_file,
+        preview_channel=preview_channel,
+        detector_configuration=detector_configuration,
+    )
     application = OperatorApplicationService(
         coordinator,
         crossing_lifecycle_id_factory=(lifecycle_id_factory or LocalCrossingLifecycleIdFactory()),

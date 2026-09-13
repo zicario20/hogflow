@@ -83,5 +83,11 @@ class OperatorApplication(Protocol):
     def start_autonomous_demo(self) -> AutonomousDemoSnapshot:
         """Start autonomous calibration/counting asynchronously."""
 
+    def cancel_autonomous_demo(self) -> AutonomousDemoSnapshot:
+        """Request cooperative cancellation of the autonomous demo."""
+
+    def autonomous_demo_available(self) -> bool:
+        """Return whether the detector/source/lane gate permits Auto Demo."""
+
 
 __all__ = ["OperatorApplication"]

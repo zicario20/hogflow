@@ -295,6 +295,8 @@ def test_all_operator_controls_and_preview_are_inside_scrollable_content() -> No
         OperatorAction.CANCEL_SESSION: "Cancel Session",
         OperatorAction.COMPLETE_TRUCK: "Complete Truck",
         OperatorAction.CANCEL_TRUCK: "Cancel Truck",
+        OperatorAction.START_AUTONOMOUS_DEMO: "AUTO CALIBRATE & COUNT",
+        OperatorAction.CANCEL_AUTONOMOUS_DEMO: "CANCEL AUTO DEMO",
         OperatorAction.REFRESH: "Refresh Snapshot",
         OperatorAction.EXIT: "Exit Application",
     }
@@ -335,6 +337,18 @@ def test_wide_layout_prioritizes_preview_actions_and_compact_status() -> None:
         widget.grid_options["row"] for pair in view._pipeline_field_widgets for widget in pair
     }
     assert pipeline_rows == {1, 2}
+
+
+def test_manager_demo_target_desktop_widths_keep_the_wide_layout() -> None:
+    for width in (1920, 1366):
+        view, _root = _view()
+        canvas_callback = view._scroll_canvas.bindings["<Configure>"][0][1]
+
+        canvas_callback(FakeEvent(view._scroll_canvas, width=width))
+
+        assert view._preview_panel.grid_options["row"] == 0
+        assert view._actions_panel.grid_options["row"] == 0
+        assert view._scroll_canvas.window_options[view._scroll_window_id]["width"] == width
 
 
 def test_widget_dimensions_are_configured_on_widgets_not_grid() -> None:

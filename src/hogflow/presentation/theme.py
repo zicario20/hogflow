@@ -135,6 +135,7 @@ def semantic_tone_for_status(status: str) -> SemanticTone:
             "end of video",
             "warning",
             "attention",
+            "low consistency",
         )
     ):
         return SemanticTone.WARNING

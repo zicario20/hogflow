@@ -1,6 +1,7 @@
 """Public application workflow for the Phase 9.1 operator presentation."""
 
 from hogflow.application.autonomous_demo import (
+    EXPECTED_V2_ARTIFACT_FINGERPRINT,
     AutonomousDemoController,
     AutonomousDemoSnapshot,
     AutonomousDemoState,
@@ -19,6 +20,7 @@ from hogflow.application.operator_service import (
 )
 from hogflow.application.ports import OperatorApplication
 from hogflow.application.runtime_access import SerializedMultiDockRuntimeAccess
+from hogflow.calibration import AutonomousDemoProgress
 from hogflow.camera import (
     CameraSnapshot,
     CameraStatus,
@@ -39,6 +41,8 @@ __all__ = [
     "AutonomousDemoController",
     "AutonomousDemoSnapshot",
     "AutonomousDemoState",
+    "EXPECTED_V2_ARTIFACT_FINGERPRINT",
+    "AutonomousDemoProgress",
     "CameraSnapshot",
     "CameraStatus",
     "CountingPipelineSnapshot",
