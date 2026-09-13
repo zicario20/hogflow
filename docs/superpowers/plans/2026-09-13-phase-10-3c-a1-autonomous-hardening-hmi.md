@@ -203,10 +203,10 @@ Run `git status --ignored` and `git ls-files`; verify no media, frames, labels, 
 
 Confirm only Phase 10.3C-A.1 source/tests/sanitized docs changed, formal Phase 10.3C remains untouched, and no roadmap phase beyond this subphase started.
 
-- [ ] **Step 4: Commit and publish.**
+- [x] **Step 4: Commit and publish.**
 
 Use descriptive commits for the scoped changes, push to `origin/main`, verify local `HEAD` equals `origin/main`, and report the actual CI run/conclusion.
 
-- [ ] **Step 5: Stop.**
+- [x] **Step 5: Stop.**
 
 Do not select/annotate/evaluate Video C, retrain V2, start persistence, Phase 10.4, Phase 11, analytics, or UI redesign.
