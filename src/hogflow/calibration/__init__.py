@@ -3,9 +3,14 @@
 from hogflow.calibration.engine import (
     AutonomousCalibrationEngine,
     AutonomousCalibrationSettings,
+    consistency_confidence,
+    detector_perturbation_agreement,
     estimate_corridor,
     estimate_dominant_direction,
+    evaluate_candidate_tracks,
     generate_line_candidates,
+    line_band_agreement,
+    relative_spread,
     select_eligible_trajectories,
 )
 from hogflow.calibration.models import (
@@ -25,6 +30,8 @@ __all__ = [
     "AutonomousCalibrationResult",
     "AutonomousCalibrationEngine",
     "AutonomousCalibrationSettings",
+    "consistency_confidence",
+    "detector_perturbation_agreement",
     "CalibrationConfidence",
     "CalibrationStatus",
     "CorridorEstimate",
@@ -36,6 +43,9 @@ __all__ = [
     "TrajectorySummary",
     "estimate_corridor",
     "estimate_dominant_direction",
+    "evaluate_candidate_tracks",
     "generate_line_candidates",
+    "line_band_agreement",
+    "relative_spread",
     "select_eligible_trajectories",
 ]

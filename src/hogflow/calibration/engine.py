@@ -8,9 +8,11 @@ from statistics import fmean
 from typing import Iterable
 
 from hogflow.calibration.models import (
+    CalibrationConfidence,
     CorridorEstimate,
     DirectionVector,
     LineCandidate,
+    LineCandidateMetrics,
     TrajectoryObservation,
     TrajectorySummary,
 )
@@ -333,11 +335,195 @@ def generate_line_candidates(
     return tuple(candidates)
 
 
+def _side_transition_count(
+    candidate: LineCandidate,
+    summary: TrajectorySummary,
+    *,
+    epsilon: float = 0.005,
+) -> tuple[int, int, int]:
+    previous_side = None
+    forward = 0
+    reverse = 0
+    crossings = 0
+    points = tuple(NormalizedPoint(*point) for point in summary.sampled_centers)
+    for previous, current in zip(points, points[1:]):
+        previous_class = candidate.line.classify(previous, epsilon)
+        current_class = candidate.line.classify(current, epsilon)
+        if current_class.value == "on_line":
+            continue
+        if previous_class.value == "on_line":
+            previous_side = current_class
+            continue
+        if previous_side is not None:
+            previous_class = previous_side
+        if previous_class is current_class:
+            previous_side = current_class
+            continue
+        if not candidate.line.intersects_movement_segment(previous, current):
+            previous_side = current_class
+            continue
+        crossings += 1
+        if (
+            previous_class.value == "negative"
+            and current_class.value == "positive"
+            and candidate.positive_direction is LiveCrossingDirection.NEGATIVE_TO_POSITIVE
+        ) or (
+            previous_class.value == "positive"
+            and current_class.value == "negative"
+            and candidate.positive_direction is LiveCrossingDirection.POSITIVE_TO_NEGATIVE
+        ):
+            forward += 1
+        else:
+            reverse += 1
+        previous_side = current_class
+    return forward, reverse, crossings
+
+
+def line_band_agreement(counts: tuple[int, ...]) -> float:
+    """Return one minus normalized count spread for a declared line band."""
+
+    if not counts:
+        return 0.0
+    maximum = max(counts)
+    minimum = min(counts)
+    denominator = max(1, sum(counts) / len(counts))
+    return max(0.0, min(1.0, 1.0 - (maximum - minimum) / denominator))
+
+
+def relative_spread(counts: tuple[int, ...]) -> float:
+    """Return bounded max-min spread relative to the median-like mean."""
+
+    if not counts:
+        return 1.0
+    denominator = max(1.0, sum(counts) / len(counts))
+    return max(0.0, (max(counts) - min(counts)) / denominator)
+
+
+def detector_perturbation_agreement(counts: tuple[int, ...]) -> float:
+    """Return confidence stability for fixed detector-threshold variants."""
+
+    return line_band_agreement(counts)
+
+
+def evaluate_candidate_tracks(
+    candidate: LineCandidate,
+    summaries: Iterable[TrajectorySummary],
+    settings: AutonomousCalibrationSettings,
+    *,
+    neighbor_counts: tuple[int, ...] = (0,),
+    detector_perturbation_counts: tuple[tuple[float, int], ...] = (),
+) -> LineCandidateMetrics:
+    """Evaluate geometry-only crossings without changing an operational counter."""
+
+    selected = select_eligible_trajectories(summaries, settings)
+    expected = 0
+    forward = 0
+    reverse = 0
+    multiple = 0
+    continuity_values = []
+    alignments = []
+    for summary in selected:
+        crossings = _side_transition_count(candidate, summary)
+        if crossings[2] == 0:
+            continue
+        expected += 1
+        forward += crossings[0]
+        reverse += crossings[1]
+        if crossings[2] > 1:
+            multiple += 1
+        continuity_values.append(summary.continuity_ratio)
+        normal = DirectionVector(
+            -(candidate.line.end.y - candidate.line.start.y),
+            candidate.line.end.x - candidate.line.start.x,
+        )
+        movement = _summary_direction(summary)
+        if movement is not None:
+            alignment = (movement.dot(normal) + 1.0) / 2.0
+            if candidate.positive_direction is LiveCrossingDirection.POSITIVE_TO_NEGATIVE:
+                alignment = 1.0 - alignment
+            alignments.append(max(0.0, min(1.0, alignment)))
+    neighbor_agreement = line_band_agreement(neighbor_counts)
+    perturbation_counts = tuple(detector_perturbation_counts)
+    perturbation_agreement = detector_perturbation_agreement(
+        tuple(count for _, count in perturbation_counts) or (0,)
+    )
+    continuity = fmean(continuity_values) if continuity_values else 0.0
+    alignment = fmean(alignments) if alignments else 0.0
+    unique_ratio = forward / expected if expected else 0.0
+    reverse_ratio = reverse / expected if expected else 0.0
+    multiple_ratio = multiple / expected if expected else 0.0
+    score = (
+        0.25 * alignment
+        + 0.20 * unique_ratio
+        + 0.20 * continuity
+        + 0.15 * neighbor_agreement
+        + 0.10 * (1.0 - candidate.edge_penalty)
+        + 0.10 * perturbation_agreement
+        - 0.10 * reverse_ratio
+        - 0.10 * multiple_ratio
+        - 0.10 * 0.0
+        - 0.05 * candidate.edge_penalty
+    )
+    return LineCandidateMetrics(
+        candidate=candidate,
+        eligible_tracks=len(selected),
+        expected_crossing_tracks=expected,
+        forward_crossings=forward,
+        reverse_crossings=reverse,
+        multiple_crossings=multiple,
+        continuity_score=continuity,
+        direction_alignment=alignment,
+        corridor_coverage=1.0 if expected else 0.0,
+        lost_near_line_ratio=0.0,
+        neighbor_counts=neighbor_counts,
+        neighbor_agreement=neighbor_agreement,
+        detector_perturbation_counts=perturbation_counts,
+        perturbation_agreement=perturbation_agreement,
+        score=max(0.0, min(1.0, score)),
+    )
+
+
+def consistency_confidence(
+    *,
+    eligible_tracks: int,
+    direction_purity: float,
+    neighbor_agreement: float,
+    continuity_score: float,
+    score: float,
+) -> CalibrationConfidence:
+    """Classify internal consistency using fixed, non-accuracy thresholds."""
+
+    if (
+        eligible_tracks >= 8
+        and direction_purity >= 0.80
+        and neighbor_agreement >= 0.80
+        and continuity_score >= 0.75
+        and score >= 0.75
+    ):
+        return CalibrationConfidence.HIGH
+    if (
+        eligible_tracks >= 5
+        and direction_purity >= 0.65
+        and neighbor_agreement >= 0.60
+        and continuity_score >= 0.55
+        and score >= 0.55
+    ):
+        return CalibrationConfidence.MEDIUM
+    if eligible_tracks >= 3:
+        return CalibrationConfidence.LOW
+    return CalibrationConfidence.INCONCLUSIVE
+
+
 __all__ = [
     "AutonomousCalibrationEngine",
     "AutonomousCalibrationSettings",
     "estimate_corridor",
     "estimate_dominant_direction",
+    "consistency_confidence",
+    "detector_perturbation_agreement",
+    "evaluate_candidate_tracks",
     "generate_line_candidates",
+    "line_band_agreement",
+    "relative_spread",
     "select_eligible_trajectories",
 ]

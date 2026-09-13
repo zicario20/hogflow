@@ -242,7 +242,9 @@ class LineCandidateMetrics:
     corridor_coverage: float
     lost_near_line_ratio: float
     neighbor_counts: tuple[int, ...]
+    neighbor_agreement: float
     detector_perturbation_counts: tuple[tuple[float, int], ...]
+    perturbation_agreement: float
     score: float
 
     def __post_init__(self) -> None:
@@ -263,6 +265,8 @@ class LineCandidateMetrics:
             "direction_alignment",
             "corridor_coverage",
             "lost_near_line_ratio",
+            "neighbor_agreement",
+            "perturbation_agreement",
             "score",
         ):
             object.__setattr__(self, name, _unit(getattr(self, name), name))
