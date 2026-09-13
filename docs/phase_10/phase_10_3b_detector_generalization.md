@@ -86,9 +86,12 @@ merely poorly localized. V1 resolution diagnostics were also negative:
 | 960 | 1 | 26 | 513 | 0.0370 | 0.0019 | 0.0037 | 14.65 |
 | 1280 | 0 | 92 | 514 | 0.0000 | 0.0000 | 0.0000 | 11.17 |
 
-Ultralytics used class filter `[0]`, confidence `0.25`, NMS IoU `0.5`, and
-`max_det=300`. B's maximum V1 predictions/frame was `3` (not a suspicious
-constant cap); a controlled max-det comparison did not change the output.
+The V1 diagnostic direct `predict` call did not override `max_det`; the
+Ultralytics predictor's observed effective default was `300`. The live runtime
+and V2 configuration set `max_det=300` explicitly. Both used class filter
+`[0]`, confidence `0.25`, and NMS IoU `0.5`. B's maximum V1
+predictions/frame was `3` (not a suspicious constant cap); a controlled
+max-det comparison did not change the output.
 
 The complete bounded diagnostic data and local overlays remain ignored under
 the local evaluation workspace; no media or predictions are committed.
@@ -120,9 +123,9 @@ No new labels or pseudo-labels were fabricated.
 
 One controlled candidate was sufficient after diagnosis:
 
-| Run | Model | Device | Size | Epochs | Batch | Threshold | Internal TP/FP/FN | Precision | Recall | F1 |
-| --- | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: |
-| `phase10_3b_yolo11n_640_gpu` | YOLO11n fine-tuned from official `yolo11n.pt` | RTX 5070 Ti / CUDA | 640 | 75/75 | 8 | 0.25 | 86/31/35 | 0.7350 | 0.7107 | 0.7227 |
+| Run | Model | Device | Size | Epochs | Batch | Train time | Threshold | Internal TP/FP/FN | Precision | Recall | F1 | Eval FPS / latency |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
+| `phase10_3b_yolo11n_640_gpu` | YOLO11n fine-tuned from official `yolo11n.pt` | RTX 5070 Ti / CUDA | 640 | 75/75 | 8 | ~198 s | 0.25 | 86/31/35 | 0.7350 | 0.7107 | 0.7227 | ~27.35 FPS / 36.56 ms per internal-calibration image |
 
 The internal result is over the frozen 21-frame A+B calibration split. The
 framework reported mAP50 `0.7400`, mAP50-95 `0.2261`, precision `0.7610`, and
@@ -134,8 +137,11 @@ was needed; resolution was not the diagnosed bottleneck.
 Environment and effective settings: Python `3.12.14`, Ultralytics `8.4.135`,
 Torch `2.11.0+cu128`, CUDA device `NVIDIA GeForce RTX 5070 Ti Laptop GPU`,
 image size `640`, seed `42`, workers `0`, patience `20`, moderate augmentation,
-NMS IoU `0.5`, and max detections `300`. A preliminary CPU attempt was stopped
-before completion and is not an evidence result.
+NMS IoU `0.5`, and max detections `300`. Training took approximately `198 s`;
+the table's evaluation latency is the bounded internal-calibration inference
+measurement, while the full-video runtime measurement is reported below. A
+preliminary CPU attempt was stopped before completion and is not an evidence
+result.
 
 ### Post-hoc B development comparison
 
