@@ -697,7 +697,10 @@ def run_autonomous_demo(
             failures=tuple(failures),
             limitations=calibration.limitations,
         )
-    except Exception:
+    except Exception as exc:
+        failure_type = type(exc).__name__
+        if not fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", failure_type):
+            failure_type = "unknown_runtime_failure"
         return AutonomousDemoResult(
             demo_id=configuration.demo_id,
             calibration=AutonomousCalibrationResult(
@@ -732,7 +735,7 @@ def run_autonomous_demo(
             counting_fps=0.0,
             average_detector_latency_ms=0.0,
             hmi_state="AUTOCALIBRATION FAILED",
-            failures=("bounded_runtime_failure",),
+            failures=("bounded_runtime_failure", f"runtime_exception_{failure_type}"),
             limitations=(
                 "autonomous_consistency_only",
                 "human_ground_truth_not_measured",

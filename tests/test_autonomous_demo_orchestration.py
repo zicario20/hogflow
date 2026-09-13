@@ -207,3 +207,20 @@ def test_neighbor_line_outside_image_is_marked_unavailable() -> None:
     )
 
     assert _shift_candidate(candidate, DirectionVector(1.0, 0.0), -0.1, "n") is None
+
+
+def test_runtime_failure_is_reported_as_a_sanitized_category() -> None:
+    def failing_detector(_configuration):
+        raise RuntimeError("private local details")
+
+    result = run_autonomous_demo(
+        _configuration(),
+        source_factory=_source_factory,
+        detector_factory=failing_detector,
+        tracker_factory=_tracker_factory,
+        clock=lambda: _NOW,
+    )
+
+    assert result.calibration.status is CalibrationStatus.FAILED
+    assert result.failures == ("bounded_runtime_failure", "runtime_exception_RuntimeError")
+    assert "private" not in str(result)

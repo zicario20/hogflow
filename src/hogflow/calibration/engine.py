@@ -437,8 +437,8 @@ def evaluate_candidate_tracks(
         if crossings[2] == 0:
             continue
         expected += 1
-        forward += crossings[0]
-        reverse += crossings[1]
+        forward += int(crossings[0] == 1 and crossings[1] == 0)
+        reverse += int(crossings[1] > 0)
         if crossings[2] > 1:
             multiple += 1
         continuity_values.append(summary.continuity_ratio)

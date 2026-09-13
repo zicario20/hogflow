@@ -105,3 +105,32 @@ def test_direction_alignment_is_based_on_line_normal() -> None:
 
     assert metrics.direction_alignment > 0.99
     assert DirectionVector(0.0, 1.0).dy == 1.0
+
+
+def test_repeated_crossing_events_do_not_exceed_unique_track_denominator() -> None:
+    oscillating = TrajectorySummary(
+        tracker_id=2,
+        first_frame=0,
+        last_frame=23,
+        first_center=(0.5, 0.1),
+        last_center=(0.5, 0.9),
+        sampled_centers=tuple(
+            (0.5, value)
+            for value in (0.1, 0.6, 0.4, 0.7, 0.9)
+        ),
+        lifetime_frames=24,
+        displacement=0.8,
+        path_length=2.0,
+        continuity_ratio=1.0,
+        mean_confidence=0.8,
+        edge_touched=False,
+    )
+
+    metrics = evaluate_candidate_tracks(
+        _candidate(),
+        (oscillating,),
+        AutonomousCalibrationSettings(),
+    )
+
+    assert metrics.expected_crossing_tracks == 1
+    assert metrics.forward_crossings <= metrics.expected_crossing_tracks
