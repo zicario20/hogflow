@@ -73,6 +73,10 @@ def test_neighbor_band_prefers_stable_candidate() -> None:
     assert relative_spread((50, 51, 51, 52)) < relative_spread((34, 67, 40, 59))
 
 
+def test_neighbor_band_with_no_evidence_is_not_stable() -> None:
+    assert line_band_agreement((0, 0, 0, 0)) == 0.0
+
+
 def test_confidence_tier_reaches_high_only_with_consistent_evidence() -> None:
     assert (
         consistency_confidence(
@@ -114,10 +118,7 @@ def test_repeated_crossing_events_do_not_exceed_unique_track_denominator() -> No
         last_frame=23,
         first_center=(0.5, 0.1),
         last_center=(0.5, 0.9),
-        sampled_centers=tuple(
-            (0.5, value)
-            for value in (0.1, 0.6, 0.4, 0.7, 0.9)
-        ),
+        sampled_centers=tuple((0.5, value) for value in (0.1, 0.6, 0.4, 0.7, 0.9)),
         lifetime_frames=24,
         displacement=0.8,
         path_length=2.0,

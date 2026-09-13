@@ -1119,7 +1119,35 @@ Resumen de madurez:
   se ajustó V2/tracker/línea y no se inició Phase 10.4, persistencia ni Phase
   11. Modelo: **DEMO MODEL — NOT PRODUCTION VALIDATED**.
 
-### 5.30 Estado de las fases posteriores
+### 5.30 Phase 10.3C-A — Autonomous Counting Calibration & AI Consistency Validation
+
+- **Semántica y límites:** se añadió una ruta autónoma acotada que reutiliza
+  detector V2, ByteTrack, cruce virtual, contador lifecycle y HMI existentes.
+  Su etiqueta obligatoria es `AUTONOMOUS AI VALIDATION — HUMAN GROUND TRUTH NOT
+  MEASURED`; los scores son consistencia interna, no exactitud ni sustituto de
+  cajas o totales humanos. El documento formal 10.3C no fue reescrito.
+- **A/B desarrollo:** el pase completo produjo `demo_video_a` READY/MEDIUM con
+  50 tracks elegibles, pureza 0.9847, score 0.9451, count 31 y 8.49 FPS; y
+  `demo_video_b` READY/HIGH con 47 tracks, pureza 0.9926, score 0.9759,
+  count 29 y 7.47 FPS. B es evidencia de desarrollo consumida, nunca un
+  holdout independiente de V2.
+- **Selección autónoma:** tras excluir A, B y los tres históricos quedaron 11
+  candidatos. El orden SHA-256 de basename rechazó cinco por sondeo de
+  evidencia insuficiente y seleccionó el primer candidato apto en rango 6 como
+  `autonomous_demo_video_1`; sus metadatos sanitizados son 848×384, 45.262 FPS,
+  894 frames y 19.752 s. La selección no comparó counts ni scores.
+- **Demo seleccionado:** un único pase autónomo quedó READY/MEDIUM con 37
+  tracks elegibles, pureza 0.6650, score 0.8727, 7 cruces primarios, 9 eventos,
+  9.33 FPS y 86.99 ms de latencia media. La calibración emitió cero eventos de
+  negocio y el count pass reinició en frame 0. Fingerprint geométrico:
+  `3b3bd48107614161aaf25339a3bdada4736e23aa843a9698b427dbb85457568c`.
+- **Estado:** parcial. El recorrido detector → tracker → crossing → counter →
+  HMI se ejecutó localmente con V2 congelado; no hay manual crossing truth para
+  A/B ni para el demo y sigue faltando Video C autorizado/anotado para una
+  medición independiente. Todo media, labels, pesos y agregados locales son
+  ignorados y no versionados. Modelo: **DEMO MODEL — NOT PRODUCTION VALIDATED**.
+
+### 5.31 Estado de las fases posteriores
 
 Phase 9 está técnicamente completada según sus subfases autorizadas; Phase
 10.1 implementa runtime supervision, Phase 10.2 integra el boundary local de

@@ -396,6 +396,8 @@ def line_band_agreement(counts: tuple[int, ...]) -> float:
         return 0.0
     maximum = max(counts)
     minimum = min(counts)
+    if maximum == 0:
+        return 0.0
     denominator = max(1, sum(counts) / len(counts))
     return max(0.0, min(1.0, 1.0 - (maximum - minimum) / denominator))
 
