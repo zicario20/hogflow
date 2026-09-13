@@ -183,6 +183,7 @@ class TrajectorySummary:
 class CorridorEstimate:
     """Robust normalized along-flow and cross-flow trajectory bounds."""
 
+    reference_center: tuple[float, float]
     along_min: float
     along_max: float
     cross_min: float
@@ -190,14 +191,16 @@ class CorridorEstimate:
     dominant_direction: DirectionVector
 
     def __post_init__(self) -> None:
-        along_min = _unit(self.along_min, "Corridor along minimum")
-        along_max = _unit(self.along_max, "Corridor along maximum")
-        cross_min = _unit(self.cross_min, "Corridor cross minimum")
-        cross_max = _unit(self.cross_max, "Corridor cross maximum")
+        reference = _point(self.reference_center, "Corridor reference center")
+        along_min = _finite(self.along_min, "Corridor along minimum")
+        along_max = _finite(self.along_max, "Corridor along maximum")
+        cross_min = _finite(self.cross_min, "Corridor cross minimum")
+        cross_max = _finite(self.cross_max, "Corridor cross maximum")
         if not along_min < along_max or not cross_min < cross_max:
             raise InputDataError("Corridor bounds must have positive spans.")
         if not isinstance(self.dominant_direction, DirectionVector):
             raise InputDataError("Corridor direction must be a DirectionVector.")
+        object.__setattr__(self, "reference_center", reference)
         object.__setattr__(self, "along_min", along_min)
         object.__setattr__(self, "along_max", along_max)
         object.__setattr__(self, "cross_min", cross_min)
