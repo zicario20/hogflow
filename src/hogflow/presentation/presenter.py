@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from hogflow.application import (
+    AutonomousDemoSnapshot,
     CameraSnapshot,
     CameraStatus,
     CountingPipelineSnapshot,
@@ -23,7 +24,9 @@ from hogflow.application import (
     TruckOperationStatus,
     VideoSourceRequest,
 )
+from hogflow.application.autonomous_demo import AutonomousDemoState
 from hogflow.presentation.models import (
+    AutonomousDemoPanel,
     CameraPipelinePanel,
     ConfirmationKind,
     ConfirmationRequest,
@@ -58,6 +61,23 @@ class OperatorPresenter:
             else OperatorStatus.READY
         )
         return self._render(snapshot, dock_id, status)
+
+    def start_autonomous_demo(
+        self,
+        dock_id: DockId = DockId.DOCK_1,
+    ) -> OperatorScreen:
+        """Start autonomous calibration asynchronously through the app boundary."""
+
+        try:
+            self._application.start_autonomous_demo()
+        except ExpectedOperatorError as exc:
+            self._view.show_error(str(exc))
+            raise
+        return self._render(
+            self._application.snapshot(),
+            dock_id,
+            OperatorStatus.READY,
+        )
 
     def configure_video_source(
         self,
@@ -281,6 +301,7 @@ class OperatorPresenter:
             preview=preview,
             dock_id=dock_id,
             status=status,
+            autonomous_demo=self._autonomous_snapshot(),
         )
         self._view.render(screen)
         self._render_preview(screen, preview)
@@ -315,6 +336,12 @@ class OperatorPresenter:
             self._application.record_preview_render_failure()
             self._view.show_error("Live preview rendering stopped; counting continues.")
 
+    def _autonomous_snapshot(self) -> AutonomousDemoSnapshot | None:
+        method = getattr(self._application, "autonomous_demo_snapshot", None)
+        if not callable(method):
+            return None
+        return method()
+
 
 def screen_from_snapshot(
     snapshot: MultiDockRuntimeSnapshot,
@@ -323,10 +350,12 @@ def screen_from_snapshot(
     preview: PreviewSnapshot | None = None,
     dock_id: DockId = DockId.DOCK_1,
     status: OperatorStatus | None = None,
+    autonomous_demo: AutonomousDemoSnapshot | None = None,
 ) -> OperatorScreen:
     """Create a transient workflow-safe display projection from one snapshot."""
 
     selected_dock = DockId.parse(dock_id)
+    autonomous_demo = autonomous_demo or AutonomousDemoSnapshot()
     lane = snapshot.counting_lane
     active_dock = None if lane.active_dock_id is None else snapshot.for_dock(lane.active_dock_id)
     lane_status = "Closed" if lane.closed else ("Occupied" if lane.occupied else "Idle")
@@ -406,9 +435,10 @@ def screen_from_snapshot(
         totals=totals,
         camera_pipeline=camera_panel,
         selected_dock_id=selected_dock.value,
-        actions=_action_state(snapshot, selected_dock, pipeline),
+        actions=_action_state(snapshot, selected_dock, pipeline, autonomous_demo),
         status_message=current_status.value,
         generated_at=snapshot.generated_at.isoformat(),
+        autonomous_demo=_autonomous_panel(autonomous_demo),
     )
 
 
@@ -416,6 +446,7 @@ def _action_state(
     snapshot: MultiDockRuntimeSnapshot,
     selected_dock: DockId,
     pipeline: CountingPipelineSnapshot,
+    autonomous_demo: AutonomousDemoSnapshot | None = None,
 ) -> OperatorActionState:
     local_file = (
         pipeline.camera.source_type is not None and pipeline.camera.source_type.value == "file"
@@ -428,6 +459,11 @@ def _action_state(
         and snapshot.counting_lane.active_dock_id is selected_dock
     )
     replay_safe = not snapshot.counting_lane.occupied
+    auto = autonomous_demo or AutonomousDemoSnapshot()
+    auto_available = auto.state not in (
+        AutonomousDemoState.CALIBRATING,
+        AutonomousDemoState.COUNTING,
+    )
     return OperatorActionState(
         register_truck=runtime_open and dock.available,
         start_truck=runtime_open and dock.runtime_status is DockRuntimeStatus.PLANNED,
@@ -466,6 +502,57 @@ def _action_state(
         and replay_safe,
         refresh=True,
         exit=True,
+        start_autonomous_demo=runtime_open
+        and local_file
+        and replay_safe
+        and not pipeline.worker_alive
+        and auto_available,
+    )
+
+
+def _autonomous_panel(snapshot: AutonomousDemoSnapshot) -> AutonomousDemoPanel:
+    calibration = snapshot.calibration
+    if calibration is None:
+        return AutonomousDemoPanel(state=snapshot.state.value, message=snapshot.message)
+    direction = "—"
+    if calibration.dominant_direction is not None:
+        vector = calibration.dominant_direction
+        if abs(vector.dy) >= abs(vector.dx):
+            direction = "↓" if vector.dy >= 0 else "↑"
+        else:
+            direction = "→" if vector.dx >= 0 else "←"
+    has_range = snapshot.observed_count_min is not None and snapshot.observed_count_max is not None
+    count_range = (
+        f"{snapshot.observed_count_min}–{snapshot.observed_count_max}" if has_range else "—"
+    )
+    line_locked = snapshot.line_locked and snapshot.state in (
+        AutonomousDemoState.READY,
+        AutonomousDemoState.LOW_CONFIDENCE,
+        AutonomousDemoState.COUNTING,
+        AutonomousDemoState.COMPLETE,
+    )
+    line_coordinates = None
+    if line_locked and calibration.selected_line is not None:
+        line_coordinates = (
+            calibration.selected_line.start.x,
+            calibration.selected_line.start.y,
+            calibration.selected_line.end.x,
+            calibration.selected_line.end.y,
+        )
+    return AutonomousDemoPanel(
+        state=snapshot.state.value,
+        direction=direction,
+        counting_line="LOCKED" if line_locked else "UNLOCKED",
+        consistency=calibration.confidence.value.upper(),
+        observed_count_range=count_range,
+        message=snapshot.message,
+        live_count=(
+            snapshot.primary_count
+            if snapshot.state in (AutonomousDemoState.COUNTING, AutonomousDemoState.COMPLETE)
+            else None
+        ),
+        line_locked=line_locked,
+        line_coordinates=line_coordinates,
     )
 
 

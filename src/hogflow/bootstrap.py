@@ -10,6 +10,7 @@ from uuid import uuid4
 from hogflow.adapters.camera_source_factory import create_camera_source
 from hogflow.adapters.live_detector_factory import create_live_detector_and_tracker
 from hogflow.application import (
+    AutonomousDemoController,
     Clock,
     CrossingLifecycleIdFactory,
     DockId,
@@ -17,6 +18,7 @@ from hogflow.application import (
     SerializedMultiDockRuntimeAccess,
     VideoSourceRequest,
 )
+from hogflow.calibration import AutonomousDemoConfiguration, run_autonomous_demo
 from hogflow.camera import (
     CameraRecoveryConfiguration,
     CountingFrameProcessorFactory,
@@ -155,9 +157,10 @@ def build_operator_runtime(
     coordinator = MultiDockRuntimeCoordinator(lane, clock=clock)
     runtime_access = SerializedMultiDockRuntimeAccess(coordinator)
     preview_channel = LatestPreviewFrameChannel(preview_configuration)
+    resolved_source_factory = source_factory or create_camera_source
     counting_pipeline = CountingPipelineController(
         runtime_access,
-        source_factory or create_camera_source,
+        resolved_source_factory,
         processor_factory
         or (lambda: _default_processor_factory(preview_channel, detector_configuration)),
         clock=clock,
@@ -167,12 +170,27 @@ def build_operator_runtime(
         real_time_file_playback=real_time_file_playback,
         playback_waiter=playback_waiter,
     )
+
+    def run_autonomous_file(video_path, progress_callback):
+        configuration = AutonomousDemoConfiguration(
+            demo_id="operator_autonomous_demo",
+            detector_configuration=detector_configuration,
+        )
+        return run_autonomous_demo(
+            configuration,
+            source_factory=resolved_source_factory,
+            source_path=video_path,
+            progress_callback=progress_callback,
+        )
+
+    autonomous_demo = AutonomousDemoController(run_autonomous_file)
     application = OperatorApplicationService(
         coordinator,
         crossing_lifecycle_id_factory=(lifecycle_id_factory or LocalCrossingLifecycleIdFactory()),
         clock=clock,
         runtime_access=runtime_access,
         counting_pipeline=counting_pipeline,
+        autonomous_demo=autonomous_demo,
     )
     health_manager = runtime_health_manager or RuntimeHealthManager(
         runtime_configuration,

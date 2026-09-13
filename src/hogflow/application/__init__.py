@@ -1,5 +1,10 @@
 """Public application workflow for the Phase 9.1 operator presentation."""
 
+from hogflow.application.autonomous_demo import (
+    AutonomousDemoController,
+    AutonomousDemoSnapshot,
+    AutonomousDemoState,
+)
 from hogflow.application.errors import ExpectedOperatorError, OperatorInputError
 from hogflow.application.models import (
     PlannedSession,
@@ -31,6 +36,9 @@ from hogflow.sessions import DockRuntimeStatus, MultiDockRuntimeSnapshot
 
 __all__ = [
     "Clock",
+    "AutonomousDemoController",
+    "AutonomousDemoSnapshot",
+    "AutonomousDemoState",
     "CameraSnapshot",
     "CameraStatus",
     "CountingPipelineSnapshot",

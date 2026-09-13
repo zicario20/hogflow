@@ -129,3 +129,36 @@ The result is useful as an operator/demo consistency check and as evidence that
 the frozen detector can feed HogFlow's existing tracker, crossing, counter, and
 HMI path. It is not a deployment approval, certification, or a measured human
 count comparison.
+
+## Consistency Hardening — Phase 10.3C-A.1
+
+The original A/B/demo values above are preserved as pre-hardening historical
+evidence. They are not overwritten or reinterpreted. The hardening algorithm is
+versioned as `phase_10_3c_a_v2` and includes the primary count in both line-band
+and detector-perturbation families, robust median/range aggregates, finite-line
+corridor coverage, track-loss-near-line ratio, and crossing-local continuity.
+
+Post-hardening reruns used the same frozen V2 detector and the same three local
+videos only. No formal Video C was inspected, selected, or evaluated.
+
+| Source ID | Status | Consistency | Eligible | Primary | Line range / median | Detector range / median | Score | Corridor | Lost-near-line | Local continuity | Reason codes |
+| --- | --- | --- | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | --- |
+| `demo_video_a` | READY | HIGH | 50 | 32 | 30–33 / 32 | 32–32 / 32 | 0.9566 | 1.0000 | 0.0976 | 0.8750 | `CONSISTENT_INTERNAL_EVIDENCE`, `HIGH_DIRECTION_PURITY` |
+| `demo_video_b` | READY | HIGH | 47 | 30 | 28–30 / 29 | 29–30 / 29 | 0.9538 | 1.0000 | 0.0000 | 0.8667 | `CONSISTENT_INTERNAL_EVIDENCE`, `HIGH_DIRECTION_PURITY` |
+| `autonomous_demo_video_1` | READY | LOW | 37 | 6 | 3–6 / 4 | 4–5 / 4 | 0.7846 | 1.0000 | 0.1429 | 1.0000 | `LOW_LINE_STABILITY`, `LOW_DETECTOR_PERTURBATION_STABILITY`, `TRACK_LOSS_NEAR_LINE` |
+
+The A and B post-hardening counts are technical autonomous counts and are not
+human-count comparisons. The selected demo remained eligible to run its clean
+second pass despite LOW consistency, with a warning state; an INCONCLUSIVE
+calibration would have blocked automatic counting.
+
+**AUTONOMOUS AI VALIDATION — HUMAN GROUND TRUTH NOT MEASURED**
+
+The desktop HMI now exposes a bounded local-file `AUTO CALIBRATE & COUNT`
+workflow, renders `CALIBRATING`, `AUTO CALIBRATION READY`, LOW or INCONCLUSIVE
+states, shows only the selected line after lock, and keeps the existing shared
+lane/business count separate from calibration evidence. The bridge uses one
+controlled non-daemon application worker and no frame/history store or second
+counter architecture.
+
+**DEMO MODEL — NOT PRODUCTION VALIDATED.**

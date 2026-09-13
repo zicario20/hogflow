@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from hogflow.application.autonomous_demo import AutonomousDemoSnapshot
 from hogflow.application.models import RegisterTruckCommand, VideoSourceRequest
 from hogflow.camera import (
     CameraSnapshot,
@@ -75,6 +76,12 @@ class OperatorApplication(Protocol):
 
     def record_preview_render_failure(self) -> PreviewSnapshot:
         """Isolate one presentation renderer failure from counting."""
+
+    def autonomous_demo_snapshot(self) -> AutonomousDemoSnapshot:
+        """Return the bounded autonomous demo state."""
+
+    def start_autonomous_demo(self) -> AutonomousDemoSnapshot:
+        """Start autonomous calibration/counting asynchronously."""
 
 
 __all__ = ["OperatorApplication"]

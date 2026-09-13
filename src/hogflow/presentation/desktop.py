@@ -186,6 +186,17 @@ class TkOperatorView:
             )
         }
         self._preview_status_value = tk.StringVar(value="Preview Waiting")
+        self._autonomous_values = {
+            name: tk.StringVar(value=value)
+            for name, value in (
+                ("state", "AUTO CALIBRATION IDLE"),
+                ("direction", "—"),
+                ("line", "UNLOCKED"),
+                ("consistency", "—"),
+                ("range", "—"),
+                ("message", "Select a local video to begin."),
+            )
+        }
         self._preview_canvas: Any = None
         self._preview_photo: Any = None
         self._live_refresh_after_id: Any = None
@@ -204,6 +215,10 @@ class TkOperatorView:
         self._system_state_widget: Any = None
         self._camera_state_widget: Any = None
         self._pipeline_state_widget: Any = None
+        self._autonomous_panel: Any = None
+        self._autonomous_state_widget: Any = None
+        self._autonomous_line_coordinates: tuple[float, float, float, float] | None = None
+        self._autonomous_line_visible = False
         self._top_status_frame: Any = None
         self._lane_panel: Any = None
         self._lane_status_widget: Any = None
@@ -263,6 +278,25 @@ class TkOperatorView:
         )
         for key, value in values:
             self._lane_values[key].set(value)
+        autonomous = screen.autonomous_demo
+        self._autonomous_line_coordinates = autonomous.line_coordinates
+        self._autonomous_line_visible = autonomous.state != "AUTO CALIBRATION IDLE"
+        if autonomous.state == "CALIBRATING":
+            self._lane_values["count"].set("CALIBRATING…")
+        elif autonomous.live_count is not None:
+            self._lane_values["count"].set(str(autonomous.live_count))
+        if hasattr(self, "_autonomous_values"):
+            for key, value in (
+                ("state", autonomous.state),
+                ("direction", autonomous.direction),
+                ("line", autonomous.counting_line),
+                ("consistency", autonomous.consistency),
+                ("range", autonomous.observed_count_range),
+                ("message", autonomous.message),
+            ):
+                self._autonomous_values[key].set(value)
+        if getattr(self, "_autonomous_state_widget", None) is not None:
+            self._apply_status_tone(self._autonomous_state_widget, autonomous.state)
         if hasattr(self, "_lane_status_widget") and self._lane_status_widget is not None:
             self._apply_status_tone(self._lane_status_widget, lane.status)
             self._lane_count_widget.configure(
@@ -473,6 +507,8 @@ class TkOperatorView:
         for primitive in plan.primitives:
             coordinates = primitive.coordinates
             if primitive.kind is PreviewPrimitiveKind.LINE:
+                if self._autonomous_line_visible:
+                    continue
                 canvas.create_line(*coordinates, fill="#03101D", width=5)
                 canvas.create_line(*coordinates, fill="#35D5E8", width=2)
             elif primitive.kind is PreviewPrimitiveKind.RECTANGLE:
@@ -495,6 +531,17 @@ class TkOperatorView:
                     fill=HMI_THEME.colors.text_primary,
                     font=HMI_THEME.typography.font(HMI_THEME.typography.micro_size, "bold"),
                 )
+
+        if self._autonomous_line_visible and self._autonomous_line_coordinates is not None:
+            x1, y1, x2, y2 = self._autonomous_line_coordinates
+            line = (
+                x1 * plan.display_width,
+                y1 * plan.display_height,
+                x2 * plan.display_width,
+                y2 * plan.display_height,
+            )
+            canvas.create_line(*line, fill="#03101D", width=5)
+            canvas.create_line(*line, fill="#35D5E8", width=2)
 
     def show_error(self, message: str) -> None:
         """Expose an expected failure in the window and a modal dialog."""
@@ -799,6 +846,58 @@ class TkOperatorView:
             )
             self._pipeline_field_widgets.append((label_widget, value_widget))
             self._pipeline_metric_widgets[key] = value_widget
+
+        self._autonomous_panel = tk.LabelFrame(
+            pipeline,
+            text="  AUTO CALIBRATION  ",
+            background=colors.panel_elevated,
+            foreground=colors.text_primary,
+            font=typography.font(typography.micro_size, "bold"),
+            highlightbackground=colors.border,
+            highlightthickness=1,
+            borderwidth=0,
+            padx=spacing.small,
+            pady=spacing.xsmall,
+        )
+        self._autonomous_panel.grid(
+            row=3, column=0, columnspan=14, sticky="ew", pady=(spacing.small, 0)
+        )
+        for column in range(6):
+            self._autonomous_panel.columnconfigure(column, weight=1)
+        autonomous_fields = (
+            ("STATE", "state"),
+            ("DIRECTION", "direction"),
+            ("LINE", "line"),
+            ("CONSISTENCY", "consistency"),
+            ("RANGE", "range"),
+        )
+        for column, (label, key) in enumerate(autonomous_fields):
+            tk.Label(
+                self._autonomous_panel,
+                text=label,
+                background=colors.panel_elevated,
+                foreground=colors.text_muted,
+                font=typography.font(typography.micro_size, "bold"),
+            ).grid(row=0, column=column, sticky="w", padx=(spacing.small, 0))
+            value_widget = tk.Label(
+                self._autonomous_panel,
+                textvariable=self._autonomous_values[key],
+                background=colors.panel_elevated,
+                foreground=colors.text_primary,
+                font=typography.font(typography.micro_size, "bold"),
+                anchor="w",
+            )
+            value_widget.grid(row=1, column=column, sticky="ew", padx=(spacing.small, 0))
+            if key == "state":
+                self._autonomous_state_widget = value_widget
+        tk.Label(
+            self._autonomous_panel,
+            textvariable=self._autonomous_values["message"],
+            background=colors.panel_elevated,
+            foreground=colors.text_secondary,
+            font=typography.font(typography.micro_size),
+            anchor="w",
+        ).grid(row=2, column=0, columnspan=6, sticky="ew", padx=spacing.small, pady=(2, 0))
 
         self._center_frame = tk.Frame(self._scroll_content, background=colors.background)
         self._center_frame.grid(
@@ -1145,6 +1244,11 @@ class TkOperatorView:
                 ),
             ),
             (
+                OperatorAction.START_AUTONOMOUS_DEMO,
+                "AUTO CALIBRATE & COUNT",
+                self._start_autonomous_demo,
+            ),
+            (
                 OperatorAction.REFRESH,
                 "Refresh Snapshot",
                 self._refresh_selected_dock,
@@ -1169,6 +1273,7 @@ class TkOperatorView:
         application_positions = {
             OperatorAction.REFRESH: (0, 0),
             OperatorAction.EXIT: (0, 1),
+            OperatorAction.START_AUTONOMOUS_DEMO: (1, 0),
         }
         for action, label, callback in callbacks:
             if action in truck_positions:
@@ -1328,6 +1433,7 @@ class TkOperatorView:
             OperatorAction.START_SESSION,
             OperatorAction.COMPLETE_SESSION,
             OperatorAction.START_PIPELINE,
+            OperatorAction.START_AUTONOMOUS_DEMO,
         }
         if destructive:
             background = "#3A1F29"
@@ -1536,6 +1642,9 @@ class TkOperatorView:
             self.show_error(str(exc))
         except ExpectedOperatorError:
             pass
+
+    def _start_autonomous_demo(self) -> None:
+        self._invoke(self._require_presenter().start_autonomous_demo, self._dock())
 
     def _refresh_selected_dock(self) -> None:
         self._invoke(self._require_presenter().refresh, self._dock())

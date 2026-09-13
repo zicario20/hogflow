@@ -9,6 +9,7 @@ from hogflow.presentation.desktop import (
     run_operator_desktop,
 )
 from hogflow.presentation.models import (
+    AutonomousDemoPanel,
     CameraPipelinePanel,
     ConfirmationKind,
     ConfirmationRequest,
@@ -33,6 +34,7 @@ __all__ = [
     "ConfirmationKind",
     "ConfirmationRequest",
     "CameraPipelinePanel",
+    "AutonomousDemoPanel",
     "CountingLanePanel",
     "DockPanel",
     "OperatorAction",

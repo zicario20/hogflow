@@ -1147,7 +1147,29 @@ Resumen de madurez:
   medición independiente. Todo media, labels, pesos y agregados locales son
   ignorados y no versionados. Modelo: **DEMO MODEL — NOT PRODUCTION VALIDATED**.
 
-### 5.31 Estado de las fases posteriores
+### 5.31 Phase 10.3C-A.1 — Autonomous Consistency Hardening + HMI Integration
+
+- **Hardening:** el algoritmo autónomo ahora usa la versión explícita
+  `phase_10_3c_a_v2`, incorpora el conteo primario en las familias de línea y
+  detector, medianas/rangos robustos, cobertura finita del corredor, pérdida
+  cerca de línea, continuidad local y reason codes acotados. El fingerprint de
+  calibración incluye la versión; la evidencia pre-hardening queda preservada.
+- **Reruns congelados:** A produjo count 32, rango de línea `30–33`, rango de
+  detector `32–32`, score `0.9566`, HIGH; B produjo count 30, rangos `28–30`
+  y `29–30`, score `0.9538`, HIGH. El demo previamente seleccionado produjo
+  count 6, rangos `3–6` y `4–5`, score `0.7846`, LOW, con códigos de estabilidad
+  y pérdida cerca de línea. Estos son resultados de consistencia interna, no
+  exactitud ni ground truth.
+- **HMI:** la desktop existente expone `AUTO CALIBRATE & COUNT` para el video
+  local configurado, con estados `CALIBRATING`, READY, LOW, INCONCLUSIVE,
+  COUNTING y COMPLETE. El puente es un único worker de aplicación controlado,
+  sin cola ni arquitectura CV paralela; la calibración no muta el contador de
+  negocio y la línea solo se muestra tras lock.
+- **Estado:** parcial. Se conservan las limitaciones
+  `AUTONOMOUS AI VALIDATION — HUMAN GROUND TRUTH NOT MEASURED` y
+  `DEMO MODEL — NOT PRODUCTION VALIDATED`; no se inspeccionó ni evaluó Video C.
+
+### 5.32 Estado de las fases posteriores
 
 Phase 9 está técnicamente completada según sus subfases autorizadas; Phase
 10.1 implementa runtime supervision, Phase 10.2 integra el boundary local de

@@ -18,6 +18,7 @@ from hogflow.calibration.models import (
     CalibrationConfidence,
     CalibrationStatus,
     CorridorEstimate,
+    CountFamilyMetrics,
     CountingGeometryConfiguration,
     DirectionVector,
     LineCandidate,
@@ -26,6 +27,7 @@ from hogflow.calibration.models import (
     TrajectorySummary,
 )
 from hogflow.calibration.orchestration import (
+    AUTONOMOUS_CALIBRATION_ALGORITHM_VERSION,
     AutonomousDemoConfiguration,
     AutonomousDemoResult,
     run_autonomous_demo,
@@ -37,6 +39,7 @@ from hogflow.calibration.video_selection import (
 )
 
 __all__ = [
+    "AUTONOMOUS_CALIBRATION_ALGORITHM_VERSION",
     "AutonomousCalibrationResult",
     "AutonomousCalibrationEngine",
     "AutonomousCalibrationSettings",
@@ -48,6 +51,7 @@ __all__ = [
     "detector_perturbation_agreement",
     "CalibrationConfidence",
     "CalibrationStatus",
+    "CountFamilyMetrics",
     "CorridorEstimate",
     "CountingGeometryConfiguration",
     "DirectionVector",

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from hogflow.application.autonomous_demo import AutonomousDemoState
+
 
 class OperatorAction(str, Enum):
     """Explicit desktop actions whose availability comes from one snapshot."""
@@ -20,6 +22,8 @@ class OperatorAction(str, Enum):
     START_PIPELINE = "start_pipeline"
     STOP_PIPELINE = "stop_pipeline"
     RESTART_VIDEO = "restart_video"
+    START_AUTONOMOUS_DEMO = "start_autonomous_demo"
+    AUTO_CALIBRATE_COUNT = "start_autonomous_demo"
     REFRESH = "refresh"
     EXIT = "exit"
 
@@ -86,6 +90,7 @@ class OperatorActionState:
     restart_video: bool
     refresh: bool
     exit: bool
+    start_autonomous_demo: bool = True
 
     def __post_init__(self) -> None:
         if any(
@@ -104,6 +109,7 @@ class OperatorActionState:
                 self.restart_video,
                 self.refresh,
                 self.exit,
+                self.start_autonomous_demo,
             )
         ):
             raise ValueError("Operator action availability must be boolean.")
@@ -179,6 +185,21 @@ class CameraPipelinePanel:
 
 
 @dataclass(frozen=True, slots=True)
+class AutonomousDemoPanel:
+    """Compact display projection for autonomous calibration and demo count."""
+
+    state: str = AutonomousDemoState.IDLE.value
+    direction: str = "—"
+    counting_line: str = "UNLOCKED"
+    consistency: str = "—"
+    observed_count_range: str = "—"
+    message: str = "Select a local video to begin."
+    live_count: int | None = None
+    line_locked: bool = False
+    line_coordinates: tuple[float, float, float, float] | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class OperatorScreen:
     """One complete immutable rendering input produced from fresh snapshots."""
 
@@ -190,6 +211,7 @@ class OperatorScreen:
     actions: OperatorActionState
     status_message: str
     generated_at: str
+    autonomous_demo: AutonomousDemoPanel = AutonomousDemoPanel()
 
     def __post_init__(self) -> None:
         if len(self.docks) != 4:
@@ -200,12 +222,15 @@ class OperatorScreen:
             raise ValueError("Operator screen requires explicit action availability.")
         if not isinstance(self.status_message, str) or not self.status_message.strip():
             raise ValueError("Operator screen requires an operator status message.")
+        if not isinstance(self.autonomous_demo, AutonomousDemoPanel):
+            raise ValueError("Operator screen requires an autonomous demo panel.")
 
 
 __all__ = [
     "ConfirmationKind",
     "ConfirmationRequest",
     "CameraPipelinePanel",
+    "AutonomousDemoPanel",
     "CountingLanePanel",
     "DockPanel",
     "OperatorAction",

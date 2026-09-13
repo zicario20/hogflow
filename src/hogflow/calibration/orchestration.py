@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from pathlib import Path
 from re import fullmatch
 from time import monotonic, perf_counter
 from typing import Callable, Iterable
@@ -59,7 +60,7 @@ from hogflow.tracking import (
 
 _IDENTIFIER = r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
 _SHA256_ZERO = "0" * 64
-_ALGORITHM_VERSION = "phase_10_3c_a_v1"
+AUTONOMOUS_CALIBRATION_ALGORITHM_VERSION = "phase_10_3c_a_v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +73,7 @@ class AutonomousDemoConfiguration:
     calibration_settings: AutonomousCalibrationSettings = AutonomousCalibrationSettings()
     crossing_epsilon: float = 0.005
     absent_track_retention_updates: int = 30
-    algorithm_version: str = _ALGORITHM_VERSION
+    algorithm_version: str = AUTONOMOUS_CALIBRATION_ALGORITHM_VERSION
 
     def __post_init__(self) -> None:
         if not isinstance(self.demo_id, str) or fullmatch(_IDENTIFIER, self.demo_id) is None:
@@ -248,8 +249,14 @@ def _collect_trajectories(
     tracker_factory: Callable[[ByteTrackConfiguration], LiveTracker],
     detector_configuration: PigDetectorConfiguration,
     clock: Callable[[], datetime] | None,
+    source_path: Path | None = None,
 ) -> _PassEvidence:
-    source = source_factory(StreamConfiguration.synthetic(configuration.demo_id))
+    source_configuration = (
+        StreamConfiguration.file(configuration.demo_id, source_path)
+        if source_path is not None
+        else StreamConfiguration.synthetic(configuration.demo_id)
+    )
+    source = source_factory(source_configuration)
     detector = detector_factory(detector_configuration)
     tracker = tracker_factory(configuration.tracker_configuration)
     engine = AutonomousCalibrationEngine(configuration.calibration_settings)
@@ -358,6 +365,8 @@ def _settings_fingerprint(settings: AutonomousCalibrationSettings) -> str:
         "minimum_lifetime_frames": settings.minimum_lifetime_frames,
         "minimum_mean_confidence": settings.minimum_mean_confidence,
         "neighbor_offsets": settings.neighbor_offsets,
+        "lost_near_line_distance": settings.lost_near_line_distance,
+        "minimum_post_line_samples": settings.minimum_post_line_samples,
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -401,6 +410,7 @@ def _build_calibration_result(
             detector_perturbation_counts=(),
             counting_configuration=None,
             limitations=base_limitations + ("insufficient_directional_evidence",),
+            algorithm_version=configuration.algorithm_version,
         )
     try:
         corridor = estimate_corridor(eligible, direction, settings)
@@ -424,10 +434,12 @@ def _build_calibration_result(
             detector_perturbation_counts=(),
             counting_configuration=None,
             limitations=base_limitations + ("no_safe_line_candidate",),
+            algorithm_version=configuration.algorithm_version,
         )
 
     metrics: list[LineCandidateMetrics] = []
     for candidate in candidates:
+        primary_count = _forward_count(candidate, primary.summaries, settings)
         neighbor_counts = tuple(
             0
             if (
@@ -453,6 +465,7 @@ def _build_calibration_result(
                 settings,
                 neighbor_counts=neighbor_counts,
                 detector_perturbation_counts=perturbation_counts,
+                primary_count=primary_count,
             )
         )
     ordered = sorted(
@@ -471,6 +484,17 @@ def _build_calibration_result(
         neighbor_agreement=selected.neighbor_agreement,
         continuity_score=selected.continuity_score,
         score=selected.score,
+        detector_agreement=selected.perturbation_agreement,
+        corridor_coverage=selected.corridor_coverage,
+        crossing_local_continuity=selected.crossing_local_continuity,
+        lost_near_line_ratio=selected.lost_near_line_ratio,
+        unique_ratio=(
+            selected.forward_crossings / selected.expected_crossing_tracks
+            if selected.expected_crossing_tracks
+            else 0.0
+        ),
+        primary_line_agreement=selected.primary_line_agreement,
+        primary_detector_agreement=selected.primary_detector_agreement,
     )
     geometry = CountingGeometryConfiguration(
         detector_artifact_fingerprint=primary.artifact_fingerprint,
@@ -484,6 +508,10 @@ def _build_calibration_result(
         settings_fingerprint=_settings_fingerprint(settings),
     )
     primary_neighbor_counts = selected.neighbor_counts
+    reason_codes = list(selected.confidence_reason_codes)
+    if purity >= 0.80:
+        reason_codes.append("HIGH_DIRECTION_PURITY")
+    reason_codes = list(dict.fromkeys(reason_codes))[:16]
     return AutonomousCalibrationResult(
         status=CalibrationStatus.READY,
         confidence=confidence,
@@ -499,6 +527,24 @@ def _build_calibration_result(
         detector_perturbation_counts=selected.detector_perturbation_counts,
         counting_configuration=geometry,
         limitations=base_limitations,
+        algorithm_version=configuration.algorithm_version,
+        primary_count=selected.primary_count,
+        neighbor_counts=selected.neighbor_counts,
+        line_count_min=selected.line_count_min,
+        line_count_max=selected.line_count_max,
+        line_count_median=selected.line_count_median,
+        line_relative_spread=selected.line_relative_spread,
+        primary_line_agreement=selected.primary_line_agreement,
+        detector_variant_counts=selected.detector_variant_counts,
+        detector_count_min=selected.detector_count_min,
+        detector_count_max=selected.detector_count_max,
+        detector_count_median=selected.detector_count_median,
+        detector_relative_spread=selected.detector_relative_spread,
+        primary_detector_agreement=selected.primary_detector_agreement,
+        corridor_coverage=selected.corridor_coverage,
+        lost_near_line_ratio=selected.lost_near_line_ratio,
+        crossing_local_continuity=selected.crossing_local_continuity,
+        confidence_reason_codes=tuple(reason_codes),
     )
 
 
@@ -510,11 +556,17 @@ def _run_count_pass(
     detector_factory: Callable[[PigDetectorConfiguration], LiveDetector],
     tracker_factory: Callable[[ByteTrackConfiguration], LiveTracker],
     clock: Callable[[], datetime] | None,
+    source_path: Path | None = None,
 ) -> tuple[int, int, int | None, float, float, float]:
     geometry = calibration.counting_configuration
     if geometry is None or calibration.selected_line is None:
         raise ValueError("Counting pass requires ready calibration geometry.")
-    source = source_factory(StreamConfiguration.synthetic(configuration.demo_id))
+    source_configuration = (
+        StreamConfiguration.file(configuration.demo_id, source_path)
+        if source_path is not None
+        else StreamConfiguration.synthetic(configuration.demo_id)
+    )
+    source = source_factory(source_configuration)
     detector = detector_factory(configuration.detector_configuration)
     tracker = tracker_factory(configuration.tracker_configuration)
     crossing_configuration = LiveCrossingConfiguration(
@@ -584,6 +636,8 @@ def run_autonomous_demo(
     detector_factory: Callable[[PigDetectorConfiguration], LiveDetector] | None = None,
     tracker_factory: Callable[[ByteTrackConfiguration], LiveTracker] | None = None,
     clock: Callable[[], datetime] | None = None,
+    progress_callback: Callable[[str, AutonomousCalibrationResult | None], None] | None = None,
+    source_path: Path | None = None,
 ) -> AutonomousDemoResult:
     """Run bounded calibration and, only when ready, one clean count pass."""
 
@@ -608,6 +662,8 @@ def run_autonomous_demo(
         tracker_factory = tracker_factory or _combined_tracker
 
     failures: list[str] = []
+    if progress_callback is not None:
+        progress_callback("calibrating", None)
     try:
         primary = _collect_trajectories(
             configuration,
@@ -616,6 +672,7 @@ def run_autonomous_demo(
             tracker_factory=tracker_factory,
             detector_configuration=configuration.detector_configuration,
             clock=clock,
+            source_path=source_path,
         )
         diagnostics = tuple(
             (
@@ -630,11 +687,19 @@ def run_autonomous_demo(
                         confidence_threshold=confidence,
                     ),
                     clock=clock,
+                    source_path=source_path,
                 ),
             )
             for confidence in configuration.calibration_settings.diagnostic_confidences
         )
         calibration = _build_calibration_result(configuration, primary, diagnostics)
+        if progress_callback is not None:
+            progress_callback(
+                "calibration_ready"
+                if calibration.status is CalibrationStatus.READY
+                else "calibration_inconclusive",
+                calibration,
+            )
         if calibration.status is not CalibrationStatus.READY:
             return AutonomousDemoResult(
                 demo_id=configuration.demo_id,
@@ -659,6 +724,8 @@ def run_autonomous_demo(
                 failures=tuple(failures),
                 limitations=calibration.limitations,
             )
+        if progress_callback is not None:
+            progress_callback("counting", calibration)
         (
             count_frames,
             crossing_events,
@@ -673,6 +740,7 @@ def run_autonomous_demo(
             detector_factory=detector_factory,
             tracker_factory=tracker_factory,
             clock=clock,
+            source_path=source_path,
         )
         return AutonomousDemoResult(
             demo_id=configuration.demo_id,
@@ -723,6 +791,7 @@ def run_autonomous_demo(
                     "demo_model_not_production_validated",
                     "bounded_runtime_failure",
                 ),
+                algorithm_version=configuration.algorithm_version,
             ),
             primary_count=None,
             primary_count_direction=None,
@@ -745,6 +814,7 @@ def run_autonomous_demo(
 
 
 __all__ = [
+    "AUTONOMOUS_CALIBRATION_ALGORITHM_VERSION",
     "AutonomousDemoConfiguration",
     "AutonomousDemoResult",
     "run_autonomous_demo",

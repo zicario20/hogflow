@@ -228,6 +228,39 @@ class LineCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class CountFamilyMetrics:
+    """Robust, bounded summary of one primary count and its variants."""
+
+    minimum: int
+    maximum: int
+    median: float
+    absolute_spread: int
+    relative_spread: float
+    primary_deviation: float
+    primary_agreement: float
+
+    def __post_init__(self) -> None:
+        for name in ("minimum", "maximum", "absolute_spread"):
+            object.__setattr__(self, name, _non_negative_int(getattr(self, name), name))
+        if self.maximum < self.minimum:
+            raise InputDataError("Count-family maximum cannot be below minimum.")
+        if self.absolute_spread != self.maximum - self.minimum:
+            raise InputDataError("Count-family spread must match its bounds.")
+        object.__setattr__(self, "median", _finite(self.median, "Count-family median"))
+        if self.median < 0.0:
+            raise InputDataError("Count-family median cannot be negative.")
+        object.__setattr__(self, "relative_spread", _unit(self.relative_spread, "Relative spread"))
+        object.__setattr__(
+            self, "primary_deviation", _finite(self.primary_deviation, "Primary deviation")
+        )
+        if self.primary_deviation < 0.0:
+            raise InputDataError("Primary deviation cannot be negative.")
+        object.__setattr__(
+            self, "primary_agreement", _unit(self.primary_agreement, "Primary agreement")
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class LineCandidateMetrics:
     """Bounded analysis-only metrics for one candidate line."""
 
@@ -246,6 +279,20 @@ class LineCandidateMetrics:
     detector_perturbation_counts: tuple[tuple[float, int], ...]
     perturbation_agreement: float
     score: float
+    primary_count: int = 0
+    line_count_min: int = 0
+    line_count_max: int = 0
+    line_count_median: float = 0.0
+    line_relative_spread: float = 0.0
+    primary_line_agreement: float = 0.0
+    detector_variant_counts: tuple[int, ...] = ()
+    detector_count_min: int = 0
+    detector_count_max: int = 0
+    detector_count_median: float = 0.0
+    detector_relative_spread: float = 0.0
+    primary_detector_agreement: float = 0.0
+    crossing_local_continuity: float = 0.0
+    confidence_reason_codes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.candidate, LineCandidate):
@@ -288,6 +335,63 @@ class LineCandidateMetrics:
                 )
             )
         object.__setattr__(self, "detector_perturbation_counts", tuple(perturbations))
+        object.__setattr__(
+            self, "primary_count", _non_negative_int(self.primary_count, "Primary count")
+        )
+        for name in (
+            "line_count_min",
+            "line_count_max",
+            "detector_count_min",
+            "detector_count_max",
+        ):
+            object.__setattr__(self, name, _non_negative_int(getattr(self, name), name))
+        if self.line_count_max < self.line_count_min:
+            raise InputDataError("Line count range is invalid.")
+        if self.detector_count_max < self.detector_count_min:
+            raise InputDataError("Detector count range is invalid.")
+        for name in (
+            "line_count_median",
+            "detector_count_median",
+        ):
+            value = _finite(getattr(self, name), name)
+            if value < 0.0:
+                raise InputDataError(f"{name} cannot be negative.")
+            object.__setattr__(self, name, value)
+        for name in (
+            "line_relative_spread",
+            "primary_line_agreement",
+            "detector_relative_spread",
+            "primary_detector_agreement",
+            "crossing_local_continuity",
+        ):
+            object.__setattr__(self, name, _unit(getattr(self, name), name))
+        if not isinstance(self.detector_variant_counts, tuple):
+            raise InputDataError("Detector variant counts must be a tuple.")
+        variants = tuple(
+            _non_negative_int(count, "Detector variant count")
+            for count in self.detector_variant_counts
+        )
+        object.__setattr__(self, "detector_variant_counts", variants)
+        if (
+            not isinstance(self.confidence_reason_codes, tuple)
+            or len(self.confidence_reason_codes) > 16
+        ):
+            raise InputDataError("Confidence reason codes must be a bounded tuple.")
+        for code in self.confidence_reason_codes:
+            if not isinstance(code, str) or fullmatch(r"[A-Z][A-Z0-9_]{0,63}", code) is None:
+                raise InputDataError("Confidence reason codes must be sanitized identifiers.")
+
+    @property
+    def line_count_range(self) -> tuple[int, int]:
+        """Return the bounded observed line-family range."""
+
+        return self.line_count_min, self.line_count_max
+
+    @property
+    def detector_count_range(self) -> tuple[int, int]:
+        """Return the bounded observed detector-family range."""
+
+        return self.detector_count_min, self.detector_count_max
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,6 +481,24 @@ class AutonomousCalibrationResult:
     detector_perturbation_counts: tuple[tuple[float, int], ...]
     counting_configuration: CountingGeometryConfiguration | None
     limitations: tuple[str, ...]
+    algorithm_version: str = "phase_10_3c_a_v1"
+    primary_count: int | None = None
+    neighbor_counts: tuple[int, ...] = ()
+    line_count_min: int = 0
+    line_count_max: int = 0
+    line_count_median: float = 0.0
+    line_relative_spread: float = 0.0
+    primary_line_agreement: float = 0.0
+    detector_variant_counts: tuple[int, ...] = ()
+    detector_count_min: int = 0
+    detector_count_max: int = 0
+    detector_count_median: float = 0.0
+    detector_relative_spread: float = 0.0
+    primary_detector_agreement: float = 0.0
+    corridor_coverage: float = 0.0
+    lost_near_line_ratio: float = 0.0
+    crossing_local_continuity: float = 0.0
+    confidence_reason_codes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, CalibrationStatus):
@@ -438,10 +560,69 @@ class AutonomousCalibrationResult:
             isinstance(item, str) and item.strip() for item in self.limitations
         ):
             raise InputDataError("Calibration limitations must be non-empty text tuples.")
+        object.__setattr__(
+            self, "algorithm_version", _identifier(self.algorithm_version, "Algorithm version")
+        )
+        if self.primary_count is not None:
+            object.__setattr__(
+                self, "primary_count", _non_negative_int(self.primary_count, "Primary count")
+            )
+        if not isinstance(self.neighbor_counts, tuple):
+            raise InputDataError("Neighbor counts must be a tuple.")
+        object.__setattr__(
+            self,
+            "neighbor_counts",
+            tuple(_non_negative_int(value, "Neighbor count") for value in self.neighbor_counts),
+        )
+        for name in (
+            "line_count_min",
+            "line_count_max",
+            "detector_count_min",
+            "detector_count_max",
+        ):
+            object.__setattr__(self, name, _non_negative_int(getattr(self, name), name))
+        if self.line_count_max < self.line_count_min:
+            raise InputDataError("Line count range is invalid.")
+        if self.detector_count_max < self.detector_count_min:
+            raise InputDataError("Detector count range is invalid.")
+        for name in ("line_count_median", "detector_count_median"):
+            value = _finite(getattr(self, name), name)
+            if value < 0.0:
+                raise InputDataError(f"{name} cannot be negative.")
+            object.__setattr__(self, name, value)
+        for name in (
+            "line_relative_spread",
+            "primary_line_agreement",
+            "detector_relative_spread",
+            "primary_detector_agreement",
+            "corridor_coverage",
+            "lost_near_line_ratio",
+            "crossing_local_continuity",
+        ):
+            object.__setattr__(self, name, _unit(getattr(self, name), name))
+        if not isinstance(self.detector_variant_counts, tuple):
+            raise InputDataError("Detector variant counts must be a tuple.")
+        object.__setattr__(
+            self,
+            "detector_variant_counts",
+            tuple(
+                _non_negative_int(count, "Detector variant count")
+                for count in self.detector_variant_counts
+            ),
+        )
+        if (
+            not isinstance(self.confidence_reason_codes, tuple)
+            or len(self.confidence_reason_codes) > 16
+        ):
+            raise InputDataError("Confidence reason codes must be a bounded tuple.")
+        for code in self.confidence_reason_codes:
+            if not isinstance(code, str) or fullmatch(r"[A-Z][A-Z0-9_]{0,63}", code) is None:
+                raise InputDataError("Confidence reason codes must be sanitized identifiers.")
 
     @property
     def fingerprint(self) -> str:
         payload = {
+            "algorithm_version": self.algorithm_version,
             "candidate_ids": [item.candidate.candidate_id for item in self.candidate_metrics],
             "confidence": self.confidence.value,
             "counting_configuration": (
@@ -458,11 +639,24 @@ class AutonomousCalibrationResult:
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
 
+    @property
+    def line_count_range(self) -> tuple[int, int]:
+        """Return the bounded observed line-family range."""
+
+        return self.line_count_min, self.line_count_max
+
+    @property
+    def detector_count_range(self) -> tuple[int, int]:
+        """Return the bounded observed detector-family range."""
+
+        return self.detector_count_min, self.detector_count_max
+
 
 __all__ = [
     "AutonomousCalibrationResult",
     "CalibrationConfidence",
     "CalibrationStatus",
+    "CountFamilyMetrics",
     "CorridorEstimate",
     "CountingGeometryConfiguration",
     "DirectionVector",

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from math import hypot
-from statistics import fmean
+from statistics import fmean, median
 from typing import Iterable
 
 from hogflow.calibration.models import (
     CalibrationConfidence,
     CorridorEstimate,
+    CountFamilyMetrics,
     DirectionVector,
     LineCandidate,
     LineCandidateMetrics,
@@ -47,6 +48,8 @@ class AutonomousCalibrationSettings:
     )
     neighbor_offsets: tuple[float, ...] = (-0.04, -0.02, 0.02, 0.04)
     diagnostic_confidences: tuple[float, ...] = (0.20, 0.30)
+    lost_near_line_distance: float = 0.05
+    minimum_post_line_samples: int = 2
 
     def __post_init__(self) -> None:
         if self.minimum_lifetime_frames <= 0 or self.maximum_sampled_centers <= 0:
@@ -62,6 +65,7 @@ class AutonomousCalibrationSettings:
             (self.minimum_direction_resultant, "minimum_direction_resultant"),
             (self.corridor_low_percentile, "corridor_low_percentile"),
             (self.corridor_high_percentile, "corridor_high_percentile"),
+            (self.lost_near_line_distance, "lost_near_line_distance"),
         ):
             if not isinstance(value, (int, float)) or not 0.0 <= float(value) <= 1.0:
                 raise ValueError(f"{name} must be between 0 and 1.")
@@ -74,6 +78,8 @@ class AutonomousCalibrationSettings:
             raise ValueError("Candidate positions must be a non-empty sorted tuple.")
         if not self.neighbor_offsets or 0.0 in self.neighbor_offsets:
             raise ValueError("Neighbor offsets must be non-empty and exclude the primary line.")
+        if self.minimum_post_line_samples <= 0:
+            raise ValueError("minimum_post_line_samples must be positive.")
 
 
 @dataclass(slots=True)
@@ -345,76 +351,152 @@ def generate_line_candidates(
     return tuple(candidates)
 
 
+def _side_transition_details(
+    candidate: LineCandidate,
+    summary: TrajectorySummary,
+    *,
+    epsilon: float = 0.005,
+) -> tuple[int, int, int, tuple[tuple[int, bool], ...], tuple[int, ...]]:
+    """Return directional crossings and bounded local transition evidence."""
+
+    forward = 0
+    reverse = 0
+    crossings = 0
+    transitions: list[tuple[int, bool]] = []
+    points = tuple(NormalizedPoint(*point) for point in summary.sampled_centers)
+    previous_side = None
+    previous_point = None
+    for index, current in enumerate(points):
+        current_side = candidate.line.classify(current, epsilon)
+        if current_side.value == "on_line":
+            continue
+        if previous_side is None:
+            previous_side = current_side
+            previous_point = current
+            continue
+        if previous_side is current_side:
+            previous_point = current
+            continue
+        assert previous_point is not None
+        finite = candidate.line.movement_intersection_parameter(previous_point, current) is not None
+        transitions.append((index, finite))
+        if finite:
+            crossings += 1
+            if (
+                previous_side.value == "negative"
+                and current_side.value == "positive"
+                and candidate.positive_direction is LiveCrossingDirection.NEGATIVE_TO_POSITIVE
+            ) or (
+                previous_side.value == "positive"
+                and current_side.value == "negative"
+                and candidate.positive_direction is LiveCrossingDirection.POSITIVE_TO_NEGATIVE
+            ):
+                forward += 1
+            else:
+                reverse += 1
+        previous_side = current_side
+        previous_point = current
+    return (
+        forward,
+        reverse,
+        crossings,
+        tuple(transitions),
+        tuple(index for index, finite in transitions if finite),
+    )
+
+
 def _side_transition_count(
     candidate: LineCandidate,
     summary: TrajectorySummary,
     *,
     epsilon: float = 0.005,
 ) -> tuple[int, int, int]:
-    previous_side = None
-    forward = 0
-    reverse = 0
-    crossings = 0
-    points = tuple(NormalizedPoint(*point) for point in summary.sampled_centers)
-    for previous, current in zip(points, points[1:]):
-        previous_class = candidate.line.classify(previous, epsilon)
-        current_class = candidate.line.classify(current, epsilon)
-        if current_class.value == "on_line":
-            continue
-        if previous_class.value == "on_line":
-            previous_side = current_class
-            continue
-        if previous_side is not None:
-            previous_class = previous_side
-        if previous_class is current_class:
-            previous_side = current_class
-            continue
-        if not candidate.line.intersects_movement_segment(previous, current):
-            previous_side = current_class
-            continue
-        crossings += 1
-        if (
-            previous_class.value == "negative"
-            and current_class.value == "positive"
-            and candidate.positive_direction is LiveCrossingDirection.NEGATIVE_TO_POSITIVE
-        ) or (
-            previous_class.value == "positive"
-            and current_class.value == "negative"
-            and candidate.positive_direction is LiveCrossingDirection.POSITIVE_TO_NEGATIVE
-        ):
-            forward += 1
-        else:
-            reverse += 1
-        previous_side = current_class
+    """Return unique track-bounded finite crossings for compatibility."""
+
+    forward, reverse, crossings, _, _ = _side_transition_details(
+        candidate, summary, epsilon=epsilon
+    )
     return forward, reverse, crossings
 
 
-def line_band_agreement(counts: tuple[int, ...]) -> float:
-    """Return one minus normalized count spread for a declared line band."""
+def count_family_metrics(primary_count: int, variant_counts: tuple[int, ...]) -> CountFamilyMetrics:
+    """Summarize a primary count with variants using a median consensus."""
 
-    if not counts:
-        return 0.0
-    maximum = max(counts)
-    minimum = min(counts)
-    if maximum == 0:
-        return 0.0
-    denominator = max(1, sum(counts) / len(counts))
-    return max(0.0, min(1.0, 1.0 - (maximum - minimum) / denominator))
+    if isinstance(primary_count, bool) or not isinstance(primary_count, int) or primary_count < 0:
+        raise ValueError("primary_count must be a non-negative integer.")
+    if not isinstance(variant_counts, tuple) or any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in variant_counts
+    ):
+        raise ValueError("variant_counts must be a tuple of non-negative integers.")
+    family = (primary_count, *variant_counts)
+    family_median = float(median(family))
+    minimum = min(family)
+    maximum = max(family)
+    spread = maximum - minimum
+    if family_median <= 0.0:
+        relative = 0.0 if spread == 0 else 1.0
+    else:
+        relative = min(1.0, spread / family_median)
+    primary_deviation = abs(primary_count - family_median)
+    if family_median <= 0.0:
+        primary_agreement = 0.0
+    else:
+        primary_agreement = max(0.0, min(1.0, 1.0 - primary_deviation / family_median))
+    return CountFamilyMetrics(
+        minimum=minimum,
+        maximum=maximum,
+        median=family_median,
+        absolute_spread=spread,
+        relative_spread=relative,
+        primary_deviation=primary_deviation,
+        primary_agreement=primary_agreement,
+    )
+
+
+def _legacy_or_primary_family(
+    primary_or_counts: int | tuple[int, ...],
+    variant_counts: tuple[int, ...] | None,
+) -> CountFamilyMetrics:
+    if variant_counts is None:
+        if not isinstance(primary_or_counts, tuple):
+            raise ValueError("variant_counts are required when a primary count is supplied.")
+        if not primary_or_counts:
+            return count_family_metrics(0, ())
+        inferred_primary = int(median(primary_or_counts))
+        return count_family_metrics(inferred_primary, primary_or_counts)
+    if not isinstance(primary_or_counts, int):
+        raise ValueError("primary count must be an integer.")
+    return count_family_metrics(primary_or_counts, variant_counts)
+
+
+def line_band_agreement(
+    primary_count: int | tuple[int, ...],
+    neighbor_counts: tuple[int, ...] | None = None,
+) -> float:
+    """Return primary-inclusive stability for a finite candidate line family."""
+
+    metrics = _legacy_or_primary_family(primary_count, neighbor_counts)
+    return max(0.0, min(1.0, metrics.primary_agreement * (1.0 - metrics.relative_spread)))
 
 
 def relative_spread(counts: tuple[int, ...]) -> float:
-    """Return bounded max-min spread relative to the median-like mean."""
+    """Return max-min spread divided by the robust median, zero-safe."""
 
     if not counts:
         return 1.0
-    denominator = max(1.0, sum(counts) / len(counts))
-    return max(0.0, (max(counts) - min(counts)) / denominator)
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in counts):
+        raise ValueError("counts must be non-negative integers.")
+    return count_family_metrics(int(median(counts)), counts).relative_spread
 
 
-def detector_perturbation_agreement(counts: tuple[int, ...]) -> float:
-    """Return confidence stability for fixed detector-threshold variants."""
+def detector_perturbation_agreement(
+    primary_count: int | tuple[int, ...],
+    variant_counts: tuple[int, ...] | None = None,
+) -> float:
+    """Return primary-inclusive stability for detector variants."""
 
-    return line_band_agreement(counts)
+    return line_band_agreement(primary_count, variant_counts)
 
 
 def evaluate_candidate_tracks(
@@ -424,6 +506,7 @@ def evaluate_candidate_tracks(
     *,
     neighbor_counts: tuple[int, ...] = (0,),
     detector_perturbation_counts: tuple[tuple[float, int], ...] = (),
+    primary_count: int | None = None,
 ) -> LineCandidateMetrics:
     """Evaluate geometry-only crossings without changing an operational counter."""
 
@@ -433,17 +516,47 @@ def evaluate_candidate_tracks(
     reverse = 0
     multiple = 0
     continuity_values = []
+    local_continuity_values = []
     alignments = []
+    supporting_tracks = 0
+    finite_tracks = 0
+    near_line_candidates = 0
+    lost_near_line = 0
     for summary in selected:
-        crossings = _side_transition_count(candidate, summary)
-        if crossings[2] == 0:
-            continue
-        expected += 1
-        forward += int(crossings[0] == 1 and crossings[1] == 0)
-        reverse += int(crossings[1] > 0)
-        if crossings[2] > 1:
-            multiple += 1
-        continuity_values.append(summary.continuity_ratio)
+        details = _side_transition_details(candidate, summary)
+        crossings = details[:3]
+        transitions = details[3]
+        finite_transition_indexes = details[4]
+        if transitions:
+            supporting_tracks += 1
+        if crossings[2] > 0:
+            finite_tracks += 1
+            expected += 1
+            forward += int(crossings[0] == 1 and crossings[1] == 0)
+            reverse += int(crossings[1] > 0)
+            if crossings[2] > 1:
+                multiple += 1
+            continuity_values.append(summary.continuity_ratio)
+            transition_index = finite_transition_indexes[0]
+            points = tuple(NormalizedPoint(*point) for point in summary.sampled_centers)
+            before_side = (
+                "negative"
+                if candidate.positive_direction is LiveCrossingDirection.NEGATIVE_TO_POSITIVE
+                else "positive"
+            )
+            after_side = "positive" if before_side == "negative" else "negative"
+            before = sum(
+                candidate.line.classify(point, 0.005).value == before_side
+                for point in points[:transition_index]
+            )
+            after = sum(
+                candidate.line.classify(point, 0.005).value == after_side
+                for point in points[transition_index:]
+            )
+            minimum_samples = max(1, settings.minimum_post_line_samples)
+            local_continuity_values.append(
+                min(1.0, before / minimum_samples, after / minimum_samples)
+            )
         normal = DirectionVector(
             -(candidate.line.end.y - candidate.line.start.y),
             candidate.line.end.x - candidate.line.start.x,
@@ -454,28 +567,83 @@ def evaluate_candidate_tracks(
             if candidate.positive_direction is LiveCrossingDirection.POSITIVE_TO_NEGATIVE:
                 alignment = 1.0 - alignment
             alignments.append(max(0.0, min(1.0, alignment)))
-    neighbor_agreement = line_band_agreement(neighbor_counts)
+        points = tuple(NormalizedPoint(*point) for point in summary.sampled_centers)
+        distances = [abs(candidate.line.signed_distance(point)) for point in points]
+        near_line = bool(distances) and min(distances) <= settings.lost_near_line_distance
+        if near_line or transitions:
+            near_line_candidates += 1
+            post_evidence = 0
+            if finite_transition_indexes:
+                transition_index = finite_transition_indexes[0]
+                expected_side = (
+                    "positive"
+                    if candidate.positive_direction is LiveCrossingDirection.NEGATIVE_TO_POSITIVE
+                    else "negative"
+                )
+                post_evidence = sum(
+                    candidate.line.classify(point, 0.005).value == expected_side
+                    for point in points[transition_index:]
+                )
+            endpoint_distance = abs(
+                candidate.line.signed_distance(NormalizedPoint(*summary.last_center))
+            )
+            if (
+                endpoint_distance <= settings.lost_near_line_distance
+                and post_evidence < settings.minimum_post_line_samples
+            ):
+                lost_near_line += 1
+    resolved_primary = forward if primary_count is None else primary_count
+    line_family = count_family_metrics(resolved_primary, neighbor_counts)
+    neighbor_agreement = line_band_agreement(resolved_primary, neighbor_counts)
     perturbation_counts = tuple(detector_perturbation_counts)
+    detector_variant_values = tuple(count for _, count in perturbation_counts)
+    detector_family = count_family_metrics(resolved_primary, detector_variant_values)
     perturbation_agreement = detector_perturbation_agreement(
-        tuple(count for _, count in perturbation_counts) or (0,)
+        resolved_primary,
+        detector_variant_values,
     )
     continuity = fmean(continuity_values) if continuity_values else 0.0
     alignment = fmean(alignments) if alignments else 0.0
     unique_ratio = forward / expected if expected else 0.0
     reverse_ratio = reverse / expected if expected else 0.0
     multiple_ratio = multiple / expected if expected else 0.0
-    score = (
-        0.25 * alignment
-        + 0.20 * unique_ratio
-        + 0.20 * continuity
-        + 0.15 * neighbor_agreement
-        + 0.10 * (1.0 - candidate.edge_penalty)
-        + 0.10 * perturbation_agreement
-        - 0.10 * reverse_ratio
-        - 0.10 * multiple_ratio
-        - 0.10 * 0.0
-        - 0.05 * candidate.edge_penalty
+    corridor_coverage = finite_tracks / supporting_tracks if supporting_tracks else 0.0
+    lost_ratio = lost_near_line / near_line_candidates if near_line_candidates else 0.0
+    local_continuity = fmean(local_continuity_values) if local_continuity_values else 0.0
+    primary_disagreement = 1.0 - min(
+        line_family.primary_agreement, detector_family.primary_agreement
     )
+    score = (
+        0.18 * alignment
+        + 0.16 * unique_ratio
+        + 0.14 * local_continuity
+        + 0.14 * corridor_coverage
+        + 0.14 * neighbor_agreement
+        + 0.12 * perturbation_agreement
+        + 0.06 * continuity
+        + 0.06 * (1.0 - candidate.edge_penalty)
+        - 0.08 * reverse_ratio
+        - 0.06 * multiple_ratio
+        - 0.08 * lost_ratio
+        - 0.10 * primary_disagreement
+    )
+    reasons: list[str] = []
+    if len(selected) < 5:
+        reasons.append("INSUFFICIENT_TRACKS")
+    if neighbor_agreement < 0.80:
+        reasons.append("LOW_LINE_STABILITY")
+    if line_family.primary_agreement < 0.80:
+        reasons.append("PRIMARY_COUNT_DISAGREES_WITH_NEIGHBORS")
+    if perturbation_agreement < 0.80:
+        reasons.append("LOW_DETECTOR_PERTURBATION_STABILITY")
+    if lost_ratio > 0.10:
+        reasons.append("TRACK_LOSS_NEAR_LINE")
+    if corridor_coverage < 0.80:
+        reasons.append("LOW_CORRIDOR_COVERAGE")
+    if reverse_ratio > 0.20:
+        reasons.append("HIGH_REVERSE_RATE")
+    if not reasons:
+        reasons.append("CONSISTENT_INTERNAL_EVIDENCE")
     return LineCandidateMetrics(
         candidate=candidate,
         eligible_tracks=len(selected),
@@ -485,13 +653,27 @@ def evaluate_candidate_tracks(
         multiple_crossings=multiple,
         continuity_score=continuity,
         direction_alignment=alignment,
-        corridor_coverage=1.0 if expected else 0.0,
-        lost_near_line_ratio=0.0,
+        corridor_coverage=max(0.0, min(1.0, corridor_coverage)),
+        lost_near_line_ratio=max(0.0, min(1.0, lost_ratio)),
         neighbor_counts=neighbor_counts,
         neighbor_agreement=neighbor_agreement,
         detector_perturbation_counts=perturbation_counts,
         perturbation_agreement=perturbation_agreement,
         score=max(0.0, min(1.0, score)),
+        primary_count=resolved_primary,
+        line_count_min=line_family.minimum,
+        line_count_max=line_family.maximum,
+        line_count_median=line_family.median,
+        line_relative_spread=line_family.relative_spread,
+        primary_line_agreement=line_family.primary_agreement,
+        detector_variant_counts=detector_variant_values,
+        detector_count_min=detector_family.minimum,
+        detector_count_max=detector_family.maximum,
+        detector_count_median=detector_family.median,
+        detector_relative_spread=detector_family.relative_spread,
+        primary_detector_agreement=detector_family.primary_agreement,
+        crossing_local_continuity=local_continuity,
+        confidence_reason_codes=tuple(reasons[:16]),
     )
 
 
@@ -502,14 +684,35 @@ def consistency_confidence(
     neighbor_agreement: float,
     continuity_score: float,
     score: float,
+    detector_agreement: float | None = None,
+    corridor_coverage: float | None = None,
+    crossing_local_continuity: float | None = None,
+    lost_near_line_ratio: float | None = None,
+    unique_ratio: float | None = None,
+    primary_line_agreement: float | None = None,
+    primary_detector_agreement: float | None = None,
 ) -> CalibrationConfidence:
     """Classify internal consistency using fixed, non-accuracy thresholds."""
 
+    detector = 1.0 if detector_agreement is None else detector_agreement
+    coverage = 1.0 if corridor_coverage is None else corridor_coverage
+    local = continuity_score if crossing_local_continuity is None else crossing_local_continuity
+    lost = 0.0 if lost_near_line_ratio is None else lost_near_line_ratio
+    unique = 1.0 if unique_ratio is None else unique_ratio
+    primary_line = 1.0 if primary_line_agreement is None else primary_line_agreement
+    primary_detector = 1.0 if primary_detector_agreement is None else primary_detector_agreement
     if (
         eligible_tracks >= 8
         and direction_purity >= 0.80
         and neighbor_agreement >= 0.80
+        and detector >= 0.80
         and continuity_score >= 0.75
+        and local >= 0.70
+        and coverage >= 0.80
+        and lost <= 0.10
+        and unique >= 0.85
+        and primary_line >= 0.80
+        and primary_detector >= 0.80
         and score >= 0.75
     ):
         return CalibrationConfidence.HIGH
@@ -517,7 +720,12 @@ def consistency_confidence(
         eligible_tracks >= 5
         and direction_purity >= 0.65
         and neighbor_agreement >= 0.60
+        and detector >= 0.60
         and continuity_score >= 0.55
+        and local >= 0.45
+        and coverage >= 0.50
+        and lost <= 0.30
+        and unique >= 0.65
         and score >= 0.55
     ):
         return CalibrationConfidence.MEDIUM
@@ -529,6 +737,7 @@ def consistency_confidence(
 __all__ = [
     "AutonomousCalibrationEngine",
     "AutonomousCalibrationSettings",
+    "count_family_metrics",
     "estimate_corridor",
     "estimate_dominant_direction",
     "consistency_confidence",
