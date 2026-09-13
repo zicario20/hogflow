@@ -45,6 +45,7 @@ def test_counting_configuration_fingerprint_is_stable_and_path_free() -> None:
     second = counting_configuration()
     assert first.fingerprint == second.fingerprint
 
+
 def test_result_rejects_more_than_64_sampled_centers() -> None:
     with pytest.raises(InputDataError):
         valid_summary(sampled_centers=tuple((0.1, 0.2) for _ in range(65)))
