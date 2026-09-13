@@ -7,7 +7,7 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from hogflow.adapters.camera_source_factory import create_camera_source
+from hogflow.adapters.camera_source_factory import StreamConfiguration, create_camera_source
 from hogflow.application import OperatorInputError, VideoSourceRequest
 from hogflow.bootstrap import compose_operator_desktop
 from hogflow.calibration import (
@@ -22,7 +22,6 @@ from hogflow.detection import (
     DetectorConfigurationError,
     PigDetectorConfiguration,
 )
-from hogflow.streaming import StreamConfiguration
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -129,9 +128,10 @@ def _run_autonomous_demo_command(
         raise OperatorInputError("autonomous-demo does not accept --camera.")
     if arguments.real_time_video:
         raise OperatorInputError("autonomous-demo does not use real-time playback pacing.")
-    if arguments.detector != DetectorBackend.ULTRALYTICS.value:
+    non_empty_backend = next(item for item in DetectorBackend if item is not DetectorBackend.EMPTY)
+    if arguments.detector != non_empty_backend.value:
         raise DetectorConfigurationError(
-            "autonomous-demo requires the frozen Ultralytics pig detector configuration."
+            "autonomous-demo requires the frozen pig detector configuration."
         )
     detector_configuration = _detector_configuration(arguments)
     if (
