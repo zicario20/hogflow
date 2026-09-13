@@ -120,3 +120,13 @@ def test_engine_bounds_track_history_and_track_count() -> None:
 
     assert len(summaries) == 1
     assert len(summaries[0].sampled_centers) == 8
+
+
+def test_bounded_samples_remain_in_frame_order() -> None:
+    engine = AutonomousCalibrationEngine(AutonomousCalibrationSettings(maximum_sampled_centers=4))
+    for frame in range(20):
+        engine.observe(TrajectoryObservation(1, frame, (0.4, frame / 20), 0.8))
+
+    samples = engine.summaries()[0].sampled_centers
+
+    assert samples == tuple(sorted(samples, key=lambda point: point[1]))

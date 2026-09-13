@@ -84,6 +84,7 @@ class _TrackAccumulator:
     first_center: tuple[float, float]
     last_center: tuple[float, float]
     sampled_centers: list[tuple[float, float]] = field(default_factory=list)
+    sampled_frames: list[int] = field(default_factory=list)
     observation_count: int = 0
     path_length: float = 0.0
     confidence_total: float = 0.0
@@ -108,9 +109,11 @@ class _TrackAccumulator:
         )
         if len(self.sampled_centers) < settings.maximum_sampled_centers:
             self.sampled_centers.append(current)
+            self.sampled_frames.append(observation.frame_sequence)
         elif len(self.sampled_centers) > 1:
             slot = 1 + ((self.observation_count - 1) % (len(self.sampled_centers) - 1))
             self.sampled_centers[slot] = current
+            self.sampled_frames[slot] = observation.frame_sequence
 
     def summary(self) -> TrajectorySummary:
         frame_span = self.last_frame - self.first_frame + 1
@@ -124,7 +127,13 @@ class _TrackAccumulator:
             last_frame=self.last_frame,
             first_center=self.first_center,
             last_center=self.last_center,
-            sampled_centers=tuple(self.sampled_centers),
+            sampled_centers=tuple(
+                center
+                for _, center in sorted(
+                    zip(self.sampled_frames, self.sampled_centers),
+                    key=lambda item: item[0],
+                )
+            ),
             lifetime_frames=frame_span,
             displacement=displacement,
             path_length=self.path_length,
@@ -155,6 +164,7 @@ class AutonomousCalibrationEngine:
                 first_center=observation.center,
                 last_center=observation.center,
                 sampled_centers=[observation.center],
+                sampled_frames=[observation.frame_sequence],
                 observation_count=1,
                 confidence_total=observation.confidence,
                 edge_touched=min(

@@ -25,6 +25,11 @@ from hogflow.calibration.models import (
     TrajectoryObservation,
     TrajectorySummary,
 )
+from hogflow.calibration.orchestration import (
+    AutonomousDemoConfiguration,
+    AutonomousDemoResult,
+    run_autonomous_demo,
+)
 from hogflow.calibration.video_selection import (
     AutonomousCandidateSuitability,
     AutonomousVideoSelection,
@@ -37,6 +42,8 @@ __all__ = [
     "AutonomousCalibrationSettings",
     "AutonomousCandidateSuitability",
     "AutonomousVideoSelection",
+    "AutonomousDemoConfiguration",
+    "AutonomousDemoResult",
     "consistency_confidence",
     "detector_perturbation_agreement",
     "CalibrationConfidence",
@@ -56,4 +63,5 @@ __all__ = [
     "relative_spread",
     "select_eligible_trajectories",
     "select_autonomous_demo_candidate",
+    "run_autonomous_demo",
 ]
