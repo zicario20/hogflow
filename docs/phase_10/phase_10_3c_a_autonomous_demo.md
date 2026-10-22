@@ -228,6 +228,11 @@ pasadas, latencia y recursos muestreados. La semántica obligatoria es:
 
 **AUTONOMOUS ESTIMATE — NOT INDEPENDENTLY VERIFIED**
 
+La HMI conserva `AUTO CALIBRATE & COUNT`, `CANCEL AUTO DEMO` y `Restart Video`
+para repetir pruebas. Tras una ejecución que produjo un informe, `VIEW REPORT`
+se habilita y abre únicamente el Markdown local a través del sistema operativo;
+la ruta privada no se proyecta en el snapshot ni en la interfaz.
+
 El benchmark usó el mismo vídeo local ya seleccionado, la misma configuración
 V2 y GPU CUDA. La línea, consistencia, count y eventos no cambiaron:
 
@@ -254,7 +259,7 @@ benchmark, no una garantía de máximo absoluto en producción.
 Video C, V2, datos empresariales, carril compartido y sesiones no fueron
 modificados.
 
-Las compuertas source-only finales quedaron en `1122 passed, 1 warning` (la
+Las compuertas source-only finales quedaron en `1124 passed, 1 warning` (la
 advertencia heredada de ByteTrack), Ruff check/format, compilación, `pip check`,
 `git diff --check` y la ayuda CLI. La comprobación interactiva de Tk en dos
 resoluciones no se ejecutó en esta sesión; la validación reproducible es:

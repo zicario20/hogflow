@@ -297,6 +297,7 @@ def test_all_operator_controls_and_preview_are_inside_scrollable_content() -> No
         OperatorAction.CANCEL_TRUCK: "Cancel Truck",
         OperatorAction.START_AUTONOMOUS_DEMO: "AUTO CALIBRATE & COUNT",
         OperatorAction.CANCEL_AUTONOMOUS_DEMO: "CANCEL AUTO DEMO",
+        OperatorAction.VIEW_AUTONOMOUS_REPORT: "VIEW REPORT",
         OperatorAction.REFRESH: "Refresh Snapshot",
         OperatorAction.EXIT: "Exit Application",
     }

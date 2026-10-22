@@ -96,6 +96,27 @@ class OperatorPresenter:
             OperatorStatus.READY,
         )
 
+    def view_autonomous_report(
+        self,
+        dock_id: DockId = DockId.DOCK_1,
+    ) -> OperatorScreen:
+        """Open the latest bounded local report through the app boundary."""
+
+        method = getattr(self._application, "view_autonomous_report", None)
+        if not callable(method):
+            self._view.show_error("Autonomous report viewing is unavailable in this composition.")
+            raise RuntimeError("Autonomous report viewing is unavailable in this composition.")
+        try:
+            method()
+        except ExpectedOperatorError as exc:
+            self._view.show_error(str(exc))
+            raise
+        return self._render(
+            self._application.snapshot(),
+            dock_id,
+            OperatorStatus.READY,
+        )
+
     def configure_video_source(
         self,
         request: VideoSourceRequest,
@@ -320,6 +341,7 @@ class OperatorPresenter:
             status=status,
             autonomous_demo=self._autonomous_snapshot(),
             autonomous_demo_available=self._autonomous_available(),
+            autonomous_report_available=self._autonomous_report_available(),
         )
         self._view.render(screen)
         self._render_preview(screen, preview, self._autonomous_snapshot())
@@ -377,6 +399,15 @@ class OperatorPresenter:
         except Exception:
             return False
 
+    def _autonomous_report_available(self) -> bool | None:
+        method = getattr(self._application, "autonomous_report_available", None)
+        if not callable(method):
+            return None
+        try:
+            return bool(method())
+        except Exception:
+            return False
+
 
 def screen_from_snapshot(
     snapshot: MultiDockRuntimeSnapshot,
@@ -387,6 +418,7 @@ def screen_from_snapshot(
     status: OperatorStatus | None = None,
     autonomous_demo: AutonomousDemoSnapshot | None = None,
     autonomous_demo_available: bool | None = None,
+    autonomous_report_available: bool | None = None,
 ) -> OperatorScreen:
     """Create a transient workflow-safe display projection from one snapshot."""
 
@@ -479,6 +511,7 @@ def screen_from_snapshot(
             pipeline,
             autonomous_demo,
             autonomous_demo_available,
+            autonomous_report_available,
         ),
         status_message=current_status.value,
         generated_at=snapshot.generated_at.isoformat(),
@@ -492,6 +525,7 @@ def _action_state(
     pipeline: CountingPipelineSnapshot,
     autonomous_demo: AutonomousDemoSnapshot | None = None,
     autonomous_demo_available: bool | None = None,
+    autonomous_report_available: bool | None = None,
 ) -> OperatorActionState:
     local_file = (
         pipeline.camera.source_type is not None and pipeline.camera.source_type.value == "file"
@@ -527,6 +561,7 @@ def _action_state(
         )
     else:
         auto_available = autonomous_demo_available
+    report_available = bool(autonomous_report_available)
     return OperatorActionState(
         register_truck=runtime_open and dock.available,
         start_truck=runtime_open and dock.runtime_status is DockRuntimeStatus.PLANNED,
@@ -575,6 +610,7 @@ def _action_state(
         and not auto_running
         and auto_available,
         cancel_autonomous_demo=runtime_open and auto_running,
+        view_autonomous_report=runtime_open and not auto_running and report_available,
     )
 
 

@@ -1204,8 +1204,8 @@ class TkOperatorView:
 
         application_group = tk.LabelFrame(actions, text="  SYSTEM  ", **group_options)
         application_group.grid(row=2, column=1, sticky="nsew", padx=3, pady=2)
-        application_group.columnconfigure(0, weight=1)
-        application_group.columnconfigure(1, weight=1)
+        for column in range(3):
+            application_group.columnconfigure(column, weight=1)
         self._action_groups["application"] = application_group
 
         callbacks: tuple[tuple[OperatorAction, str, Callable[[], None]], ...] = (
@@ -1284,6 +1284,11 @@ class TkOperatorView:
                 self._cancel_autonomous_demo,
             ),
             (
+                OperatorAction.VIEW_AUTONOMOUS_REPORT,
+                "VIEW REPORT",
+                self._view_autonomous_report,
+            ),
+            (
                 OperatorAction.REFRESH,
                 "Refresh Snapshot",
                 self._refresh_selected_dock,
@@ -1310,6 +1315,7 @@ class TkOperatorView:
             OperatorAction.EXIT: (0, 1),
             OperatorAction.START_AUTONOMOUS_DEMO: (1, 0),
             OperatorAction.CANCEL_AUTONOMOUS_DEMO: (1, 1),
+            OperatorAction.VIEW_AUTONOMOUS_REPORT: (1, 2),
         }
         for action, label, callback in callbacks:
             if action in truck_positions:
@@ -1685,6 +1691,9 @@ class TkOperatorView:
 
     def _cancel_autonomous_demo(self) -> None:
         self._invoke(self._require_presenter().cancel_autonomous_demo, self._dock())
+
+    def _view_autonomous_report(self) -> None:
+        self._invoke(self._require_presenter().view_autonomous_report, self._dock())
 
     def _refresh_selected_dock(self) -> None:
         self._invoke(self._require_presenter().refresh, self._dock())

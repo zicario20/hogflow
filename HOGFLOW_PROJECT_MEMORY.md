@@ -1213,7 +1213,7 @@ Resumen de madurez:
   `AUTONOMOUS ESTIMATE — NOT INDEPENDENTLY VERIFIED`.
 - **Estado:** listo para pruebas autónomas repetibles; no es precisión humana,
   certificación ni aptitud de producción. V2 y Video C permanecen intactos.
-- **Comprobación:** suite source-only `1122 passed, 1 warning`; Ruff,
+- **Comprobación:** suite source-only `1124 passed, 1 warning`; Ruff,
   formato, compilación, `pip check`, `git diff --check` y ayuda CLI en verde.
 
 ### 5.34 Estado de las fases posteriores

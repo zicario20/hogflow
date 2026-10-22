@@ -120,6 +120,17 @@ def test_inconclusive_calibration_keeps_line_unlocked_and_count_hidden() -> None
     assert screen.autonomous_demo.live_count is None
 
 
+def test_completed_report_exposes_view_report_action_without_touching_lane() -> None:
+    application, _coordinator = operator_application()
+    screen = screen_from_snapshot(
+        application.snapshot(),
+        autonomous_report_available=True,
+    )
+
+    assert screen.actions.is_enabled(OperatorAction.VIEW_AUTONOMOUS_REPORT)
+    assert screen.counting_lane.live_count == 0
+
+
 def test_running_autonomous_demo_blocks_normal_pipeline_actions(tmp_path: Path) -> None:
     video = tmp_path / "demo.mp4"
     video.write_bytes(b"synthetic")

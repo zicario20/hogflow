@@ -25,6 +25,7 @@ class OperatorAction(str, Enum):
     START_AUTONOMOUS_DEMO = "start_autonomous_demo"
     AUTO_CALIBRATE_COUNT = "start_autonomous_demo"
     CANCEL_AUTONOMOUS_DEMO = "cancel_autonomous_demo"
+    VIEW_AUTONOMOUS_REPORT = "view_autonomous_report"
     REFRESH = "refresh"
     EXIT = "exit"
 
@@ -93,6 +94,7 @@ class OperatorActionState:
     exit: bool
     start_autonomous_demo: bool = True
     cancel_autonomous_demo: bool = False
+    view_autonomous_report: bool = False
 
     def __post_init__(self) -> None:
         if any(
@@ -113,6 +115,7 @@ class OperatorActionState:
                 self.exit,
                 self.start_autonomous_demo,
                 self.cancel_autonomous_demo,
+                self.view_autonomous_report,
             )
         ):
             raise ValueError("Operator action availability must be boolean.")

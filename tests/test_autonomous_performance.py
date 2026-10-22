@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from time import sleep
 
+from _phase9_helpers import LifecycleIdFactory, operator_application
 from test_autonomous_demo_orchestration import (
     _configuration,
     _detector_factory,
@@ -10,6 +11,7 @@ from test_autonomous_demo_orchestration import (
     _tracker_factory,
 )
 
+from hogflow.application import OperatorApplicationService
 from hogflow.calibration import AutonomousDemoConfiguration, run_autonomous_demo
 
 
@@ -127,3 +129,27 @@ def test_resource_sampler_is_bounded_and_sanitized() -> None:
     }
     assert snapshot.peak_ram_mb is None or snapshot.peak_ram_mb >= 0
     assert snapshot.peak_vram_mb is None or snapshot.peak_vram_mb >= 0
+
+
+def test_local_report_action_is_bounded_and_does_not_expose_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _application, coordinator = operator_application()
+    report = tmp_path / "autonomous.md"
+    report.write_text("technical report", encoding="utf-8")
+    application = OperatorApplicationService(
+        coordinator,
+        crossing_lifecycle_id_factory=LifecycleIdFactory(),
+        autonomous_report_path_supplier=lambda: report,
+    )
+    opened: list[str] = []
+    monkeypatch.setattr(
+        "hogflow.application.operator_service.os.startfile",
+        lambda value: opened.append(value),
+        raising=False,
+    )
+
+    assert application.autonomous_report_available() is True
+    application.view_autonomous_report()
+    assert opened == [str(report)]

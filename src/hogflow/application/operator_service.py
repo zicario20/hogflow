@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -31,6 +33,7 @@ from hogflow.sessions import MultiDockRuntimeCoordinator, MultiDockRuntimeSnapsh
 
 Clock = Callable[[], datetime]
 CrossingLifecycleIdFactory = Callable[[DockId, str], str]
+ReportPathSupplier = Callable[[], Path | None]
 
 
 class OperatorApplicationService:
@@ -50,6 +53,7 @@ class OperatorApplicationService:
         runtime_access: SerializedMultiDockRuntimeAccess | None = None,
         counting_pipeline: CountingPipelineController | None = None,
         autonomous_demo: AutonomousDemoController | None = None,
+        autonomous_report_path_supplier: ReportPathSupplier | None = None,
     ) -> None:
         if not isinstance(coordinator, MultiDockRuntimeCoordinator):
             raise TypeError("Operator application requires a multi-dock runtime coordinator.")
@@ -63,6 +67,7 @@ class OperatorApplicationService:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._autonomous_demo = autonomous_demo
         self._autonomous_video_path: Path | None = None
+        self._autonomous_report_path_supplier = autonomous_report_path_supplier
 
     def snapshot(self) -> MultiDockRuntimeSnapshot:
         """Read fresh Phase 8 state without retaining a presentation mirror."""
@@ -220,6 +225,39 @@ class OperatorApplicationService:
                 "Autonomous demo is unavailable in this composition."
             )
         return self._autonomous_demo.cancel()
+
+    def autonomous_report_available(self) -> bool:
+        """Return whether a completed local Markdown report is ready to open."""
+
+        if self.autonomous_demo_snapshot().worker_alive:
+            return False
+        supplier = self._autonomous_report_path_supplier
+        if supplier is None:
+            return False
+        try:
+            report_path = supplier()
+        except Exception:
+            return False
+        return isinstance(report_path, Path) and report_path.is_file()
+
+    def view_autonomous_report(self) -> None:
+        """Open the latest report through the host OS without showing its path."""
+
+        if not self.autonomous_report_available():
+            raise CameraPipelineLifecycleError("No completed autonomous report is available.")
+        assert self._autonomous_report_path_supplier is not None
+        report_path = self._autonomous_report_path_supplier()
+        if not isinstance(report_path, Path) or not report_path.is_file():
+            raise CameraPipelineLifecycleError("No completed autonomous report is available.")
+        try:
+            if hasattr(os, "startfile"):
+                os.startfile(str(report_path))
+            elif not webbrowser.open(report_path.as_uri()):
+                raise OSError
+        except (OSError, TypeError, webbrowser.Error) as exc:
+            raise CameraPipelineLifecycleError(
+                "The autonomous report could not be opened on this desktop."
+            ) from exc
 
     def start_counting_pipeline(self) -> CountingPipelineSnapshot:
         """Start the one shared camera pipeline."""

@@ -89,5 +89,11 @@ class OperatorApplication(Protocol):
     def autonomous_demo_available(self) -> bool:
         """Return whether the detector/source/lane gate permits Auto Demo."""
 
+    def autonomous_report_available(self) -> bool:
+        """Return whether a completed local autonomous report can be opened."""
+
+    def view_autonomous_report(self) -> None:
+        """Open the latest local Markdown report without exposing its path in HMI."""
+
 
 __all__ = ["OperatorApplication"]

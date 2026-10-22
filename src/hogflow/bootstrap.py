@@ -176,8 +176,10 @@ def build_operator_runtime(
         real_time_file_playback=real_time_file_playback,
         playback_waiter=playback_waiter,
     )
+    autonomous_report_holder: dict[str, Path | None] = {"markdown": None}
 
     def run_autonomous_file(video_path, progress_callback, should_stop):
+        autonomous_report_holder["markdown"] = None
         configuration = AutonomousDemoConfiguration(
             demo_id="operator_autonomous_demo",
             detector_configuration=detector_configuration,
@@ -190,12 +192,13 @@ def build_operator_runtime(
             should_stop=should_stop,
         )
         if autonomous_report_root is not None:
-            write_autonomous_demo_report(
+            report_paths = write_autonomous_demo_report(
                 result,
                 configuration,
                 video_path=video_path,
                 output_root=autonomous_report_root / configuration.execution_mode,
             )
+            autonomous_report_holder["markdown"] = report_paths.markdown_path
         return result
 
     autonomous_demo = AutonomousDemoController(
@@ -210,6 +213,7 @@ def build_operator_runtime(
         runtime_access=runtime_access,
         counting_pipeline=counting_pipeline,
         autonomous_demo=autonomous_demo,
+        autonomous_report_path_supplier=lambda: autonomous_report_holder["markdown"],
     )
     health_manager = runtime_health_manager or RuntimeHealthManager(
         runtime_configuration,

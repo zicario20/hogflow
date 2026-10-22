@@ -59,7 +59,7 @@
 - Test: `tests/test_phase_10_3c_a3_hmi.py` and existing HMI suites.
 
 - [x] Keep `AUTO CALIBRATE & COUNT`, `CANCEL`, latest-frame preview and technical live count unchanged.
-- [x] Reuse the existing bounded `Restart Video` action for repeat tests; reports are generated automatically under the ignored local report root. No separate report viewer was added to avoid exposing local paths in the HMI.
+- [x] Reuse the existing bounded `Restart Video` action for repeat tests and add `VIEW REPORT`, enabled only after a completed local Markdown report exists. The HMI opens it through the host OS without exposing the path.
 - [x] Preserve dark industrial tones, blue informational LIVE MODE, amber LOW, and no accuracy claims.
 
 ### Task 5: Real local benchmark, documentation, and gates
