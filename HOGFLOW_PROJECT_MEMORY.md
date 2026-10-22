@@ -1610,6 +1610,22 @@ de cerdos, tracking real, conteo ni producción.
 - no se publican credentials, URLs RTSP privadas, IPs de deployment ni rutas
   locales.
 
+### 10.5 Investigación de datasets externos (2026-10-22)
+
+Se creó una investigación documental, sin descargas ni entrenamiento, en
+`docs/research/`. Las fuentes prioritarias son PigDetect High-IoU para una
+hipótesis de densidad/oclusión, PigLife para diversidad productiva condicionada
+a autorización de University of Illinois, y PigTracking/Edinburgh/OinkTrack para
+continuidad temporal. Las fichas y repositorios consultados no convierten por
+sí solos estos datos en licencia comercial ni en ground truth de cruce.
+
+La decisión actual es **NO-GO para entrenar V3**: antes se requiere seleccionar
+una versión concreta, archivar los términos de uso, auditar checksums/formato y
+splits, y conservar un holdout nuevo no usado para decisiones. Los adaptadores
+futuros deben alimentar los contracts existentes (`PreparedTrainingDataset` y
+replay MOT) sin alterar V2, ByteTrack, `LiveDirectionalCounter`, el carril
+compartido ni la política de privacidad.
+
 ---
 
 ## 11. Métricas
