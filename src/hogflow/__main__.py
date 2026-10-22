@@ -13,7 +13,9 @@ from hogflow.bootstrap import compose_operator_desktop
 from hogflow.calibration import (
     AutonomousDemoConfiguration,
     CalibrationStatus,
+    RuntimeResourceSampler,
     run_autonomous_demo,
+    write_autonomous_demo_report,
 )
 from hogflow.camera import PreviewConfiguration
 from hogflow.core import HogFlowError
@@ -83,6 +85,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default="auto", metavar="auto|cpu|cuda[:INDEX]")
     parser.add_argument("--max-detections", type=int, default=300)
     parser.add_argument("--half-precision", action="store_true")
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Run legacy A.2 and optimized A.3 modes on the same local video.",
+    )
+    parser.add_argument(
+        "--report-root",
+        type=Path,
+        default=Path("data/runs/autonomous"),
+        help="Ignored local directory for sanitized autonomous JSON/Markdown reports.",
+    )
     return parser
 
 
@@ -153,13 +166,36 @@ def _run_autonomous_demo_command(
     def source_factory(_configuration: StreamConfiguration):
         return create_camera_source(StreamConfiguration.file(demo_id, video_path))
 
-    result = run_autonomous_demo(
-        AutonomousDemoConfiguration(
+    modes = ("legacy", "optimized") if arguments.benchmark else ("optimized",)
+    mode_results: dict[str, object] = {}
+    mode_resources = {}
+    for mode in modes:
+        configuration = AutonomousDemoConfiguration(
             demo_id=demo_id,
             detector_configuration=detector_configuration,
-        ),
-        source_factory=source_factory,
-    )
+            execution_mode=mode,
+        )
+        sampler = RuntimeResourceSampler()
+        sampler.start()
+        try:
+            result = run_autonomous_demo(
+                configuration,
+                source_factory=source_factory,
+            )
+        finally:
+            resources = sampler.stop()
+        mode_resources[mode] = resources
+        write_autonomous_demo_report(
+            result,
+            configuration,
+            video_path=video_path,
+            output_root=arguments.report_root / mode,
+            resources=resources,
+        )
+        mode_results[mode] = result
+    result = mode_results["optimized"]
+    if not hasattr(result, "calibration"):
+        raise RuntimeError("Autonomous demo did not produce a result.")
     summary = {
         "algorithm_version": result.calibration.algorithm_version,
         "confidence": result.calibration.confidence.value,
@@ -188,11 +224,47 @@ def _run_autonomous_demo_command(
         "primary_count": result.primary_count,
         "selected_score": result.calibration.selected_score,
         "status": result.calibration.status.value,
+        "execution_mode": "optimized",
+        "inference_passes": result.inference_passes,
+        "cache_replay_used": result.cache_replay_used,
+        "forward_crossings": result.forward_crossings,
+        "reverse_crossings": result.reverse_crossings,
+        "tracks_observed": result.tracks_observed,
+        "max_active_tracks": result.max_active_tracks,
+        "total_elapsed_seconds": result.total_elapsed_seconds,
+        "resource_measurement": resources.measurement,
+        "peak_ram_mb": resources.peak_ram_mb,
+        "peak_vram_mb": resources.peak_vram_mb,
     }
+    if arguments.benchmark:
+        legacy = mode_results["legacy"]
+        summary["benchmark"] = {
+            "baseline_a2": _runtime_summary(legacy, mode_resources["legacy"]),
+            "optimized_a3": _runtime_summary(result, mode_resources["optimized"]),
+            "count_unchanged": legacy.primary_count == result.primary_count,
+            "pass_reduction": legacy.inference_passes - result.inference_passes,
+        }
     print(json.dumps(summary, sort_keys=True))
     if result.calibration.status is not CalibrationStatus.READY:
         return 2
     return 0
+
+
+def _runtime_summary(result, resources=None) -> dict[str, object]:
+    return {
+        "primary_count": result.primary_count,
+        "inference_passes": result.inference_passes,
+        "calibration_fps": result.calibration_fps,
+        "counting_fps": result.counting_fps,
+        "average_detector_latency_ms": result.average_detector_latency_ms,
+        "total_elapsed_seconds": result.total_elapsed_seconds,
+        "cache_replay_used": result.cache_replay_used,
+        "forward_crossings": result.forward_crossings,
+        "reverse_crossings": result.reverse_crossings,
+        "resource_measurement": None if resources is None else resources.measurement,
+        "peak_ram_mb": None if resources is None else resources.peak_ram_mb,
+        "peak_vram_mb": None if resources is None else resources.peak_vram_mb,
+    }
 
 
 def _detector_configuration(arguments: argparse.Namespace) -> PigDetectorConfiguration:

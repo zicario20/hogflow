@@ -33,6 +33,15 @@ from hogflow.calibration.orchestration import (
     AutonomousDemoResult,
     run_autonomous_demo,
 )
+from hogflow.calibration.reporting import (
+    AutonomousReportPaths,
+    RuntimeResourceSampler,
+    RuntimeResourceSnapshot,
+    autonomous_demo_report_json,
+    autonomous_demo_report_markdown,
+    autonomous_demo_report_payload,
+    write_autonomous_demo_report,
+)
 from hogflow.calibration.video_selection import (
     AutonomousCandidateSuitability,
     AutonomousVideoSelection,
@@ -70,4 +79,11 @@ __all__ = [
     "select_eligible_trajectories",
     "select_autonomous_demo_candidate",
     "run_autonomous_demo",
+    "AutonomousReportPaths",
+    "RuntimeResourceSampler",
+    "RuntimeResourceSnapshot",
+    "autonomous_demo_report_json",
+    "autonomous_demo_report_markdown",
+    "autonomous_demo_report_payload",
+    "write_autonomous_demo_report",
 ]

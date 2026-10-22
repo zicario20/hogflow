@@ -59,6 +59,7 @@ from hogflow.tracking import (
     TrackingRequest,
     byte_track_configuration_fingerprint,
 )
+from hogflow.tracking.models import TrackingResult
 
 _IDENTIFIER = r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
 _SHA256_ZERO = "0" * 64
@@ -76,6 +77,8 @@ class AutonomousDemoConfiguration:
     crossing_epsilon: float = 0.005
     absent_track_retention_updates: int = 30
     algorithm_version: str = AUTONOMOUS_CALIBRATION_ALGORITHM_VERSION
+    execution_mode: str = "optimized"
+    replay_cache_max_frames: int = 4096
 
     def __post_init__(self) -> None:
         if not isinstance(self.demo_id, str) or fullmatch(_IDENTIFIER, self.demo_id) is None:
@@ -102,6 +105,14 @@ class AutonomousDemoConfiguration:
             or fullmatch(_IDENTIFIER, self.algorithm_version) is None
         ):
             raise ValueError("algorithm_version must be a sanitized identifier.")
+        if self.execution_mode not in {"optimized", "legacy"}:
+            raise ValueError("execution_mode must be optimized or legacy.")
+        if (
+            not isinstance(self.replay_cache_max_frames, int)
+            or isinstance(self.replay_cache_max_frames, bool)
+            or self.replay_cache_max_frames <= 0
+        ):
+            raise ValueError("replay_cache_max_frames must be positive.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +135,13 @@ class AutonomousDemoResult:
     failures: tuple[str, ...]
     limitations: tuple[str, ...]
     cancelled: bool = False
+    forward_crossings: int = 0
+    reverse_crossings: int = 0
+    tracks_observed: int = 0
+    max_active_tracks: int = 0
+    inference_passes: int = 0
+    cache_replay_used: bool = False
+    total_elapsed_seconds: float = 0.0
 
     def __post_init__(self) -> None:
         if not isinstance(self.demo_id, str) or fullmatch(_IDENTIFIER, self.demo_id) is None:
@@ -165,6 +183,22 @@ class AutonomousDemoResult:
                 raise ValueError(f"{name} must be non-empty text tuples.")
         if not isinstance(self.cancelled, bool):
             raise ValueError("cancelled must be boolean.")
+        for name in (
+            "forward_crossings",
+            "reverse_crossings",
+            "tracks_observed",
+            "max_active_tracks",
+            "inference_passes",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer.")
+        if (
+            not isinstance(self.cache_replay_used, bool)
+            or not isinstance(self.total_elapsed_seconds, (int, float))
+            or float(self.total_elapsed_seconds) < 0
+        ):
+            raise ValueError("Autonomous runtime telemetry is invalid.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +238,10 @@ class _AutonomousStopRequested(Exception):
     """Internal control flow for cooperative autonomous cancellation."""
 
 
+class _ReplayUnavailable(Exception):
+    """The bounded tracking replay cannot represent the source pass exactly."""
+
+
 @dataclass(frozen=True, slots=True)
 class _PassEvidence:
     summaries: tuple[TrajectorySummary, ...]
@@ -213,6 +251,25 @@ class _PassEvidence:
     detector_latencies_ms: tuple[float, ...]
     artifact_fingerprint: str
     tracker_fingerprint: str
+    tracking_frames: tuple[TrackingResult, ...] = ()
+    replay_complete: bool = False
+    tracks_observed: int = 0
+    max_active_tracks: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class _CountEvidence:
+    frames: int
+    crossing_events: int
+    primary_count: int | None
+    first_sequence: int | None
+    fps: float
+    average_latency: float
+    forward_crossings: int
+    reverse_crossings: int
+    tracks_observed: int
+    max_active_tracks: int
+    replay_used: bool
 
 
 def _clock_now(clock: Callable[[], datetime] | None) -> datetime:
@@ -385,6 +442,7 @@ def _collect_trajectories(
     should_stop: Callable[[], bool] | None = None,
     progress_callback: Callable[..., None] | None = None,
     publish_preview: bool = False,
+    capture_replay: bool = False,
 ) -> _PassEvidence:
     source_configuration = (
         StreamConfiguration.file(configuration.demo_id, source_path)
@@ -401,6 +459,10 @@ def _collect_trajectories(
     started = perf_counter()
     artifact_fingerprint = _SHA256_ZERO
     tracker_fingerprint = byte_track_configuration_fingerprint(configuration.tracker_configuration)
+    replay_frames: list[TrackingResult] = []
+    replay_complete = capture_replay
+    observed_track_ids: set[int] = set()
+    max_active_tracks = 0
     source.open()
     try:
         _check_stop(should_stop)
@@ -428,6 +490,13 @@ def _collect_trajectories(
             if first_sequence is None:
                 first_sequence = packet.sequence_number
             frames += 1
+            observed_track_ids.update(item.track.tracker_id for item in tracking.tracked_objects)
+            max_active_tracks = max(max_active_tracks, len(tracking.tracked_objects))
+            if capture_replay:
+                if len(replay_frames) < configuration.replay_cache_max_frames:
+                    replay_frames.append(tracking)
+                else:
+                    replay_complete = False
             for tracked_object in tracking.tracked_objects:
                 box: BoundingBox = tracked_object.track.detection.bounding_box
                 center = (
@@ -472,6 +541,10 @@ def _collect_trajectories(
         detector_latencies_ms=tuple(latencies),
         artifact_fingerprint=artifact_fingerprint,
         tracker_fingerprint=tracker_fingerprint,
+        tracking_frames=tuple(replay_frames) if replay_complete else (),
+        replay_complete=replay_complete,
+        tracks_observed=len(observed_track_ids),
+        max_active_tracks=max_active_tracks,
     )
 
 
@@ -715,7 +788,8 @@ def _run_count_pass(
     source_path: Path | None = None,
     should_stop: Callable[[], bool] | None = None,
     progress_callback: Callable[..., None] | None = None,
-) -> tuple[int, int, int | None, float, float, float]:
+    replay_frames: tuple[TrackingResult, ...] = (),
+) -> _CountEvidence:
     geometry = calibration.counting_configuration
     if geometry is None or calibration.selected_line is None:
         raise ValueError("Counting pass requires ready calibration geometry.")
@@ -725,8 +799,9 @@ def _run_count_pass(
         else StreamConfiguration.synthetic(configuration.demo_id)
     )
     source = source_factory(source_configuration)
-    detector = detector_factory(configuration.detector_configuration)
-    tracker = tracker_factory(configuration.tracker_configuration)
+    use_replay = bool(replay_frames)
+    detector = None if use_replay else detector_factory(configuration.detector_configuration)
+    tracker = None if use_replay else tracker_factory(configuration.tracker_configuration)
     crossing_configuration = LiveCrossingConfiguration(
         enabled=True,
         line=geometry.line,
@@ -747,14 +822,21 @@ def _run_count_pass(
     crossing_events = 0
     count: int | None = None
     latencies: list[float] = []
+    forward_crossings = 0
+    reverse_crossings = 0
+    observed_track_ids: set[int] = set()
+    max_active_tracks = 0
     started = perf_counter()
     source.open()
     try:
         _check_stop(should_stop)
-        detector.load()
-        tracker.start(source.identity.stream_id)
+        if not use_replay:
+            assert detector is not None and tracker is not None
+            detector.load()
+            tracker.start(source.identity.stream_id)
         crossing.start(source.identity.stream_id)
         counter.start(source.identity.stream_id, crossing.lifecycle_id)
+        replay_index = 0
         while True:
             _check_stop(should_stop)
             result = source.read()
@@ -769,16 +851,32 @@ def _run_count_pass(
             if result.status is not StreamReadStatus.FRAME or result.frame is None:
                 continue
             packet = _make_packet(source, frames, result.frame, clock)
-            detections = detector.infer(packet)
-            latencies.append(float(detections.inference_duration_ms))
-            tracking = tracker.update(_tracking_request(detections))
+            if use_replay:
+                if replay_index >= len(replay_frames):
+                    raise _ReplayUnavailable("tracking replay ended before the source stream")
+                tracking = replay_frames[replay_index]
+                if tracking.frame_sequence != packet.sequence_number:
+                    raise _ReplayUnavailable("tracking replay sequence does not match source")
+                replay_index += 1
+            else:
+                assert detector is not None and tracker is not None
+                detections = detector.infer(packet)
+                latencies.append(float(detections.inference_duration_ms))
+                tracking = tracker.update(_tracking_request(detections))
             if first_sequence is None:
                 first_sequence = packet.sequence_number
             crossing_result = crossing.update(tracking)
             crossing_events += len(crossing_result.events)
+            for event in crossing_result.events:
+                if event.direction is geometry.positive_direction:
+                    forward_crossings += 1
+                else:
+                    reverse_crossings += 1
             counting_result = counter.update(crossing_result)
             count = counting_result.lifecycle_directional_count
             frames += 1
+            observed_track_ids.update(item.track.tracker_id for item in tracking.tracked_objects)
+            max_active_tracks = max(max_active_tracks, len(tracking.tracked_objects))
             if progress_callback is not None:
                 _notify_progress(
                     progress_callback,
@@ -798,14 +896,31 @@ def _run_count_pass(
                         ),
                     ),
                 )
+        if use_replay and replay_index != len(replay_frames):
+            raise _ReplayUnavailable("tracking replay contains frames not present in source")
     finally:
         counter.close()
         crossing.close()
-        _close_pass_components(source, detector, tracker)
+        if detector is not None and tracker is not None:
+            _close_pass_components(source, detector, tracker)
+        else:
+            source.close()
     elapsed = max(0.0, perf_counter() - started)
     fps = frames / elapsed if elapsed else 0.0
     average_latency = sum(latencies) / len(latencies) if latencies else 0.0
-    return frames, crossing_events, count, first_sequence, fps, average_latency
+    return _CountEvidence(
+        frames=frames,
+        crossing_events=crossing_events,
+        primary_count=count,
+        first_sequence=first_sequence,
+        fps=fps,
+        average_latency=average_latency,
+        forward_crossings=forward_crossings,
+        reverse_crossings=reverse_crossings,
+        tracks_observed=len(observed_track_ids),
+        max_active_tracks=max_active_tracks,
+        replay_used=use_replay,
+    )
 
 
 def run_autonomous_demo(
@@ -843,6 +958,7 @@ def run_autonomous_demo(
 
     failures: list[str] = []
     calibration: AutonomousCalibrationResult | None = None
+    run_started = perf_counter()
     try:
         _check_stop(should_stop)
         _notify_progress(progress_callback, "calibrating", None)
@@ -857,6 +973,7 @@ def run_autonomous_demo(
             should_stop=should_stop,
             progress_callback=progress_callback,
             publish_preview=True,
+            capture_replay=configuration.execution_mode == "optimized",
         )
         diagnostic_evidence = []
         for confidence in configuration.calibration_settings.diagnostic_confidences:
@@ -913,49 +1030,79 @@ def run_autonomous_demo(
                 hmi_state="AUTOCALIBRATION INCONCLUSIVE",
                 failures=tuple(failures),
                 limitations=calibration.limitations,
+                tracks_observed=primary.tracks_observed,
+                max_active_tracks=primary.max_active_tracks,
+                inference_passes=1 + len(configuration.calibration_settings.diagnostic_confidences),
+                total_elapsed_seconds=max(0.0, perf_counter() - run_started),
             )
         _check_stop(should_stop)
         _notify_progress(progress_callback, "counting", calibration)
-        (
-            count_frames,
-            crossing_events,
-            primary_count,
-            first_sequence,
-            count_fps,
-            count_latency,
-        ) = _run_count_pass(
-            configuration,
-            calibration,
-            source_factory=source_factory,
-            detector_factory=detector_factory,
-            tracker_factory=tracker_factory,
-            clock=clock,
-            source_path=source_path,
-            should_stop=should_stop,
-            progress_callback=progress_callback,
+        replay_requested = configuration.execution_mode == "optimized" and primary.replay_complete
+        replay_frames = primary.tracking_frames if replay_requested else ()
+        try:
+            count_evidence = _run_count_pass(
+                configuration,
+                calibration,
+                source_factory=source_factory,
+                detector_factory=detector_factory,
+                tracker_factory=tracker_factory,
+                clock=clock,
+                source_path=source_path,
+                should_stop=should_stop,
+                progress_callback=progress_callback,
+                replay_frames=replay_frames,
+            )
+        except _ReplayUnavailable:
+            count_evidence = _run_count_pass(
+                configuration,
+                calibration,
+                source_factory=source_factory,
+                detector_factory=detector_factory,
+                tracker_factory=tracker_factory,
+                clock=clock,
+                source_path=source_path,
+                should_stop=should_stop,
+                progress_callback=progress_callback,
+            )
+        primary_latency = (
+            sum(primary.detector_latencies_ms) / len(primary.detector_latencies_ms)
+            if primary.detector_latencies_ms
+            else 0.0
         )
+        inference_passes = 1 + len(configuration.calibration_settings.diagnostic_confidences)
+        if not count_evidence.replay_used:
+            inference_passes += 1
         return AutonomousDemoResult(
             demo_id=configuration.demo_id,
             calibration=calibration,
-            primary_count=primary_count,
+            primary_count=count_evidence.primary_count,
             primary_count_direction=(
                 calibration.selected_positive_direction.value
                 if calibration.selected_positive_direction is not None
                 else None
             ),
             calibration_crossing_events=0,
-            counting_crossing_events=crossing_events,
-            pass_two_first_frame_sequence=first_sequence,
+            counting_crossing_events=count_evidence.crossing_events,
+            pass_two_first_frame_sequence=count_evidence.first_sequence,
             calibration_frames=primary.frames,
-            counting_frames=count_frames,
+            counting_frames=count_evidence.frames,
             calibration_fps=primary.frames / primary.elapsed_seconds
             if primary.elapsed_seconds
             else 0.0,
-            counting_fps=count_fps,
-            average_detector_latency_ms=count_latency,
+            counting_fps=count_evidence.fps,
+            average_detector_latency_ms=(
+                primary_latency if count_evidence.replay_used else count_evidence.average_latency
+            ),
             hmi_state="LIVE COUNT",
             failures=tuple(failures),
             limitations=calibration.limitations,
+            forward_crossings=count_evidence.forward_crossings,
+            reverse_crossings=count_evidence.reverse_crossings,
+            tracks_observed=max(primary.tracks_observed, count_evidence.tracks_observed),
+            max_active_tracks=max(primary.max_active_tracks, count_evidence.max_active_tracks),
+            inference_passes=inference_passes,
+            cache_replay_used=count_evidence.replay_used,
+            total_elapsed_seconds=max(0.0, perf_counter() - run_started),
         )
     except _AutonomousStopRequested:
         if calibration is None:

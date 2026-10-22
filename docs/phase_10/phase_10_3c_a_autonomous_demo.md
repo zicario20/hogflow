@@ -212,3 +212,52 @@ regression tests cover the 1920 and 1366 target widths, bounded latest-frame
 replacement, hidden pre-lock geometry, selected-line lock, intermediate live
 count, LOW persistence, and INCONCLUSIVE behavior. No screenshots or media
 were retained.
+
+## Phase 10.3C-A.3 — Autonomous Counting Test & Performance Optimization
+
+La fase A.3 mantiene congelados el detector V2, `phase_10_3c_a_v2`, ByteTrack,
+el cruce virtual y `LifecycleDirectionalCounter`. La ruta optimizada conserva
+únicamente `TrackingResult` compactos y acotados (sin píxeles) durante la
+pasada primaria; el segundo pase decodifica el vídeo, publica preview y
+reproduce esos tracks mediante el contador existente. Si el replay no coincide
+con la fuente o se excede `replay_cache_max_frames`, vuelve a la ruta legacy.
+
+Cada ejecución CLI escribe JSON y Markdown sanitizados bajo `data/runs/`, con
+hashes de vídeo/modelo, geometría normalizada, dirección, cruces, tracks,
+pasadas, latencia y recursos muestreados. La semántica obligatoria es:
+
+**AUTONOMOUS ESTIMATE — NOT INDEPENDENTLY VERIFIED**
+
+El benchmark usó el mismo vídeo local ya seleccionado, la misma configuración
+V2 y GPU CUDA. La línea, consistencia, count y eventos no cambiaron:
+
+| Métrica | A.2 legacy | A.3 optimizado |
+| --- | ---: | ---: |
+| Pasadas de inferencia | 4 | 3 |
+| Tiempo total interno | 85,198 s | 60,465 s |
+| Reducción de tiempo | — | 29,0 % |
+| Count técnico | 6 | 6 |
+| Cruces forward / reverse | 6 / 2 | 6 / 2 |
+| Calibration FPS | 34,304 | 44,533 |
+| Count FPS | 42,758 | 941,177* |
+| Latencia detector media | 19,994 ms | 19,206 ms |
+| Pico RSS muestreado | 1.635,055 MB | 1.638,242 MB |
+| Pico VRAM de dispositivo | 568,098 MB | 572,098 MB |
+
+`*` En A.3 el count FPS es `replay_decode_and_count_no_detector`; no es FPS
+de inferencia ni throughput de despliegue. El resultado permaneció LOW con
+score `0.7846019002` y los mismos códigos `LOW_LINE_STABILITY`,
+`LOW_DETECTOR_PERTURBATION_STABILITY` y `TRACK_LOSS_NEAR_LINE`. No se fabricó
+precisión ni ground truth humano. RSS/VRAM son muestras acotadas durante este
+benchmark, no una garantía de máximo absoluto en producción.
+
+Video C, V2, datos empresariales, carril compartido y sesiones no fueron
+modificados.
+
+Las compuertas source-only finales quedaron en `1122 passed, 1 warning` (la
+advertencia heredada de ByteTrack), Ruff check/format, compilación, `pip check`,
+`git diff --check` y la ayuda CLI. La comprobación interactiva de Tk en dos
+resoluciones no se ejecutó en esta sesión; la validación reproducible es:
+arrancar la composición desktop con el V2 explícito, configurar un vídeo local,
+ejecutar `AUTO CALIBRATE & COUNT`, observar preview/line/count durante ambas
+pasadas y cerrar durante cada estado para confirmar cancelación y shutdown.

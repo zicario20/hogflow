@@ -1194,7 +1194,29 @@ Resumen de madurez:
   validación formal 10.3C continúa bloqueada. Modelo: **DEMO MODEL — NOT
   PRODUCTION VALIDATED**.
 
-### 5.33 Estado de las fases posteriores
+### 5.33 Phase 10.3C-A.3 — Autonomous Counting Test & Performance Optimization
+
+- **Optimización segura:** la ruta `optimized` conserva una caché acotada de
+  `TrackingResult` sin píxeles durante la pasada primaria y reproduce esos
+  tracks mediante el cruce y contador existentes mientras vuelve a decodificar
+  frames para preview. Si el replay no coincide o supera
+  `replay_cache_max_frames`, vuelve a la ruta `legacy`; no hay degradación
+  silenciosa.
+- **Benchmark comparable:** con el mismo demo local y configuración V2, A.2
+  ejecutó 4 pasadas y A.3 3. El tiempo interno fue `85.198 s` frente a
+  `60.465 s` (29.0% menos); count técnico `6` en ambos y cruces `6 forward / 2
+  reverse` en ambos. RSS/VRAM muestreados: `1635.055/568.098 MB` A.2 y
+  `1638.242/572.098 MB` A.3.
+- **Reportes:** el CLI y la composición desktop escriben JSON/Markdown locales
+  bajo `data/runs/` con hashes, configuración, línea normalizada, cruces,
+  latencia, pasadas y limitaciones. Se conserva literalmente
+  `AUTONOMOUS ESTIMATE — NOT INDEPENDENTLY VERIFIED`.
+- **Estado:** listo para pruebas autónomas repetibles; no es precisión humana,
+  certificación ni aptitud de producción. V2 y Video C permanecen intactos.
+- **Comprobación:** suite source-only `1122 passed, 1 warning`; Ruff,
+  formato, compilación, `pip check`, `git diff --check` y ayuda CLI en verde.
+
+### 5.34 Estado de las fases posteriores
 
 Phase 9 está técnicamente completada según sus subfases autorizadas; Phase
 10.1 implementa runtime supervision, Phase 10.2 integra el boundary local de

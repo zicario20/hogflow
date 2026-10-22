@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Callable
 from uuid import uuid4
 
@@ -18,7 +19,11 @@ from hogflow.application import (
     SerializedMultiDockRuntimeAccess,
     VideoSourceRequest,
 )
-from hogflow.calibration import AutonomousDemoConfiguration, run_autonomous_demo
+from hogflow.calibration import (
+    AutonomousDemoConfiguration,
+    run_autonomous_demo,
+    write_autonomous_demo_report,
+)
 from hogflow.camera import (
     CameraRecoveryConfiguration,
     CountingFrameProcessorFactory,
@@ -144,6 +149,7 @@ def build_operator_runtime(
     detector_configuration: PigDetectorConfiguration = PigDetectorConfiguration.empty(),
     real_time_file_playback: bool = False,
     playback_waiter: Callable[[float], bool] | None = None,
+    autonomous_report_root: Path | None = None,
 ) -> OperatorRuntimeComposition:
     """Build one shared lane, source controller, and operator application."""
 
@@ -176,13 +182,21 @@ def build_operator_runtime(
             demo_id="operator_autonomous_demo",
             detector_configuration=detector_configuration,
         )
-        return run_autonomous_demo(
+        result = run_autonomous_demo(
             configuration,
             source_factory=resolved_source_factory,
             source_path=video_path,
             progress_callback=progress_callback,
             should_stop=should_stop,
         )
+        if autonomous_report_root is not None:
+            write_autonomous_demo_report(
+                result,
+                configuration,
+                video_path=video_path,
+                output_root=autonomous_report_root / configuration.execution_mode,
+            )
+        return result
 
     autonomous_demo = AutonomousDemoController(
         run_autonomous_file,
@@ -232,6 +246,7 @@ def compose_operator_desktop(
     runtime_health_manager: RuntimeHealthManager | None = None,
     detector_configuration: PigDetectorConfiguration = PigDetectorConfiguration.empty(),
     real_time_file_playback: bool = False,
+    autonomous_report_root: Path | None = Path("data/runs/autonomous"),
 ) -> OperatorDesktopComposition:
     """Create and wire lane → coordinator → application → presenter → view."""
 
@@ -246,6 +261,7 @@ def compose_operator_desktop(
         runtime_health_manager=runtime_health_manager,
         detector_configuration=detector_configuration,
         real_time_file_playback=real_time_file_playback,
+        autonomous_report_root=autonomous_report_root,
     )
     try:
         if video_source is not None:
