@@ -21,8 +21,12 @@ Antes de copiar una sola imagen:
 1. Guardar URL oficial, DOI/revisión, autores, fecha de acceso y términos de
    licencia.
 2. Confirmar que la licencia permite uso de investigación, obras derivadas,
-   entrenamiento de modelos y, por separado, uso comercial futuro. Si una
-   casilla es desconocida, estado `BLOCKED_LEGAL_REVIEW`.
+   entrenamiento de modelos y, por separado, uso comercial futuro. Para
+   **PigLife**, la licencia oficial es Non-Exclusive Research Use: limita el
+   uso a investigación no lucrativa, excluye uso comercial, prohíbe
+   modificaciones/mejoras de los datos y compartirlos, y termina a los cinco
+   años; por eso labels o modelos derivados requieren autorización escrita
+   compatible. Si una casilla es desconocida, estado `BLOCKED_LEGAL_REVIEW`.
 3. Descargar únicamente metadatos o un paquete pequeño autorizado para
    inventario. No descargar el archivo completo por defecto.
 4. Generar un inventario de clips, frames, dimensiones, FPS, modalidades,

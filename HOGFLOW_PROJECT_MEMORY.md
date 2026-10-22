@@ -1621,10 +1621,14 @@ sí solos estos datos en licencia comercial ni en ground truth de cruce.
 
 La decisión actual es **NO-GO para entrenar V3**: antes se requiere seleccionar
 una versión concreta, archivar los términos de uso, auditar checksums/formato y
-splits, y conservar un holdout nuevo no usado para decisiones. Los adaptadores
-futuros deben alimentar los contracts existentes (`PreparedTrainingDataset` y
-replay MOT) sin alterar V2, ByteTrack, `LiveDirectionalCounter`, el carril
-compartido ni la política de privacidad.
+splits, y conservar un holdout nuevo no usado para decisiones. En particular,
+PigLife está bajo **Non-Exclusive Research Use**: investigación no lucrativa,
+sin uso comercial, sin modificaciones/mejoras de los datos, sin compartir y
+con término de cinco años; no se deben asumir labels o modelos derivados sin
+autorización escrita compatible. Los adaptadores futuros deben alimentar los
+contracts existentes (`PreparedTrainingDataset` y replay MOT) sin alterar V2,
+ByteTrack, `LiveDirectionalCounter`, el carril compartido ni la política de
+privacidad.
 
 ---
 
